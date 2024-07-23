@@ -1,0 +1,2707 @@
+#ifdef TESTING
+#include <string>
+#include <fstream>
+#include "task_tests.h"
+#include "xml_handler.h"
+#include "laph_stdio.h"
+#include "latt_field.h"
+#include "layout_info.h"
+#include "utils.h"
+#include "field_smearing_info.h"
+#include "dilution_scheme_info.h"
+#include "dilution_handler.h"
+#include "quark_action_info.h"
+#include <memory>
+#if defined(USE_GSL_CBLAS)
+#include "gsl_cblas.h"
+#elif defined(USE_OPENBLAS)
+#include "openblas.h"
+#endif
+#include "array.h"
+#include "laph_noise_info.h"
+#include "laph_noise.h"
+#include "quda_info.h"
+
+
+#ifdef ARCH_PARALLEL
+#include <mpi.h>
+#endif
+
+typedef std::complex<double> dcmplx;
+typedef std::complex<float>  fcmplx;
+
+#include <quda.h>
+#include <dirac_quda.h>
+#include <blas_quda.h>
+#include <quda_internal.h>
+//extern quda::GaugeField *gaugePrecise;
+
+
+using namespace std;
+using namespace LaphEnv;
+
+namespace QLTestEnv {
+
+
+// ************************************************
+
+    //   Want assignment method that is reproducible for checking.
+
+LatticeAssigner::LatticeAssigner(uint in_mtseed, double in_minval, double in_maxval, bool in_random) 
+                      : random_set(in_random), mtseed(seedval(in_mtseed,in_random)), Q(mtseed)
+{
+ dprec=(LattField::get_cpu_prec_bytes()==sizeof(dcmplx));
+ minval=in_minval;
+ maxval=in_maxval;
+ if (maxval<minval){
+    range=maxval; maxval=minval; minval=range;}
+ if ((maxval-minval)<1.0){ maxval=minval+1.0;}
+ range=maxval-minval;
+ setup_gen();
+ if (random_set){
+    printLaph(make_str("Lattice Assigner created: mtseed = ",mtseed," is_random = yes"));}
+ else{
+    printLaph(make_str("Lattice Assigner created: mtseed = ",mtseed," is_random = no  gcoef = ",gcoef));}
+}
+
+
+void LatticeAssigner::reSeed(uint in_mtseed)
+{
+ uint inmtseed=seedval(in_mtseed,random_set);
+ if (inmtseed!=mtseed){
+    mtseed=inmtseed;
+    Q.Reseed(mtseed);
+    setup_gen();
+    if (random_set){
+       printLaph(make_str("Lattice Assigner reseeded: mtseed = ",mtseed," is_random = yes"));}
+    else{
+       printLaph(make_str("Lattice Assigner reseeded: mtseed = ",mtseed," is_random = no  gcoef = ",gcoef));}}
+}
+
+void LatticeAssigner::setup_gen()
+{
+ if (!random_set){
+    for (int k=0;k<32;++k){
+       gcoef=generate();}}
+}
+
+uint LatticeAssigner::seedval(uint inseed, bool inrandom)
+{
+ return ((!inrandom)&&(inseed==0))?16777216:inseed;
+}
+
+
+double LatticeAssigner::generate()
+{
+ double gen=double(Q.generate() % 1073741824)/1073741824.0;
+ return minval+gen*range;
+}
+
+
+void LatticeAssigner::assign_field(LattField& latfield, const string& fieldname)
+{
+ vector<char> sitedata(latfield.bytesPerSite());
+ vector<int> coord(LayoutInfo::Ndim);
+ for (int x=0;x<LayoutInfo::getLattSizes()[0];++x)
+ for (int y=0;y<LayoutInfo::getLattSizes()[1];++y)
+ for (int z=0;z<LayoutInfo::getLattSizes()[2];++z)
+ for (int t=0;t<LayoutInfo::getLattSizes()[3];++t){
+    coord[0]=x; coord[1]=y; coord[2]=z; coord[3]=t;
+    assign_site(coord,sitedata,latfield.elemsPerSite());
+    latfield.putSiteData(coord,sitedata);}
+ printLaph(make_strf("Lattice field %s assigned using putSiteData",fieldname));
+ printLaph(make_strf("  Bytes per site is %d",latfield.bytesPerSite()));
+ printLaph(make_strf("  Bytes per word is %d",latfield.bytesPerWord()));
+ printLaph(make_strf(" Elements per site is %d\n",latfield.elemsPerSite()));
+
+// const complex<float>* zd=reinterpret_cast<const complex<float>*>(latfield.getDataConstPtr());
+// int ncmplx=latfield.getDataRef().size()/sizeof(complex<float>);
+// for (int k=0;k<ncmplx;++k,++zd){ printLaph(make_str("val[",k,"] = ",*zd));}
+}
+
+
+void LatticeAssigner::assign_site(const std::vector<int>& coord, std::vector<char>& result, 
+                                  int cmplx_per_site)
+{
+ vector<dcmplx> buffer(cmplx_per_site);
+ if (random_set){
+     site_random_assigner(coord,buffer);}
+ else{
+     site_basic_assigner(coord,buffer);}
+ if (dprec){
+    dcmplx* dptr=reinterpret_cast<dcmplx*>(result.data());
+    for (int k=0;k<cmplx_per_site;++k,++dptr){
+       *dptr=buffer[k];}}
+ else{
+    complex<float>* fptr=reinterpret_cast<complex<float>*>(result.data());
+    for (int k=0;k<cmplx_per_site;++k,++fptr){
+       *fptr=complex<float>(real(buffer[k]),imag(buffer[k]));}}
+}
+
+
+void LatticeAssigner::site_random_assigner(const std::vector<int>& coord, 
+                                           std::vector<dcmplx>& result)
+{
+ for (uint k=0;k<result.size();++k){
+    result[k]=dcmplx(generate(),generate());}
+ if (result.size()==9) reunitarize(result);
+}
+
+
+void LatticeAssigner::site_basic_assigner(const std::vector<int>& coord, 
+                                          std::vector<dcmplx>& result)
+{
+ double x=double(coord[0]);
+ double y=double(coord[1]);
+ double z=double(coord[2]);
+ double t=double(coord[3]);
+ double res1=2.5*x-3.7*y+0.334*z+1.32*t+0.25*gcoef;
+ double res2=-4.12*t+x+0.153*z+0.632*y-1.25*gcoef;
+ for (uint k=0;k<result.size();++k){
+    double gen1=res1+double(k)*res2;
+    double gen2=res2+double(k)*res1;
+    while (gen1>maxval) gen1-=range;
+    while (gen1<minval) gen1+=range;
+    while (gen2>maxval) gen2-=range;
+    while (gen2<minval) gen2+=range;
+    result[k]=dcmplx(gen1,gen2);}
+ if (result.size()==9) reunitarize(result);
+}
+
+
+vector<int> LatticeAssigner::getRandomSite()
+{
+ vector<int> randsite(LayoutInfo::Ndim);
+ if (isPrimaryRank()){
+    for (int k=0;k<LayoutInfo::Ndim;++k){
+       randsite[k]=Q.generate() % LayoutInfo::getLattSizes()[k];}}
+#ifdef ARCH_PARALLEL
+ comm_broadcast((char*)randsite.data(),LayoutInfo::Ndim*sizeof(int),0);
+#endif
+ return randsite;
+}
+
+
+void LatticeAssigner::reunitarize(std::vector<dcmplx>& result)
+{
+ double r=1.0/sqrt((result[0]*conj(result[0])+result[1]*conj(result[1])+result[2]*conj(result[2])).real());
+ result[0]*=r; result[1]*=r; result[2]*=r;  // this is u1
+ dcmplx b1=result[3]+result[6];
+ dcmplx b2=result[4]+result[7];
+ dcmplx b3=result[5]+result[8];
+    // take cross product u1 X v1 then unit normalize
+ cross_prod(b1,b2,b3,result[0],result[1],result[2],result[3],result[4],result[5]);
+ cross_prod(conj(result[0]),conj(result[1]),conj(result[2]),result[3],result[4],result[5],result[6],result[7],result[8]);
+   // check unitarity
+ //dcmplx U11=result[0]; dcmplx U12=result[1]; dcmplx U13=result[2];
+ //dcmplx U21=result[3]; dcmplx U22=result[4]; dcmplx U23=result[5];
+ //dcmplx U31=result[6]; dcmplx U32=result[7]; dcmplx U33=result[8]; dcmplx one(1.0,0.0);
+ //if (std::abs( U11*conj(U11) + U12*conj(U12) + U13*conj(U13)-one)>1e-10) printLaph("unitarity1 failed\n");
+ //if (std::abs( U11*conj(U21) + U12*conj(U22) + U13*conj(U23)    )>1e-10) printLaph("unitarity2 failed\n");  
+ //if (std::abs( U11*conj(U31) + U12*conj(U32) + U13*conj(U33)    )>1e-10) printLaph("unitarity3 failed\n");
+ //if (std::abs( U21*conj(U11) + U22*conj(U12) + U23*conj(U13)    )>1e-10) printLaph("unitarity4 failed\n");  
+ //if (std::abs( U21*conj(U21) + U22*conj(U22) + U23*conj(U23)-one)>1e-10) printLaph("unitarity5 failed\n");
+ //if (std::abs( U21*conj(U31) + U22*conj(U32) + U23*conj(U33)    )>1e-10) printLaph("unitarity6 failed\n");
+ //if (std::abs( U31*conj(U11) + U32*conj(U12) + U33*conj(U13)    )>1e-10) printLaph("unitarity7 failed\n"); 
+ //if (std::abs( U31*conj(U21) + U32*conj(U22) + U33*conj(U23)    )>1e-10) printLaph("unitarity8 failed\n"); 
+ //if (std::abs( U31*conj(U31) + U32*conj(U32) + U33*conj(U33)-one)>1e-10) printLaph("unitarity9 failed\n");
+}
+
+    // sets C = A X B* then unit normalizes C
+void LatticeAssigner::cross_prod(const dcmplx& A1, const dcmplx& A2, const dcmplx& A3,
+                                 const dcmplx& B1, const dcmplx& B2, const dcmplx& B3,
+                                 dcmplx& C1, dcmplx& C2, dcmplx& C3)
+{
+ C1=A2*conj(B3)-A3*conj(B2);
+ C2=A3*conj(B1)-A1*conj(B3);
+ C3=A1*conj(B2)-A2*conj(B1);
+ double r=1.0/sqrt((C1*conj(C1)+C2*conj(C2)+C3*conj(C3)).real());
+ C1*=r; C2*=r; C3*=r; 
+}
+
+bool LatticeAssigner::dprec;
+
+// ************************************************
+
+     // tol<=0.0 means set tolerance from whether double or single precision
+
+bool LatticeChecker::check_field(const LattField& latfield, const string& fieldname, bool full,
+                                 double tol)
+{
+ if (latassigner.isDblePrec()){  printLaph("double precision check");
+    double tolerance=(tol<=0.0)? 1e-10: tol;
+    return do_check_field(latfield,fieldname,full,tolerance);}
+ else{
+    float tolerance=(tol<=0.0)? 1e-5 : tol;  printLaph("single precision check");
+    return do_check_field(latfield,fieldname,full,tolerance);}
+}
+
+
+template <typename T>
+bool LatticeChecker::do_check_field(const LattField& latfield, const string& fieldname, bool full,
+                                    const T& tolerance)
+{
+ bool flag;
+ printLaph(" Starting field check");
+ printLaph(make_strf("  Bytes per site is %d",latfield.bytesPerSite()));
+ printLaph(make_strf("  Bytes per word is %d",latfield.bytesPerWord()));
+ printLaph(make_strf(" Elements per site is %d",latfield.elemsPerSite()));
+ if (full) flag=check_field_full(latfield,fieldname,tolerance);
+ else flag=check_field_random(latfield,fieldname,tolerance);
+ printLaph("\n");
+ return flag;
+}
+
+
+template <typename T>
+bool LatticeChecker::check_field_full(const LattField& latfield, const string& fieldname,
+                                      const T& tolerance)
+{
+ bool result=true;
+ printLaph(make_strf("Do full lattice field check for %s",fieldname));
+ for (int y=0;y<LayoutInfo::getLattSizes()[1];++y)
+ for (int x=0;x<LayoutInfo::getLattSizes()[0];++x)
+ for (int t=0;t<LayoutInfo::getLattSizes()[3];++t)
+ for (int z=0;z<LayoutInfo::getLattSizes()[2];++z){
+    vector<int> coord(LayoutInfo::Ndim);
+    coord[0]=x; coord[1]=y; coord[2]=z; coord[3]=t;
+    result = result && do_site_checker(latfield,coord,tolerance);}
+ printLaph(make_strf("Full lattice check of %s is done",fieldname));
+ return result;
+}
+
+
+template <typename T>
+bool LatticeChecker::check_field_random(const LattField& latfield, const string& fieldname,
+                                        const T& tolerance)
+{
+ bool result=true;
+ printLaph(make_strf("Do random lattice field check for %s",fieldname));
+ for (int k=0;k<256;++k){
+    vector<int> coord(latassigner.getRandomSite());
+    result = result && do_site_checker(latfield,coord,tolerance);}
+ printLaph(make_strf("Random lattice check of %s is done",fieldname));
+ return result;
+}
+
+
+template <typename T>
+bool LatticeChecker::do_site_checker(const LattField& latfield, const vector<int>& coord, 
+                                     const T& tolerance)
+{
+ vector<char> cv(latfield.getSiteData(coord));  
+ vector<char> check(latfield.bytesPerSite());
+ latassigner.assign_site(coord,check,latfield.elemsPerSite());
+ bool flag=true;
+ complex<T>* dptr=reinterpret_cast<complex<T>*>(cv.data());
+ complex<T>* cptr=reinterpret_cast<complex<T>*>(check.data());
+ for (uint k=0;k<latfield.elemsPerSite();++k,++dptr,++cptr){
+    T df=std::abs((*dptr)-(*cptr))/std::max(1.0,(0.5*(std::abs((*dptr))+std::abs((*cptr)))));
+    flag=flag && (df<tolerance);}
+#ifdef ARCH_PARALLEL
+ flag=globalAnd(flag);
+#endif
+ if (!flag){
+    printLaph(make_strf("MISMATCH for site (%d,%d,%d,%d)",coord[0],coord[1],coord[2],coord[3]));
+    dptr=reinterpret_cast<complex<T>*>(cv.data());
+    cptr=reinterpret_cast<complex<T>*>(check.data());    
+    for (uint k=0;k<latfield.elemsPerSite();++k,++dptr,++cptr){
+       printLaph(make_strf("For element %d GOT: (%f,%f) EXPECTED (%f,%f)",k,dptr->real(),dptr->imag(),
+                  cptr->real(),cptr->imag()));}}
+ return flag;
+}
+
+
+// *************************************************************************************
+
+
+void GaugeFieldAssigner::assign_gauge_field(std::vector<LattField>& gauge_field, const string& fieldname)
+{
+ gauge_field.resize(LayoutInfo::Ndim);
+ for (int dir=0;dir<LayoutInfo::Ndim;++dir){
+    gauge_field[dir].reset(FieldSiteType::ColorMatrix);
+    LA.reSeed(mtseeds[dir]);
+    LA.assign_field(gauge_field[dir],fieldname);}
+}
+
+
+bool GaugeFieldChecker::check_gauge_field(const vector<LattField>& gffield, const string& fieldname, 
+                                          bool full, double tol)
+{
+ bool flag=true;
+ for (int dir=0;dir<LayoutInfo::Ndim;++dir){
+    LC.reSeed(GF_assigner.mtseeds[dir]);
+    flag=flag && LC.check_field(gffield[dir],fieldname,full,tol);}
+ return flag;
+}
+
+
+bool compare_sites_dp(const vector<char>& site1, const vector<char>& site2, int nelem)
+{
+ double eps=1e-9;
+ const complex<double>* z1=reinterpret_cast<const complex<double>*>(site1.data());
+ const complex<double>* z2=reinterpret_cast<const complex<double>*>(site2.data());
+ for (int k=0;k<nelem;++k){
+    if (std::abs((*z1)-(*z2))>eps){
+       printLaph(make_str("DISAGREE ",*z1," ",*z2));
+       return false;}
+    ++z1;++z2;}
+ return true;
+}
+
+bool compare_sites_sp(const vector<char>& site1, const vector<char>& site2, int nelem)
+{
+ float eps=1e-5;
+ const complex<float>* z1=reinterpret_cast<const complex<float>*>(site1.data());
+ const complex<float>* z2=reinterpret_cast<const complex<float>*>(site2.data());
+ for (int k=0;k<nelem;++k){
+    if (std::abs((*z1)-(*z2))>eps){
+       printLaph(make_str("DISAGREE ",*z1," ",*z2));
+       return false;}
+    ++z1;++z2;}
+ return true;
+}
+
+bool compare_sites(const vector<char>& site1, const vector<char>& site2, int nelem)
+{
+ if (site1.size()!=site2.size()){
+    printLaph("Size mismatch"); return false;}
+ if (site1.size()==sizeof(complex<double>)*nelem){
+    return compare_sites_dp(site1,site2,nelem);}
+ else{
+    return compare_sites_sp(site1,site2,nelem);}
+}
+
+
+void compare_fields(const LattField& src1, const LattField& src2)
+{
+ bool flag=true;
+ int n1=src1.elemsPerSite();
+ int n2=src2.elemsPerSite();
+ if (n1!=n2){ flag=false;}
+ else{
+ vector<int> latt_coords(LayoutInfo::Ndim);
+ for (latt_coords[0]=0;latt_coords[0]<LayoutInfo::getLattSizes()[0];++latt_coords[0])
+ for (latt_coords[1]=0;latt_coords[1]<LayoutInfo::getLattSizes()[1];++latt_coords[1])
+ for (latt_coords[2]=0;latt_coords[2]<LayoutInfo::getLattSizes()[2];++latt_coords[2])
+ for (latt_coords[3]=0;latt_coords[3]<LayoutInfo::getLattSizes()[3];++latt_coords[3]){
+    vector<char> site1(src1.getSiteData(latt_coords));
+    vector<char> site2(src2.getSiteData(latt_coords));
+    bool check=compare_sites(site1,site2,n1);
+    if (!check){
+       printLaph(make_str("Site (",latt_coords[0],",",latt_coords[1],",",latt_coords[2],
+                  ",",latt_coords[3],")"));}
+    flag=flag && check;}}
+ if (flag) printLaph("Fields AGREE");
+ else printLaph("Fields DISAGREE");
+}
+
+
+// **************************************************************************
+
+  // This is useful for debugging only; very slow.  "nsites" is the number of
+  // sites to print in order from (0,0,0,0).  An input value of -1 means print all.
+
+void printField(const LattField& field, const std::string& fieldname, int nsites)
+{
+ printLaph(make_str("Lattice Field named ",fieldname));
+ bool dp=(field.bytesPerWord()==sizeof(complex<double>)); 
+ int nelem_site=field.elemsPerSite();
+ vector<char> siteData(field.bytesPerSite());
+ vector<int> coord(LayoutInfo::Ndim);
+ uint count=0;
+ uint ncount=(nsites>0)?nsites:LayoutInfo::getLatticeNumSites();
+ for (coord[3]=0;coord[3]<LayoutInfo::getLattSizes()[3];++coord[3])
+ for (coord[2]=0;coord[2]<LayoutInfo::getLattSizes()[2];++coord[2])
+ for (coord[1]=0;coord[1]<LayoutInfo::getLattSizes()[1];++coord[1])
+ for (coord[0]=0;coord[0]<LayoutInfo::getLattSizes()[0];++coord[0],++count){
+    if (count==ncount) return;
+    printLaph(make_str(" field site (",coord[0],",",coord[1],",",coord[2],",",coord[3],"):"));
+    vector<char> sitedata(field.getSiteData(coord));
+    if (dp){
+       complex<double>* z=reinterpret_cast<complex<double>*>(sitedata.data());
+       for (int k=0;k<nelem_site;++k,++z){
+          printLaph(make_str("  field_comp[",k,"] = ",*z));}}
+    else{
+       complex<float>* z=reinterpret_cast<complex<float>*>(sitedata.data());
+       for (int k=0;k<nelem_site;++k,++z){
+          printLaph(make_str("  field_comp[",k,"] = ",*z));}}}
+}
+
+
+void printFieldToFile(const LattField& field, const std::string& infostring, const std::string& filename)
+{
+ ofstream fout;
+ if (isPrimaryRank()){
+    fout.open(filename);
+    fout << infostring<<endl;
+    fout.precision(14);}
+ bool dp=(field.bytesPerWord()==sizeof(complex<double>)); 
+ int nelem_site=field.elemsPerSite();
+ vector<char> siteData(field.bytesPerSite());
+ vector<int> coord(LayoutInfo::Ndim);
+ for (coord[3]=0;coord[3]<LayoutInfo::getLattSizes()[3];++coord[3])
+ for (coord[2]=0;coord[2]<LayoutInfo::getLattSizes()[2];++coord[2])
+ for (coord[1]=0;coord[1]<LayoutInfo::getLattSizes()[1];++coord[1])
+ for (coord[0]=0;coord[0]<LayoutInfo::getLattSizes()[0];++coord[0]){
+    if (isPrimaryRank()){
+       fout << " field site ("<<coord[0]<<","<<coord[1]<<","<<coord[2]<<","<<coord[3]<<"):"<<endl;}
+    vector<char> sitedata(field.getSiteData(coord));
+    if (dp){
+       complex<double>* z=reinterpret_cast<complex<double>*>(sitedata.data());
+       for (int k=0;k<nelem_site;++k,++z){
+          if (isPrimaryRank()){
+             fout <<"  field_comp["<<k<<"] = "<<*z<<endl;}}}
+    else{
+       complex<float>* z=reinterpret_cast<complex<float>*>(sitedata.data());
+       for (int k=0;k<nelem_site;++k,++z){
+          if (isPrimaryRank()){
+             fout <<"  field_comp["<<k<<"] = "<<*z<<endl;}}}}
+ if (isPrimaryRank()){
+    fout.close();}
+}
+
+
+void printField(const LattField& field, const std::string& fieldname, 
+                const std::vector<std::vector<int>>& sites)
+{
+ printLaph(make_str("Lattice Field named ",fieldname));
+ bool dp=(field.bytesPerWord()==sizeof(complex<double>)); 
+ int nelem_site=field.elemsPerSite();
+ vector<char> siteData(field.bytesPerSite());
+ for (int count=0;count<int(sites.size());++count){
+    const std::vector<int>& coord=sites[count];
+    printLaph(make_str(" field site (",coord[0],",",coord[1],",",coord[2],",",coord[3],"):"));
+    vector<char> sitedata(field.getSiteData(coord));
+    if (dp){
+       complex<double>* z=reinterpret_cast<complex<double>*>(sitedata.data());
+       for (int k=0;k<nelem_site;++k,++z){
+          printLaph(make_str("  field_comp[",k,"] = ",*z));}}
+    else{
+       complex<float>* z=reinterpret_cast<complex<float>*>(sitedata.data());
+       for (int k=0;k<nelem_site;++k,++z){
+          printLaph(make_str("  field_comp[",k,"] = ",*z));}}}
+}
+
+
+void setConstantField(LattField& field, const std::complex<double>& zconst)
+{
+ bool dp=(field.bytesPerWord()==sizeof(complex<double>));
+ int n=field.elemsPerSite()*LayoutInfo::getRankLatticeNumSites();
+ if (dp){
+    complex<double>* z=reinterpret_cast<complex<double>*>(field.getDataPtr());
+    for (int k=0;k<n;++k,++z){
+       *z=zconst;}}
+ else{
+    complex<float> zfconst(float(real(zconst)),float(imag(zconst)));
+    complex<float>* z=reinterpret_cast<complex<float>*>(field.getDataPtr());
+    for (int k=0;k<n;++k,++z){
+       *z=zfconst;}}
+}
+
+
+void setUnitField(LattField& field)
+{
+ setConstantField(field,complex<double>(1.0,0.0));
+}
+
+
+void setZeroField(LattField& field)
+{
+ setConstantField(field,complex<double>(0.0,0.0));
+}
+
+//*******************************************************************************
+
+    //  This is for testing
+
+void applyLaphPhaseConventionSlow(vector<LattField>& fields)
+{
+ int nev=fields.size();
+ if (nev==0){return;}
+ bool dp=(fields[0].bytesPerWord()==sizeof(std::complex<double>));
+ int ntime=LayoutInfo::getLattSizes()[LayoutInfo::Ndim-1];
+ dcmplx rephasedp;
+ fcmplx rephasesp;
+ for (int v=0;v<int(fields.size());++v){
+    for (int t=0;t<ntime;++t){
+       vector<int> latt_coords(LayoutInfo::Ndim);
+       latt_coords[0]=0; latt_coords[1]=0; latt_coords[2]=0; latt_coords[3]=t;
+       vector<char> sitedata(fields[v].getSiteData(latt_coords));
+       if (dp){
+          complex<double> *zptr=reinterpret_cast<complex<double>*>(sitedata.data());
+          complex<double> z=std::conj(*zptr);
+          double r=std::abs(z);
+          rephasedp=z/r;}
+       else{
+          complex<float> *zptr=reinterpret_cast<complex<float>*>(sitedata.data());
+          complex<float> z=std::conj(*zptr);
+          float r=std::abs(z);
+          rephasesp=z/r;}
+       for (latt_coords[0]=0;latt_coords[0]<LayoutInfo::getLattSizes()[0];++latt_coords[0])
+       for (latt_coords[1]=0;latt_coords[1]<LayoutInfo::getLattSizes()[1];++latt_coords[1])
+       for (latt_coords[2]=0;latt_coords[2]<LayoutInfo::getLattSizes()[2];++latt_coords[2]){
+          vector<char> sitedata(fields[v].getSiteData(latt_coords));
+          if (dp){
+             complex<double>* zptr=reinterpret_cast<complex<double>*>(sitedata.data());
+             for (int c=0;c<FieldNcolor;++c,++zptr){
+                *zptr*=rephasedp;}}
+          else{
+             complex<float>* zptr=reinterpret_cast<complex<float>*>(sitedata.data());
+             for (int c=0;c<FieldNcolor;++c,++zptr){
+                *zptr*=rephasesp;}}
+          fields[v].putSiteData(latt_coords,sitedata);}}}
+}
+
+
+void applyLaphPhaseConvention(vector<LattField>& fields)
+{
+ int nev=fields.size();
+ if (nev==0){
+    return;}
+ for (int v=0;v<nev;++v){
+    if (fields[v].getFieldSiteType()!=FieldSiteType::ColorVector){
+       errorLaph("Applying phase convention can only be done to ColorVector fields");}}
+
+ bool dp=(fields[0].bytesPerWord()==sizeof(std::complex<double>));
+ int loc_nsites=LayoutInfo::getRankLatticeNumSites();
+ int loc_npsites=loc_nsites/2;
+ int start_parity=LayoutInfo::getMyStartParity();
+ int nloctime=LayoutInfo::getRankLattSizes()[3];
+ int tstride=LayoutInfo::getRankLattSizes()[0]*LayoutInfo::getRankLattSizes()[1]
+            *LayoutInfo::getRankLattSizes()[2];
+ int incx=FieldNcolor;
+ int cbytes=(dp)?sizeof(std::complex<double>):sizeof(std::complex<float>);
+ int bps=fields[0].bytesPerSite();
+ dcmplx rephasedp;
+ fcmplx rephasesp;
+
+        //  get the rephase factors for each eigvec and local time slice
+ vector<char> rephase(nev*nloctime*cbytes);
+ if ((LayoutInfo::getMyCommCoords()[0]==0)
+   &&(LayoutInfo::getMyCommCoords()[1]==0)
+   &&(LayoutInfo::getMyCommCoords()[2]==0)){
+    char* rp=rephase.data();
+    for (int v=0;v<nev;++v){
+       char* fp=reinterpret_cast<char*>(fields[v].getDataPtr());
+       for (int tloc=0;tloc<nloctime;++tloc,rp+=cbytes){
+          int parshift=loc_npsites*((start_parity+tloc)%2);
+          int start1=((tstride*tloc)/2) + parshift;
+          char* x1=fp+bps*start1;         // location of (0,0,0,t)
+          if (dp){
+             complex<double>* zptr=reinterpret_cast<complex<double>*>(x1);
+             complex<double> z(std::conj(*zptr));
+             double r=std::abs(z);
+             if (r<1e-12){
+                errorLaph(make_str("problem applying phase convention: 0-th color component at site",
+                          " (0,0,0) has very small magnitude ",r));}  // pray this does not happen!
+             rephasedp=z/r;
+             std::memcpy(rp,&rephasedp,cbytes);}
+          else{
+             complex<float>* zptr=reinterpret_cast<complex<float>*>(x1);
+             complex<float> z(std::conj(*zptr));
+             float r=std::abs(z);
+             if (r<1e-8){
+                errorLaph(make_str("problem applying phase convention: 0-th color component at site",
+                          " (0,0,0) has very small magnitude ",r));}  // pray this does not happen!
+             rephasesp=z/r;
+             std::memcpy(rp,&rephasesp,cbytes);}}}}
+
+#ifdef ARCH_PARALLEL
+    // now broadcast these rephase factors to the ranks that need them
+ vector<int> comm_coords(LayoutInfo::Ndim-1);
+ comm_coords[LayoutInfo::Ndim-1]=LayoutInfo::getMyCommCoords()[LayoutInfo::Ndim-1];
+ comm_coords[0]=0; comm_coords[1]=0; comm_coords[2]=0;
+ int orig_sender_rank=LayoutInfo::getRankFromCommCoords(comm_coords);
+ int sender_rank=0;
+ vector<int> broadcast_ranks;
+ int count=0;
+ for (comm_coords[0]=0;comm_coords[0]<LayoutInfo::getCommNumPartitions()[0];++comm_coords[0])
+ for (comm_coords[1]=0;comm_coords[1]<LayoutInfo::getCommNumPartitions()[1];++comm_coords[1])
+ for (comm_coords[2]=0;comm_coords[2]<LayoutInfo::getCommNumPartitions()[2];++comm_coords[2],++count){
+    int next_rank=LayoutInfo::getRankFromCommCoords(comm_coords);
+    if (next_rank==orig_sender_rank){
+       sender_rank=count;}
+    broadcast_ranks.push_back(next_rank);}
+ if (broadcast_ranks.size()>1){
+    if (int(broadcast_ranks.size())==LayoutInfo::getNumRanks()){
+       comm_broadcast(rephase.data(),nev*nloctime*cbytes,orig_sender_rank);}
+    else{
+       MPI_Group world_group;
+       MPI_Comm_group(MPI_COMM_WORLD, &world_group);
+       MPI_Group time_group;
+       MPI_Group_incl(world_group, broadcast_ranks.size(), broadcast_ranks.data(), &time_group);
+       MPI_Comm time_comm;
+       MPI_Comm_create_group(MPI_COMM_WORLD, time_group, sender_rank, &time_comm);
+       if (time_comm != MPI_COMM_NULL){
+          int status=MPI_Bcast(rephase.data(), nev*nloctime*cbytes, MPI_BYTE, sender_rank, time_comm);
+          if (status!=MPI_SUCCESS){
+             errorLaph("Broadcast of re-phase factor in applyLaphPhaseConvention failed");}}
+       MPI_Group_free(&time_group);
+       MPI_Group_free(&world_group);
+       MPI_Comm_free(&time_comm);}}
+#endif
+
+    // now apply the rephase factors
+ const char* rf=rephase.data();
+ for (int v=0;v<nev;++v){
+    char* fp=reinterpret_cast<char*>(fields[v].getDataPtr());
+    for (int tloc=0;tloc<nloctime;++tloc,rf+=cbytes){
+       int parshift=loc_npsites*((start_parity+tloc)%2);
+       int start1=((tstride*tloc)/2) + parshift;
+       int stop1=((1+tstride*(tloc+1))/2) + parshift;
+       int n1=stop1-start1;
+       parshift=loc_npsites*((start_parity+1+tloc)%2);
+       int start2=((1+tstride*tloc)/2) + parshift;
+       int stop2=((tstride*(tloc+1))/2) + parshift;
+       int n2=stop2-start2;
+       char* x1=fp+bps*start1;         // location of (0,0,0,t)
+       char* x2=fp+bps*start2;         // location of (1,0,0,t)
+       for (int c=0;c<FieldNcolor;++c){
+          if (dp){
+             cblas_zscal(n1,rf,x1,incx);
+             cblas_zscal(n2,rf,x2,incx);}
+          else{
+             cblas_cscal(n1,rf,x1,incx);
+             cblas_cscal(n2,rf,x2,incx);}
+          x1+=cbytes; x2+=cbytes;}
+       }}
+#ifdef ARCH_PARALLEL
+ comm_barrier();
+#endif
+}
+
+// **********************************************************************
+
+    //  This routine applies an inner product conj(leftfield).rightfield,
+    //  where leftfield and rightfield are color-vector fields, but the
+    //  inner product is taken over the time slices.  The ntime inner
+    //  products are returned. (Slow version for testing)
+
+std::vector<complex<double>> getTimeSlicedInnerProductsSlow(const LattField& leftfield, 
+                                                            const LattField& rightfield)
+{
+ if ((leftfield.getFieldSiteType()!=FieldSiteType::ColorVector)
+   ||(rightfield.getFieldSiteType()!=FieldSiteType::ColorVector)){
+    errorLaph("getTimeSlicedInnerProducts only supports ColorVector fields");}
+ if (leftfield.bytesPerWord()!=rightfield.bytesPerWord()){
+    errorLaph("getTimeSlicedInnerProducts requires both fields have same precision");}
+ bool dp=(leftfield.bytesPerWord()==sizeof(std::complex<double>));
+ int ntime=LayoutInfo::getLattSizes()[LayoutInfo::Ndim-1];
+ vector<complex<double>> results(ntime);
+ vector<int> latt_coords(LayoutInfo::Ndim);
+ for (latt_coords[3]=0;latt_coords[3]<LayoutInfo::getLattSizes()[3];++latt_coords[3]){
+    complex<double> dres(0.0,0.0);
+    complex<float> fres(0.0,0.0);
+    for (latt_coords[2]=0;latt_coords[2]<LayoutInfo::getLattSizes()[2];++latt_coords[2])
+    for (latt_coords[1]=0;latt_coords[1]<LayoutInfo::getLattSizes()[1];++latt_coords[1])
+    for (latt_coords[0]=0;latt_coords[0]<LayoutInfo::getLattSizes()[0];++latt_coords[0]){
+       vector<char> rightsite(rightfield.getSiteData(latt_coords));
+       vector<char> leftsite(leftfield.getSiteData(latt_coords));
+       if (dp){
+          complex<double> *lp=reinterpret_cast<complex<double>*>(leftsite.data());
+          complex<double> *rp=reinterpret_cast<complex<double>*>(rightsite.data());
+          for (int c=0;c<FieldNcolor;++c,++lp,++rp){
+             dres+=std::conj(*lp)*(*rp);}}
+       else{
+          complex<float> *lp=reinterpret_cast<complex<float>*>(leftsite.data());
+          complex<float> *rp=reinterpret_cast<complex<float>*>(rightsite.data());
+          for (int c=0;c<FieldNcolor;++c,++lp,++rp){
+             fres+=std::conj(*lp)*(*rp);}}}
+    if (dp){
+       results[latt_coords[3]]=dres;}
+    else{
+       results[latt_coords[3]]=complex<double>(double(real(fres)),double(imag(fres)));}}
+ return results;
+}
+
+    //  This routine applies an inner product conj(leftfield).rightfield,
+    //  where leftfield and rightfield are color-vector fields, but the
+    //  inner product is taken over the time slices.  The ntime inner
+    //  products are returned.
+
+std::vector<complex<double>> getTimeSlicedInnerProducts(const LattField& leftfield, 
+                                                        const LattField& rightfield)
+{
+ if ((leftfield.getFieldSiteType()!=FieldSiteType::ColorVector)
+   ||(rightfield.getFieldSiteType()!=FieldSiteType::ColorVector)){
+    errorLaph("getTimeSlicedInnerProducts only supports ColorVector fields");}
+ if (leftfield.bytesPerWord()!=rightfield.bytesPerWord()){
+    errorLaph("getTimeSlicedInnerProducts requires both fields have same precision");}
+ bool dp=(leftfield.bytesPerWord()==sizeof(std::complex<double>));
+ int loc_nsites=LayoutInfo::getRankLatticeNumSites();
+ int loc_npsites=loc_nsites/2;
+ int start_parity=LayoutInfo::getMyStartParity();
+ int nloctime=LayoutInfo::getRankLattSizes()[3];
+ int tstride=LayoutInfo::getRankLattSizes()[0]*LayoutInfo::getRankLattSizes()[1]
+            *LayoutInfo::getRankLattSizes()[2];
+ int cbytes=(dp)?sizeof(std::complex<double>):sizeof(std::complex<float>);
+ int bps=leftfield.bytesPerSite();
+
+ vector<char> iprods1(nloctime*cbytes);
+ vector<char> iprods2(nloctime*cbytes);
+ const char* lp=reinterpret_cast<const char*>(leftfield.getDataConstPtr());
+ const char* rp=reinterpret_cast<const char*>(rightfield.getDataConstPtr());
+ char* ip1=reinterpret_cast<char*>(iprods1.data());
+ char* ip2=reinterpret_cast<char*>(iprods2.data());
+ for (int tloc=0;tloc<nloctime;++tloc,ip1+=cbytes,ip2+=cbytes){
+    int parshift=loc_npsites*((start_parity+tloc)%2);
+    int start1=((tstride*tloc)/2) + parshift;
+    int stop1=((1+tstride*(tloc+1))/2) + parshift;
+    int n1=FieldNcolor*(stop1-start1);
+    parshift=loc_npsites*((start_parity+1+tloc)%2);
+    int start2=((1+tstride*tloc)/2) + parshift;
+    int stop2=((tstride*(tloc+1))/2) + parshift;
+    int n2=FieldNcolor*(stop2-start2);
+    const char* x1=lp+bps*start1;
+    const char* x2=lp+bps*start2;
+    const char* y1=rp+bps*start1;
+    const char* y2=rp+bps*start2;
+    if (dp){
+       cblas_zdotc_sub(n1,x1,1,y1,1,ip1);
+       cblas_zdotc_sub(n2,x2,1,y2,1,ip2);}
+    else{
+       cblas_cdotc_sub(n1,x1,1,y1,1,ip1);
+       cblas_cdotc_sub(n2,x2,1,y2,1,ip2);}}
+
+ int ntime=LayoutInfo::getLattSizes()[3];
+ vector<complex<double>> iprods(ntime);
+ for (int t=0;t<ntime;++t){
+    iprods[t]=complex<double>(0.0,0.0);}
+ int mytmin=LayoutInfo::getMyCommCoords()[3]*LayoutInfo::getRankLattSizes()[3];
+ if (dp){
+    complex<double>* z1=reinterpret_cast<complex<double>*>(iprods1.data());
+    complex<double>* z2=reinterpret_cast<complex<double>*>(iprods2.data());
+    for (int tloc=0;tloc<nloctime;++tloc,++z1,++z2){
+       iprods[tloc+mytmin]+=(*z1)+(*z2);}}
+ else{
+    float* f1=reinterpret_cast<float*>(iprods1.data());
+    float* f2=reinterpret_cast<float*>(iprods2.data());
+    for (int tloc=0;tloc<nloctime;++tloc,++f1,++f2){
+       double zr=(*f1)+(*f2); ++f1; ++f2;
+       double zi=(*f1)+(*f2);
+       iprods[tloc+mytmin]+=complex<double>(zr,zi);}}
+
+#ifdef ARCH_PARALLEL
+ vector<complex<double>> results(ntime);
+ int status=MPI_Allreduce(iprods.data(),results.data(),2*ntime,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+ if (status!=MPI_SUCCESS){
+    errorLaph("Problem occurred in getTimeSlicedInnerProducts");}
+ return results;
+#else
+ return iprods;
+#endif
+}
+
+// ********************************************************************************
+
+void testLatticeField(XMLHandler& xml_in)
+{
+ if (xml_tag_count(xml_in,"TestLatticeField")==0)
+ return;
+
+ uint MTseed1=0, MTseed2=0, MTseed3=0, MTseed4=0;
+ XMLHandler xmlr(xml_in,"TestLatticeField");
+ xmlreadif(xmlr,"MTSeed1",MTseed1,"TestLatticeField");
+ xmlreadif(xmlr,"MTSeed2",MTseed2,"TestLatticeField");
+ xmlreadif(xmlr,"MTSeed3",MTseed3,"TestLatticeField");
+ xmlreadif(xmlr,"MTSeed4",MTseed4,"TestLatticeField");
+ double minval=-10.0;
+ double maxval=10.0;
+ xmlreadif(xmlr,"MinValue",minval,"TestLatticeField");
+ xmlreadif(xmlr,"MaxValue",maxval,"TestLatticeField");
+
+ printLaph(make_strf("MTSeed1 is %d",MTseed1));
+ printLaph(make_strf("MTSeed2 is %d",MTseed2));
+ printLaph(make_strf("MTSeed3 is %d",MTseed3));
+ printLaph(make_strf("MTSeed4 is %d",MTseed4));
+ printLaph(make_strf("MinValue is %f",minval));
+ printLaph(make_strf("MaxValue is %f",maxval));
+
+ LatticeAssigner Q(MTseed1,minval,maxval);
+ LatticeChecker LC(Q);
+
+ {LattField tmp;
+ printLaph(make_strf("Initial tmp size is %d (should be 0)",tmp.getDataConstRef().size()));
+
+ tmp.reset(FieldSiteType::ColorVector);
+ printLaph(make_strf("After reset, tmp size is %d (should be %d)",tmp.getDataConstRef().size(),
+             LayoutInfo::getRankLatticeNumSites()*3*LattField::get_cpu_prec_bytes()));
+ Q.assign_field(tmp,"First ColorVector");
+ LC.check_field(tmp,"First ColorVector",true);
+
+ //printField(tmp,"First ColorVector Field");
+
+ LattField tmp2(FieldSiteType::Complex);
+ Q.reSeed(MTseed2);
+ Q.assign_field(tmp2,"First Complex");
+ LC.check_field(tmp2,"First Complex",false);
+
+ LattField tmp3(tmp);
+ Q.reSeed(MTseed1);
+ LC.check_field(tmp3,"tmp3 copy",false);
+ 
+ LattField tmp4(FieldSiteType::ColorSpinVector);
+ tmp4=tmp3;
+ LC.check_field(tmp4,"tmp4 assigned",false);
+
+ tmp2.reset(FieldSiteType::ColorSpinVector);
+ Q.reSeed(MTseed3);
+ Q.assign_field(tmp2,"Reset ColorSpinVector");
+ LC.check_field(tmp2,"Reset ColorSpinVector",true);}
+
+
+ {LattField tmp;
+ printLaph(make_strf("Initial tmp size is %d (should be 0)",tmp.getDataConstRef().size()));
+
+ tmp.reset(FieldSiteType::ColorVector);
+ printLaph(make_strf("After reset, tmp size is %d (should be %d)",tmp.getDataConstRef().size(),
+             LayoutInfo::getRankLatticeNumSites()*3*LattField::get_cpu_prec_bytes()));
+ Q.reSeed(MTseed1);
+ Q.assign_field(tmp,"Second ColorVector");
+ LC.check_field(tmp,"Second ColorVector",true);
+
+ LattField tmp2(FieldSiteType::Complex);
+ Q.reSeed(MTseed2);
+ Q.assign_field(tmp2,"Second Complex");
+ LC.check_field(tmp2,"Second Complex",false);
+
+ LattField tmp3(tmp);
+ Q.reSeed(MTseed1);
+ LC.check_field(tmp3,"Second tmp3 copy",false);
+ 
+ LattField tmp4(FieldSiteType::ColorSpinVector);
+ tmp4=tmp3;
+ LC.check_field(tmp4,"Second tmp4 assigned",false);
+
+ tmp2.reset(FieldSiteType::ColorSpinVector);
+ Q.reSeed(MTseed2);
+ Q.assign_field(tmp2,"Reset ColorSpinVector");
+ LC.check_field(tmp2,"Reset ColorSpinVector",true);}
+
+ printLaph("Doing a gauge field assignment");
+ GaugeFieldAssigner GC(MTseed1,MTseed2,MTseed3,MTseed4);
+ vector<LattField> GF1;
+ GC.assign_gauge_field(GF1,"GaugeField1");
+ 
+ GaugeFieldChecker GFC(GC);
+ GFC.check_gauge_field(GF1,"GaugeField1",true);
+
+ printLaph("Doing another gauge field assignment");
+ vector<LattField> GF2;
+ GC.reSeed(MTseed3,MTseed1,MTseed4,MTseed2);
+ GC.assign_gauge_field(GF2,"GaugeField2");
+ GFC.check_gauge_field(GF2,"GaugeField2",true);
+
+/* vector<vector<int>> sites;
+ sites.push_back(vector<int>{0,0,0,0});
+ sites.push_back(vector<int>{1,0,0,0});
+ sites.push_back(vector<int>{2,0,0,0});
+ sites.push_back(vector<int>{3,0,0,0});
+ sites.push_back(vector<int>{0,0,0,1});
+ sites.push_back(vector<int>{1,0,0,1});
+ sites.push_back(vector<int>{2,0,0,1});
+ sites.push_back(vector<int>{3,0,0,1});
+ sites.push_back(vector<int>{0,0,0,2});
+ sites.push_back(vector<int>{1,0,0,2});
+ sites.push_back(vector<int>{2,0,0,2});
+ sites.push_back(vector<int>{0,0,0,3});
+ sites.push_back(vector<int>{2,0,0,3});
+ sites.push_back(vector<int>{1,0,0,3});
+*/ 
+ int nevecs=3;
+ vector<uint> evseed(nevecs);
+ evseed[0]=MTseed3;
+ evseed[1]=MTseed4;
+ evseed[2]=MTseed1;
+ printLaph("Testing applyLaphPhaseConvention");
+ vector<LattField> evecs(nevecs,FieldSiteType::ColorVector);
+ for (int k=0;k<nevecs;++k){
+    Q.reSeed(evseed[k]);
+    Q.assign_field(evecs[k],"LaphEigenvector");}
+// printField(evecs[0],"evec[0] original",sites);
+ vector<LattField> evcheck(evecs);
+
+ applyLaphPhaseConvention(evecs);
+ applyLaphPhaseConventionSlow(evcheck);
+ for (int k=0;k<nevecs;++k){
+    //printField(evecs[k],"evec",sites);
+    //printField(evcheck[k],"evec_check",sites);
+    compare_fields(evecs[k],evcheck[k]);}
+
+ printLaph("\n Now testing getTimeSlicedInnerProducts\n");
+ vector<complex<double>> iprods1,iprods2;
+ LattField tmp;
+ tmp.reset(FieldSiteType::ColorVector);
+ Q.reSeed(MTseed1);
+ Q.assign_field(tmp,"ColorVector");
+ LattField tmp2(FieldSiteType::ColorVector);
+ Q.reSeed(MTseed2);
+ Q.assign_field(tmp2,"ColorVector");
+ LattField tmp3(FieldSiteType::ColorVector);
+ Q.reSeed(MTseed3);
+ Q.assign_field(tmp3,"ColorVector");
+
+ iprods1=getTimeSlicedInnerProducts(tmp,tmp2);
+ iprods2=getTimeSlicedInnerProductsSlow(tmp,tmp2);
+// for (int t=0;t<int(iprods1.size());++t){
+//    printLaph(make_strf("inner prod t=%d  (%20.15f, %20.15f) (%20.15f, %20.15f)\n",
+//              t,real(iprods1[t]),imag(iprods1[t]),real(iprods2[t]),imag(iprods2[t])));}
+ double eps=1e-10;
+ if (tmp.bytesPerWord()!=sizeof(complex<double>)) eps=1e-5;
+ bool flag=true;
+ for (int t=0;t<int(iprods1.size());++t){
+    flag=flag && (std::abs(iprods1[t]-iprods2[t])<eps*std::abs(iprods1[t]+iprods2[t]));}
+ if (flag){ printLaph("First test succeeded");}
+ else{ printLaph("First test FAILED :(");}
+ iprods1=getTimeSlicedInnerProducts(tmp,tmp3);
+ iprods2=getTimeSlicedInnerProductsSlow(tmp,tmp3);
+ flag=true;
+ for (int t=0;t<int(iprods1.size());++t){
+    flag=flag && (std::abs(iprods1[t]-iprods2[t])<eps*std::abs(iprods1[t]+iprods2[t]));}
+ if (flag){ printLaph("Second test succeeded");}
+ else{ printLaph("Second test FAILED :(");}
+ iprods1=getTimeSlicedInnerProducts(tmp2,tmp3);
+ iprods2=getTimeSlicedInnerProductsSlow(tmp2,tmp3);
+ flag=true;
+ for (int t=0;t<int(iprods1.size());++t){
+    flag=flag && (std::abs(iprods1[t]-iprods2[t])<eps*std::abs(iprods1[t]+iprods2[t]));}
+ if (flag){ printLaph("Third test succeeded");}
+ else{ printLaph("Third test FAILED :(");}
+
+}
+
+
+void make_quark_source_slow_dp(LattField& ferm_src, const Array<dcmplx>& laph_noise, 
+                               const std::vector<LattField>& evs, const list<int>& on_times, 
+                               const list<int>& on_spins, const list<int>& on_eigs)
+{
+ printLaph(" Slow making source for this inversion...");
+ if (evs.size()==0){
+    errorLaph("Cannot make fermion source since no Laph eigenvectors available");}
+ ferm_src.reset(FieldSiteType::ColorSpinVector);
+ vector<int> latt_coords(LayoutInfo::Ndim);
+ for (latt_coords[0]=0;latt_coords[0]<LayoutInfo::getLattSizes()[0];++latt_coords[0])
+ for (latt_coords[1]=0;latt_coords[1]<LayoutInfo::getLattSizes()[1];++latt_coords[1])
+ for (latt_coords[2]=0;latt_coords[2]<LayoutInfo::getLattSizes()[2];++latt_coords[2])
+ for (latt_coords[3]=0;latt_coords[3]<LayoutInfo::getLattSizes()[3];++latt_coords[3]){
+    vector<char> siteData(ferm_src.bytesPerSite());
+    complex<double>* sd=reinterpret_cast<complex<double>*>(siteData.data());
+    for (uint k=0;k<ferm_src.elemsPerSite();++k){
+       *(sd+k)=complex<double>(0.0,0.0);}
+    bool onflag=false;
+    for (list<int>::const_iterator it0=on_times.begin();it0!=on_times.end();it0++){
+       if ((*it0)==latt_coords[3]) onflag=true;}
+    if (onflag){
+       for (list<int>::const_iterator smask= on_spins.begin(); smask!=on_spins.end(); smask++){
+       for (list<int>::const_iterator vmask= on_eigs.begin(); vmask!=on_eigs.end(); vmask++){
+          std::vector<char> buf(evs[*vmask].getSiteData(latt_coords));
+          complex<double>* vv=reinterpret_cast<complex<double>*>(buf.data());
+          complex<double> zrho(laph_noise(latt_coords[3],*smask,*vmask));
+            // multiply by gamma_4 in Dirac-Pauli
+          if (*smask>1) zrho=-zrho;
+          for (int c=0;c<FieldNcolor;++c){
+             *(sd+(*smask)*FieldNcolor+c)+=zrho*(*(vv+c));}}}}
+    ferm_src.putSiteData(latt_coords,siteData);}
+ printLaph("Slow source for this inversion created");
+}
+
+void make_quark_source_slow_sp(LattField& ferm_src, const Array<dcmplx>& laph_noise, 
+                               const std::vector<LattField>& evs, const list<int>& on_times, 
+                               const list<int>& on_spins, const list<int>& on_eigs)
+{
+ printLaph(" Slow making source for this inversion...");
+ if (evs.size()==0){
+    errorLaph("Cannot make fermion source since no Laph eigenvectors available");}
+ ferm_src.reset(FieldSiteType::ColorSpinVector);
+ vector<int> latt_coords(LayoutInfo::Ndim);
+ for (latt_coords[0]=0;latt_coords[0]<LayoutInfo::getLattSizes()[0];++latt_coords[0])
+ for (latt_coords[1]=0;latt_coords[1]<LayoutInfo::getLattSizes()[1];++latt_coords[1])
+ for (latt_coords[2]=0;latt_coords[2]<LayoutInfo::getLattSizes()[2];++latt_coords[2])
+ for (latt_coords[3]=0;latt_coords[3]<LayoutInfo::getLattSizes()[3];++latt_coords[3]){
+    vector<char> siteData(ferm_src.bytesPerSite());
+    complex<float>* sd=reinterpret_cast<complex<float>*>(siteData.data());
+    for (uint k=0;k<ferm_src.elemsPerSite();++k){
+       *(sd+k)=complex<float>(0.0,0.0);}
+    bool onflag=false;
+    for (list<int>::const_iterator it0=on_times.begin();it0!=on_times.end();it0++){
+       if ((*it0)==latt_coords[3]) onflag=true;}
+    if (onflag){
+       for (list<int>::const_iterator smask= on_spins.begin(); smask!=on_spins.end(); smask++){
+       for (list<int>::const_iterator vmask= on_eigs.begin(); vmask!=on_eigs.end(); vmask++){
+          std::vector<char> buf(evs[*vmask].getSiteData(latt_coords));
+          complex<float>* vv=reinterpret_cast<complex<float>*>(buf.data());
+          complex<double> zdrho(laph_noise(latt_coords[3],*smask,*vmask));
+          complex<float> zrho(real(zdrho),imag(zdrho));
+            // multiply by gamma_4 in Dirac-Pauli
+          if (*smask>1) zrho=-zrho;
+          for (int c=0;c<FieldNcolor;++c){
+             *(sd+(*smask)*FieldNcolor+c)+=zrho*(*(vv+c));}}}}
+    ferm_src.putSiteData(latt_coords,siteData);}
+ printLaph("Slow source for this inversion created");
+}
+
+
+ // below is the fast (on the cpu) version to be tested
+ 
+void QuarkHandler_make_source(LattField& ferm_src, const Array<cmplx>& laph_noise, 
+                              std::vector<void*> evList, const list<int>& on_times, 
+                              const list<int>& on_spins, const list<int>& on_eigs)
+{
+ printLaph(" Making source for this inversion...");
+ if (evList.size()==0){
+    errorLaph("Cannot make fermion source since no Laph eigenvectors available");}
+ ferm_src.reset(FieldSiteType::ColorSpinVector);
+ bool dp=(ferm_src.bytesPerWord()==sizeof(std::complex<double>));
+    // initialize source field to zero
+ int loc_nsites=LayoutInfo::getRankLatticeNumSites();
+ int ncmplx_per_site=ferm_src.elemsPerSite();
+ int ncmplx=ncmplx_per_site*loc_nsites;
+ int cbytes;
+ dcmplx zrhodp;
+ fcmplx zrhosp;
+ char *zrho;
+ if (dp){
+    double* z0=reinterpret_cast<double*>(ferm_src.getDataPtr());
+    std::fill(z0,z0+2*ncmplx,0.0);
+    cbytes=sizeof(std::complex<double>);
+    zrho=reinterpret_cast<char*>(&zrhodp);}
+ else{
+    float* z0=reinterpret_cast<float*>(ferm_src.getDataPtr());
+    std::fill(z0,z0+2*ncmplx,0.0);
+    cbytes=sizeof(std::complex<float>);
+    zrho=reinterpret_cast<char*>(&zrhosp);}
+
+ int loc_npsites=loc_nsites/2;
+ int start_parity=LayoutInfo::getMyStartParity();
+ int mytmin=LayoutInfo::getMyCommCoords()[3]*LayoutInfo::getRankLattSizes()[3];
+ int mytmax=mytmin+LayoutInfo::getRankLattSizes()[3]-1;
+ int tstride=LayoutInfo::getRankLattSizes()[0]*LayoutInfo::getRankLattSizes()[1]
+            *LayoutInfo::getRankLattSizes()[2];
+ int incx=FieldNcolor;
+ int incy=FieldNcolor*FieldNspin;
+
+ for (list<int>::const_iterator it0=on_times.begin();it0!=on_times.end();it0++){
+    if (((*it0)>=mytmin)&&((*it0)<=mytmax)){
+       int tloc=((*it0)-mytmin);
+       int parshift=loc_npsites*((start_parity+tloc)%2);
+       int start1=((tstride*tloc)/2) + parshift;
+       int stop1=((1+tstride*(tloc+1))/2) + parshift;
+       int n1=stop1-start1;
+       parshift=loc_npsites*((start_parity+1+tloc)%2);
+       int start2=((1+tstride*tloc)/2) + parshift;
+       int stop2=((tstride*(tloc+1))/2) + parshift;
+       int n2=stop2-start2;
+       int xstart1=start1*incx*cbytes;
+       int xstart2=start2*incx*cbytes;
+       char* ystart1=ferm_src.getDataPtr()+start1*incy*cbytes;
+       char* ystart2=ferm_src.getDataPtr()+start2*incy*cbytes;
+       
+       for (list<int>::const_iterator vmask= on_eigs.begin(); vmask!=on_eigs.end(); vmask++){
+          char* x0=reinterpret_cast<char*>(evList[*vmask]);
+          for (list<int>::const_iterator smask= on_spins.begin(); smask!=on_spins.end(); smask++){
+             zrhodp=laph_noise(*it0,*smask,*vmask);
+	     if (*smask>1){ zrhodp=-zrhodp;}  // multiply by gamma_4
+	     if (!dp){
+                zrhosp=complex<float>(real(zrhodp),imag(zrhodp));}
+             char* x1=x0+xstart1;
+             char* x2=x0+xstart2;
+             char* y1=ystart1+(*smask)*incx*cbytes;
+             char* y2=ystart2+(*smask)*incx*cbytes;
+             for (int c=0;c<FieldNcolor;++c){
+                if (dp){
+                   cblas_zaxpy(n1,(dcmplx*)(zrho),(dcmplx*)(x1),incx,(dcmplx*)(y1),incy);
+                   cblas_zaxpy(n2,(dcmplx*)(zrho),(dcmplx*)(x2),incx,(dcmplx*)(y2),incy);}
+                else{
+                   cblas_caxpy(n1,(fcmplx*)(zrho),(fcmplx*)(x1),incx,(fcmplx*)(y1),incy);
+                   cblas_caxpy(n2,(fcmplx*)(zrho),(fcmplx*)(x2),incx,(fcmplx*)(y2),incy);}
+                x1+=cbytes; y1+=cbytes; x2+=cbytes; y2+=cbytes;}}}}}
+//    QDPIO::cout << "source created...starting inversion"<<endl;
+//    bulova.stop(); srctime+=bulova.getTimeInSeconds();
+//    seiko.stop(); rotatetime+=seiko.getTimeInSeconds();*/
+
+// check norm (slow version)
+/*
+if (dp){
+  double norm=0.0;
+    double* z0=reinterpret_cast<double*>(ferm_src.getDataPtr());
+    cout << "ncmplx = "<<ncmplx<<endl;
+    for (int k=0;k<2*ncmplx;++k,++z0){
+       norm+=(*z0)*(*z0);}
+  cout  << "norm = "<<sqrt(norm)<<endl;}
+*/      
+  
+
+ printLaph("Source for this inversion created");
+}
+
+/*
+void QuarkHandler_make_source(LattField& ferm_src, const Array<cmplx>& laph_noise, 
+                              std::vector<void*> evList, const list<int>& on_times, 
+                              const list<int>& on_spins, const list<int>& on_eigs)
+{
+ printLaph(" Making source for this inversion...");
+ if (evList.size()==0){
+    errorLaph("Cannot make fermion source since no Laph eigenvectors available");}
+ ferm_src.reset(FieldSiteType::ColorSpinVector);
+ bool dp=(ferm_src.bytesPerWord()==sizeof(std::complex<double>));
+    // initialize source field to zero
+ int nsites=LayoutInfo::getRankLatticeNumSites();
+ int ncmplx_per_site=ferm_src.elemsPerSite();
+ int ncmplx=ncmplx_per_site*nsites;
+ int cbytes;
+ dcmplx zrhodp;
+ fcmplx zrhosp;
+ char *zrho;
+ if (dp){
+    double* z0=reinterpret_cast<double*>(ferm_src.getDataPtr());
+    std::fill(z0,z0+2*ncmplx,0.0);
+    cbytes=sizeof(std::complex<double>);
+    zrho=reinterpret_cast<char*>(&zrhodp);}
+ else{
+    float* z0=reinterpret_cast<float*>(ferm_src.getDataPtr());
+    std::fill(z0,z0+2*ncmplx,0.0);
+    cbytes=sizeof(std::complex<float>);
+    zrho=reinterpret_cast<char*>(&zrhosp);}
+
+ int start_parity=LayoutInfo::getMyStartParity();
+ int mytmin=LayoutInfo::getMyCommCoords()[3]*LayoutInfo::getRankLattSizes()[3];
+ int mytmax=mytmin+LayoutInfo::getRankLattSizes()[3]-1;
+ int tstride=LayoutInfo::getRankLattSizes()[0]*LayoutInfo::getRankLattSizes()[1]
+            *LayoutInfo::getRankLattSizes()[2];
+ int loc_nsites=LayoutInfo::getRankLatticeNumSites();
+ int incx=FieldNcolor;
+ int incy=FieldNcolor*FieldNspin;
+
+ for (list<int>::const_iterator it0=on_times.begin();it0!=on_times.end();it0++){
+    if (((*it0)>=mytmin)&&((*it0)<=mytmax)){
+       int tloc=((*it0)-mytmin);
+       int parshift=loc_nsites/2*((start_parity+tloc)%2);
+       int start1=tstride*tloc/2 + parshift;
+       int stop1=(1+tstride*(tloc+1))/2 + parshift;
+       int n1=stop1-start1;
+       parshift=loc_nsites/2*((start_parity+1+tloc)%2);
+       int start2=(1+tstride*tloc)/2 + parshift;
+       int stop2=(tstride*(tloc+1))/2 + parshift;
+       int n2=stop2-start2;
+       int xstart1=start1*incx*cbytes;
+       int xstart2=start2*incx*cbytes;
+       char* ystart1=ferm_src.getDataPtr()+start1*incy*cbytes;
+       char* ystart2=ferm_src.getDataPtr()+start2*incy*cbytes;
+       
+       for (list<int>::const_iterator vmask= on_eigs.begin(); vmask!=on_eigs.end(); vmask++){
+          char* x0=reinterpret_cast<char*>(evList[*vmask]);
+          for (list<int>::const_iterator smask= on_spins.begin(); smask!=on_spins.end(); smask++){
+             if (dp){
+                zrhodp=laph_noise(*it0,*smask,*vmask);}
+             else{
+                zrhodp=laph_noise(*it0,*smask,*vmask);
+                zrhosp=complex<float>(real(zrhodp),imag(zrhodp));}
+             char* x1=x0+xstart1;
+             char* x2=x0+xstart2;
+             char* y1=ystart1+(*smask)*incx*cbytes;
+             char* y2=ystart2+(*smask)*incx*cbytes;
+             for (int c=0;c<FieldNcolor;++c){
+                if (dp){
+                   cblas_zaxpy(n1,(dcmplx*)(zrho),(dcmplx*)(x1),incx,(dcmplx*)(y1),incy);
+                   cblas_zaxpy(n2,(dcmplx*)(zrho),(dcmplx*)(x2),incx,(dcmplx*)(y2),incy);}
+                else{
+                   cblas_caxpy(n1,(fcmplx*)(zrho),(fcmplx*)(x1),incx,(fcmplx*)(y1),incy);
+                   cblas_caxpy(n2,(fcmplx*)(zrho),(fcmplx*)(x2),incx,(fcmplx*)(y2),incy);}
+                x1+=cbytes; y1+=cbytes; x2+=cbytes; y2+=cbytes;}}}}}
+ printLaph("Source for this inversion created");
+}
+*/
+
+void testMakeQuarkSource(XMLHandler& xml_in)
+{
+ if (xml_tag_count(xml_in,"TestMakeQuarkSource")==0)
+ return;
+ 
+ printLaph("Starting MakeQuarkSource test");
+ XMLHandler xmlr(xml_in,"TestMakeQuarkSource");
+ DilutionSchemeInfo dilscheme(xmlr);
+ QuarkSmearingInfo qSmear(xmlr);
+ LaphNoiseInfo noise(xmlr);
+ uint MTseed=0;
+ xmlreadif(xmlr,"MTSeed",MTseed,"TestMakeQuarkSource");
+ double minval=-10.0;
+ double maxval=10.0;
+ xmlreadif(xmlr,"MinValue",minval,"TestLatticeField");
+ xmlreadif(xmlr,"MaxValue",maxval,"TestLatticeField");
+ printLaph(make_str("Mersenne Twister seed: ",MTseed));
+ printLaph(make_str(" random min value is ",minval));
+ printLaph(make_str(" random max value is ",maxval));
+
+ printLaph("Dilution Scheme :");
+ printLaph(dilscheme.output());
+ printLaph("Quark Smearing:");
+ printLaph(qSmear.output());
+ printLaph("Noise Info:");
+ printLaph(noise.output());
+
+ DilutionHandler dilHandler(dilscheme,qSmear);
+ int nEigs = qSmear.getNumberOfLaplacianEigenvectors();
+ printLaph("Dilution Handler successfully set up");
+
+        // generate the source noise field
+ LaphZnNoise rho(noise.getZNGroup(),noise.getSeed());
+ Array<dcmplx> laph_noise=rho.generateLapHQuarkSourceForSink(LayoutInfo::getLattSizes()[3],FieldNspin,nEigs);
+
+// for (int t=0;t<LayoutInfo::getLattSizes()[3];++t)
+// for (int s=0;s<FieldNspin;++s)
+// for (int v=0;v<nEigs;++v){
+//    printLaph(make_str("laph_noise(",t,",",s,",",v,") = ",laph_noise(t,s,v)));}
+
+ LatticeAssigner Q(MTseed,minval,maxval);
+ printLaph("LatticeAssigner created");
+
+ vector<LattField> laph_evs(nEigs,FieldSiteType::ColorVector);
+ vector<void*> evList(nEigs);
+ for (int k=0;k<nEigs;++k){
+    printLaph(make_str("creating eigenvector",k));
+    //MTseed/=(k+117);
+    //MTseed+=713245239;
+    //Q.reSeed(MTseed);
+    Q.assign_field(laph_evs[k],"AssignedLaphEv");
+    evList[k]=reinterpret_cast<void*>(laph_evs[k].getDataPtr());}
+
+ printLaph("Now beginning source creation tests...");
+ int ndil=dilHandler.getNumberOfSpinEigvecProjectors();
+ for (int time_proj_index=0;time_proj_index<dilHandler.getNumberOfTimeProjectors();++time_proj_index){
+    for (int dil=0;dil<ndil;dil++){
+       printLaph(make_str("Starting source creation test for time_proj_index = ",time_proj_index," and dil = ",dil));
+       const list<int>& on_times=dilHandler.getOnTimes(time_proj_index);
+       const list<int>& on_spins=dilHandler.getOnSpinIndices(dil);
+       const list<int>& on_eigs=dilHandler.getOnEigvecIndices(dil);
+       LattField ferm_src1, ferm_src2;
+       QuarkHandler_make_source(ferm_src1,laph_noise,evList,on_times,on_spins,on_eigs);
+       if (ferm_src1.bytesPerWord()==sizeof(complex<double>)){
+          make_quark_source_slow_dp(ferm_src2,laph_noise,laph_evs,on_times,on_spins,on_eigs);}
+       else{
+          make_quark_source_slow_sp(ferm_src2,laph_noise,laph_evs,on_times,on_spins,on_eigs);}
+       compare_fields(ferm_src1,ferm_src2);
+       }}
+}
+
+
+void setFieldLexicoIndex(LattField& field)
+{
+ const vector<int>& N=LayoutInfo::getRankLattSizes();
+ const vector<int>& GN=LayoutInfo::getLattSizes();
+ const vector<int>& comm_coord=LayoutInfo::getMyCommCoords();
+ vector<int> xstart(LayoutInfo::Ndim);
+ vector<int> xstop(LayoutInfo::Ndim);
+ vector<int> x(LayoutInfo::Ndim);
+ int bps=field.bytesPerSite();
+ bool dp=(field.bytesPerWord()==sizeof(std::complex<double>));
+ int nelem=field.elemsPerSite();
+ for (int dir=0;dir<LayoutInfo::Ndim;++dir){
+    xstart[dir]=comm_coord[dir]*N[dir];
+    xstop[dir]=xstart[dir]+N[dir];}
+ char* fp=field.getDataPtr();
+ for (int par=0;par<2;++par){
+    for (x[3]=xstart[3];x[3]<xstop[3];++x[3]){
+       for (x[2]=xstart[2];x[2]<xstop[2];++x[2]){
+          for (x[1]=xstart[1];x[1]<xstop[1];++x[1]){
+             for (x[0]=xstart[0];x[0]<xstop[0];++x[0]){
+                if (((x[0]+x[1]+x[2]+x[3])%2)==par){
+                   int ival=x[0]+GN[0]*(x[1]+GN[1]*(x[2]+GN[2]*x[3]));
+                   if (dp){
+                      complex<double>* dt=reinterpret_cast<complex<double>*>(fp);
+                      double rval=double(ival);
+                      complex<double> zval(rval,rval);
+                      for (int k=0;k<nelem;++k,++dt){*dt=zval;}}
+                   else{
+                      complex<float>* dt=reinterpret_cast<complex<float>*>(fp);
+                      float rval=float(ival);
+                      complex<float> zval(rval,rval);
+                      for (int k=0;k<nelem;++k,++dt){*dt=zval;}}
+                   fp+=bps;}}}}}}
+}
+
+
+   // assigns y[d] from x[d]; if d==dir, y[d]=(x[d]+1) % N[d]
+
+void index_increaser(int dir, int d, vector<int>& y, const vector<int>& x, 
+                     const vector<int>& N)
+{
+ if (dir==d){ y[d]=(x[d]==(N[d]-1))?0:x[d]+1;}
+ else{ y[d]=x[d];}
+}
+
+   // assigns y[d] from x[d]; if d==dir, y[d]=(x[d]-1+N[d]) % N[d]
+
+void index_decreaser(int dir, int d, vector<int>& y, const vector<int>& x, 
+                     const vector<int>& N)
+{
+ if (dir==d){ y[d]=(x[d]==0)?N[d]-1:x[d]-1;}
+ else{ y[d]=x[d];}
+}
+
+
+void flipsign(char* sitedata, int bps, bool dp)
+{
+ if (dp){
+    int nelem=bps/sizeof(complex<double>);
+    complex<double>* op=reinterpret_cast<complex<double>*>(sitedata);
+    for (int k=0;k<nelem;++k,++op){
+       *op=-(*op);}}
+ else{
+    int nelem=bps/sizeof(complex<float>);
+    complex<float>* op=reinterpret_cast<complex<float>*>(sitedata);
+    for (int k=0;k<nelem;++k,++op){
+       *op=-(*op);}}
+}
+    
+
+#ifdef ARCH_SERIAL
+
+
+      //  This routine is slow: meant only for debugging, testing
+      //   outfield(x) <=  infield(x+dir)  if fwd_or_bwd=='F'
+      //   outfield(x) <=  infield(x-dir)  if fwd_or_bwd=='B'
+
+      // linear index for site (x,y,z,t) is
+      //      (x+Nx*(y+Ny*(z+Nz*t)))/2 + (nsites/2)*((x+y+z+t)%2);
+
+void latt_shifter(LattField& outfield, const LattField& infield, int dir, 
+                  void (*indexfunc)(int,int,vector<int>&,const vector<int>&, 
+                                    const vector<int>&), char fwd_or_bwd,
+                  bool apply_antiperiodic_fermbc=false)
+{
+ if ((dir<0)||(dir>3)){
+    errorLaph("Invalid direction in lattice field shift");}
+ outfield.reset(infield.getFieldSiteType());
+ const vector<int>& N=LayoutInfo::getLattSizes();
+ int nsites=LayoutInfo::getLatticeNumSites();
+ int npsites=nsites/2;
+ int bps=infield.bytesPerSite();
+ char* oute=outfield.getDataPtr();
+ char* outo=oute+npsites*bps;
+ const char* ine=infield.getDataConstPtr();
+ const char* ino=ine+npsites*bps;
+ int fliptime=-1;
+ if ((infield.getFieldSiteType()==FieldSiteType::ColorSpinVector)
+     && (apply_antiperiodic_fermbc) && (dir==3)){
+    fliptime=(fwd_or_bwd=='B')?0:N[3]-1;}
+ bool dp=(infield.bytesPerWord()==sizeof(complex<double>)); 
+ vector<int> x(LayoutInfo::Ndim);
+ vector<int> y(LayoutInfo::Ndim);
+ for (x[3]=0;x[3]<N[3];++x[3]){
+    indexfunc(dir,3,y,x,N);
+    bool signflip=(x[3]==fliptime);
+    for (x[2]=0;x[2]<N[2];++x[2]){
+       indexfunc(dir,2,y,x,N);
+       for (x[1]=0;x[1]<N[1];++x[1]){
+          indexfunc(dir,1,y,x,N);
+          for (x[0]=0;x[0]<N[0];++x[0]){
+             indexfunc(dir,0,y,x,N);
+             int shift=bps*((y[0]+N[0]*(y[1]+N[1]*(y[2]+N[2]*y[3])))/2);
+             if ((x[0]+x[1]+x[2]+x[3])%2){
+                const char* inp=ine+shift;
+                std::memcpy(outo,inp,bps);
+                if (signflip){ flipsign(outo,bps,dp);}
+                outo+=bps;}
+             else{
+                const char* inp=ino+shift;
+                std::memcpy(oute,inp,bps);
+                if (signflip){ flipsign(oute,bps,dp);}
+                oute+=bps;}}}}}
+}
+
+      //  This routine is slow: meant only for debugging, testing
+      //   outfield(x) <=  infield(x+dir)  if fwd_or_bwd=='F'
+      //   outfield(x) <=  infield(x-dir)  if fwd_or_bwd=='B'
+
+void lattice_shift(LattField& outfield, const LattField& infield, int dir, char fwd_or_bwd,
+                   bool apply_antiperiodic_fermbc=false)
+{
+ if (fwd_or_bwd=='F'){
+    latt_shifter(outfield,infield,dir,&index_increaser,fwd_or_bwd,apply_antiperiodic_fermbc);}
+ else if (fwd_or_bwd=='B'){
+    latt_shifter(outfield,infield,dir,&index_decreaser,fwd_or_bwd,apply_antiperiodic_fermbc);}
+ else{
+    errorLaph("lattice shift needs F or B for forward/backward");}
+}
+
+
+#else                // parallel version now
+
+
+bool fwd_stay_local(int dir, const vector<int>& x, const vector<int>& N, bool nocomm)
+{
+ if (x[dir]<(N[dir]-1)) return true;
+ return nocomm;
+}
+
+bool bwd_stay_local(int dir, const vector<int>& x, const vector<int>& N, bool nocomm)
+{
+ if (x[dir]>0) return true;
+ return nocomm;
+}
+
+
+void get_fwd_comm_to_from(int dir, int& send_to, int& recv_from)
+{
+ vector<int> rank_coord(LayoutInfo::getMyCommCoords());  // rank coords of this node
+       // get mpi rank where to send
+ if (rank_coord[dir]>0) rank_coord[dir]--;
+ else rank_coord[dir]=LayoutInfo::getCommNumPartitions()[dir]-1;
+ send_to=LayoutInfo::getRankFromCommCoords(rank_coord);
+       // get mpi rank where to receive from
+ rank_coord=LayoutInfo::getMyCommCoords();
+ rank_coord[dir]++;
+ if (rank_coord[dir]==LayoutInfo::getCommNumPartitions()[dir]) rank_coord[dir]=0;
+ recv_from=LayoutInfo::getRankFromCommCoords(rank_coord);
+}
+
+void get_bwd_comm_to_from(int dir, int& send_to, int& recv_from)
+{
+ vector<int> rank_coord(LayoutInfo::getMyCommCoords());  // rank coords of this node
+       // get mpi rank where to receive from
+ if (rank_coord[dir]>0) rank_coord[dir]--;
+ else rank_coord[dir]=LayoutInfo::getCommNumPartitions()[dir]-1;
+ recv_from=LayoutInfo::getRankFromCommCoords(rank_coord);
+       // get mpi rank where to send
+ rank_coord=LayoutInfo::getMyCommCoords();
+ rank_coord[dir]++;
+ if (rank_coord[dir]==LayoutInfo::getCommNumPartitions()[dir]) rank_coord[dir]=0;
+ send_to=LayoutInfo::getRankFromCommCoords(rank_coord);
+}
+
+
+      //  This routine is slow: meant only for debugging, testing
+      //   outfield(x) <=  infield(x+dir)  if fwd_or_bwd=='F'
+      //   outfield(x) <=  infield(x-dir)  if fwd_or_bwd=='B'
+
+      // linear index for site (x,y,z,t) is
+      //      (x+Nx*(y+Ny*(z+Nz*t)))/2 + (nsites/2)*((x+y+z+t)%2);
+
+
+void latt_shifter(LattField& outfield, const LattField& infield, int dir, 
+                  void (*indexfunc)(int,int,vector<int>&,const vector<int>&, 
+                                    const vector<int>&),
+                  bool (*staylocal)(int,const vector<int>&,const vector<int>&,bool),
+                  void (*neighbors)(int,int&,int&), char fwd_or_bwd,
+                  bool apply_antiperiodic_fermbc=false)
+{
+ int start_parity=LayoutInfo::getMyStartParity();
+ if ((dir<0)||(dir>3)){
+    errorLaph("Invalid direction in lattice field shift");}
+ outfield.reset(infield.getFieldSiteType());
+ const vector<int>& N=LayoutInfo::getRankLattSizes();
+ int nsites=LayoutInfo::getRankLatticeNumSites();
+ int npsites=nsites/2;
+ int bps=infield.bytesPerSite();
+ char* oute=outfield.getDataPtr();
+ char* outo=oute+npsites*bps;
+ const char* ine=infield.getDataConstPtr();
+ const char* ino=ine+npsites*bps;
+ vector<int> x(LayoutInfo::Ndim);
+ vector<int> y(LayoutInfo::Ndim);
+ bool needcomm=(LayoutInfo::getCommNumPartitions()[dir]>1);
+ bool nocm=!needcomm;
+ vector<char> sendbuffer,recvbuffer;
+ char *snde=0;
+ char *sndo=0;
+ int nbuf=0;
+ bool nospflip=((N[dir]%2)==0);
+ if (needcomm){
+    nbuf=nsites/N[dir]; nbuf+=nbuf%2;
+    sendbuffer.resize(nbuf*bps);
+    recvbuffer.resize(nbuf*bps);
+    snde=sendbuffer.data();
+    sndo=snde+(nbuf/2)*bps;
+    if (!nospflip){
+       sndo=sendbuffer.data();
+       snde=sndo+(nbuf/2)*bps;}}
+ int fliptime=-1;
+ if ((infield.getFieldSiteType()==FieldSiteType::ColorSpinVector)
+     && (apply_antiperiodic_fermbc) && (dir==3)){
+    if ((fwd_or_bwd=='B')&&(LayoutInfo::getMyCommCoords()[3]==(LayoutInfo::getCommNumPartitions()[3]-1))){
+       fliptime=0;}
+    else if ((fwd_or_bwd=='F')&&(LayoutInfo::getMyCommCoords()[3]==0)){
+       fliptime=N[3]-1;}}
+ bool dp=(infield.bytesPerWord()==sizeof(complex<double>)); 
+        // make local changes and put data in send buffer
+ for (x[3]=0;x[3]<N[3];++x[3]){
+    indexfunc(dir,3,y,x,N);
+    bool signflip=(x[3]==fliptime);
+    for (x[2]=0;x[2]<N[2];++x[2]){
+       indexfunc(dir,2,y,x,N);
+       for (x[1]=0;x[1]<N[1];++x[1]){
+          indexfunc(dir,1,y,x,N);
+          for (x[0]=0;x[0]<N[0];++x[0]){
+             indexfunc(dir,0,y,x,N);
+             int site_parity=(start_parity+x[0]+x[1]+x[2]+x[3])%2;
+             int shift=bps*((y[0]+N[0]*(y[1]+N[1]*(y[2]+N[2]*y[3])))/2);
+             if (site_parity){
+                if (staylocal(dir,x,N,nocm)){
+                   const char* inp=ine+shift; 
+                   std::memcpy(outo,inp,bps);
+                   if (signflip){ flipsign(outo,bps,dp);}}
+                else{
+                   const char* inp=(nospflip?ine:ino)+shift;
+                   std::memcpy(sndo,inp,bps);
+                   if (signflip){ flipsign(sndo,bps,dp);}
+                   sndo+=bps;}
+                outo+=bps;}
+             else{
+                if (staylocal(dir,x,N,nocm)){
+                   const char* inp=ino+shift; 
+                   std::memcpy(oute,inp,bps);
+                   if (signflip){ flipsign(oute,bps,dp);}}
+                else{
+                   const char* inp=(nospflip?ino:ine)+shift;
+                   std::memcpy(snde,inp,bps);
+                   if (signflip){ flipsign(snde,bps,dp);}
+                   snde+=bps;}
+                oute+=bps;}}}}}
+ if (!needcomm){
+    return;}
+
+      // do the communication (send and receive) 
+ int send_to=0;
+ int recv_from=0;
+ neighbors(dir,send_to,recv_from);
+ MPI_Status mpistatus;
+ int status=MPI_Sendrecv(sendbuffer.data(), nbuf*bps, MPI_BYTE, send_to, LayoutInfo::getMyRank(), 
+                         recvbuffer.data(), nbuf*bps, MPI_BYTE, recv_from, recv_from, 
+                         MPI_COMM_WORLD, &mpistatus);
+ if (status!=MPI_SUCCESS){
+    errorLaph("Error in communication while doing shift");}
+
+     // put data received into local memory appropriately
+ sendbuffer.clear();
+ oute=outfield.getDataPtr();
+ outo=oute+npsites*bps;
+ const char* rcve=recvbuffer.data();
+ const char* rcvo=rcve+(nbuf/2)*bps;
+ for (x[3]=0;x[3]<N[3];++x[3]){
+    for (x[2]=0;x[2]<N[2];++x[2]){
+       for (x[1]=0;x[1]<N[1];++x[1]){
+          for (x[0]=0;x[0]<N[0];++x[0]){
+             if ((start_parity+x[0]+x[1]+x[2]+x[3])%2){
+                if (!staylocal(dir,x,N,nocm)){ std::memcpy(outo,rcvo,bps); rcvo+=bps;}
+                outo+=bps;}
+             else{
+                if (!staylocal(dir,x,N,nocm)){ std::memcpy(oute,rcve,bps); rcve+=bps;}
+                oute+=bps;}}}}}
+}
+
+
+     //  This routine is slow: meant only for debugging, testing
+      //   outfield(x) <=  infield(x+dir)  if fwd_or_bwd=='F'
+      //   outfield(x) <=  infield(x-dir)  if fwd_or_bwd=='B'
+
+void lattice_shift(LattField& outfield, const LattField& infield, int dir, char fwd_or_bwd,
+                   bool apply_antiperiodic_fermbc=false)
+{
+ if (fwd_or_bwd=='F'){
+    latt_shifter(outfield,infield,dir,&index_increaser,&fwd_stay_local,&get_fwd_comm_to_from,
+                 fwd_or_bwd,apply_antiperiodic_fermbc);}
+ else if (fwd_or_bwd=='B'){
+    latt_shifter(outfield,infield,dir,&index_decreaser,&bwd_stay_local,&get_bwd_comm_to_from,
+                 fwd_or_bwd,apply_antiperiodic_fermbc);}
+ else{
+    errorLaph("lattice shift needs F or B for forward/backward");}
+ MPI_Barrier(MPI_COMM_WORLD);
+}
+
+
+#endif 
+
+
+void check_shift_forward(LattField& outfield, const LattField& infield, int dir, 
+                         bool apply_antiperiodic_fermbc=false)
+{
+ bool flag=true;
+ int nelem=infield.elemsPerSite();
+ bool fermbc=(infield.getFieldSiteType()==FieldSiteType::ColorSpinVector)
+            && apply_antiperiodic_fermbc && (dir==3);
+ bool dp=(infield.bytesPerWord()==sizeof(complex<double>)); 
+ if (nelem!=int(outfield.elemsPerSite())){ flag=false;}
+ else{
+ vector<int> coord(LayoutInfo::Ndim);
+ for (coord[3]=0;coord[3]<LayoutInfo::getLattSizes()[3];++coord[3]){
+    bool fermbcflip=fermbc && (coord[3]==LayoutInfo::getLattSizes()[3]-1);
+    for (coord[2]=0;coord[2]<LayoutInfo::getLattSizes()[2];++coord[2])
+    for (coord[1]=0;coord[1]<LayoutInfo::getLattSizes()[1];++coord[1])
+    for (coord[0]=0;coord[0]<LayoutInfo::getLattSizes()[0];++coord[0]){
+       vector<char> outsitedata(outfield.getSiteData(coord));
+       vector<int> shifted(coord);
+       shifted[dir]++;
+       if (shifted[dir]==LayoutInfo::getLattSizes()[dir]){
+          shifted[dir]=0;}
+       vector<char> insitedata(infield.getSiteData(shifted));
+       if (fermbcflip){ flipsign(insitedata.data(),infield.bytesPerSite(),dp);}
+       //if (!compare_sites(outsitedata,insitedata,nelem)){
+       //printLaph(make_strf("shifted site (%d %d %d %d)\n",coord[0],coord[1],coord[2],coord[3]));}}}}
+       flag=flag && compare_sites(outsitedata,insitedata,nelem);}}}
+ if (flag) printLaph("Shift checks OK");
+ else printLaph("Shift is WRONG");
+}
+    
+void check_shift_backward(LattField& outfield, const LattField& infield, int dir,
+                          bool apply_antiperiodic_fermbc=false)
+{
+ bool flag=true;
+ int nelem=infield.elemsPerSite();
+ bool fermbc=(infield.getFieldSiteType()==FieldSiteType::ColorSpinVector)
+            && apply_antiperiodic_fermbc && (dir==3);
+ bool dp=(infield.bytesPerWord()==sizeof(complex<double>)); 
+ if (nelem!=int(outfield.elemsPerSite())){ flag=false;}
+ else{
+ vector<int> coord(LayoutInfo::Ndim);
+ for (coord[3]=0;coord[3]<LayoutInfo::getLattSizes()[3];++coord[3]){
+    bool fermbcflip=fermbc && (coord[3]==0);
+    for (coord[2]=0;coord[2]<LayoutInfo::getLattSizes()[2];++coord[2])
+    for (coord[1]=0;coord[1]<LayoutInfo::getLattSizes()[1];++coord[1])
+    for (coord[0]=0;coord[0]<LayoutInfo::getLattSizes()[0];++coord[0]){
+       vector<char> outsitedata(outfield.getSiteData(coord));
+       vector<int> shifted(coord);
+       if (shifted[dir]==0){
+          shifted[dir]=LayoutInfo::getLattSizes()[dir]-1;}
+       else{
+          --shifted[dir];}
+       vector<char> insitedata(infield.getSiteData(shifted));
+       if (fermbcflip){ flipsign(insitedata.data(),infield.bytesPerSite(),dp);}
+       //if (!compare_sites(outsitedata,insitedata,nelem)){
+       //printLaph(make_strf("shifted site (%d %d %d %d)\n",coord[0],coord[1],coord[2],coord[3]));}}}}
+       flag=flag && compare_sites(outsitedata,insitedata,nelem);}}}
+ if (flag) printLaph("Shift checks OK");
+ else printLaph("Shift is WRONG");
+}
+    
+
+void checkShift(LattField& outfield, const LattField& infield, int dir, char fwd_or_bwd, 
+                bool apply_antiperiodic_fermbc=false)
+{
+  if (fwd_or_bwd=='F'){
+    check_shift_forward(outfield,infield,dir,apply_antiperiodic_fermbc);}
+ else if (fwd_or_bwd=='B'){
+    check_shift_backward(outfield,infield,dir,apply_antiperiodic_fermbc);}
+ else{
+    errorLaph("lattice shift needs F or B for forward/backward");}
+}
+
+
+
+
+void testShift(XMLHandler& xml_in)
+{
+ if (xml_tag_count(xml_in,"TestShift")==0)
+ return;
+
+ uint MTseed1=0, MTseed2;
+ XMLHandler xmlr(xml_in,"TestShift");
+ xmlreadif(xmlr,"MTSeed1",MTseed1,"TestClover");
+ xmlreadif(xmlr,"MTSeed2",MTseed2,"TestClover");
+ double minval=-10.0;
+ double maxval=10.0;
+ xmlreadif(xmlr,"MinValue",minval,"TestClover");
+ xmlreadif(xmlr,"MaxValue",maxval,"TestClover");
+
+ printLaph(make_strf("MTSeed1 is %d",MTseed1));
+ printLaph(make_strf("MTSeed2 is %d",MTseed2));
+ printLaph(make_strf("MinValue is %f",minval));
+ printLaph(make_strf("MaxValue is %f",maxval));
+
+ LattField FC(FieldSiteType::Complex);
+// setUnitField(FC);
+// printFieldToFile(FC,"Should be unit field","UnitField");
+// setZeroField(FC);
+// printFieldToFile(FC,"Should be zero field","ZeroField");
+// setConstantField(FC,complex<double>(2.0,0.5));
+// printFieldToFile(FC,"Should be constant field with value (2.0,0.5)","ConstField");
+ setFieldLexicoIndex(FC);
+// printFieldToFile(FC,"Lexico values","LexicoField");
+
+ for (int dir=0;dir<4;dir++){
+    printLaph(make_str("Doing a forward shift of Complex Lexico in dir ",dir));
+    LattField FS(FieldSiteType::ColorVector);
+    lattice_shift(FS,FC,dir,'F');
+    checkShift(FS,FC,dir,'F');}
+ for (int dir=0;dir<4;dir++){
+    printLaph(make_str("Doing a backward shift of Complex Lexico in dir ",dir));
+    LattField FS(FieldSiteType::ColorVector);
+    lattice_shift(FS,FC,dir,'B');
+    checkShift(FS,FC,dir,'B');}
+
+
+ printLaph("Doing a Lattice color vector assignment");
+ bool random=true;
+ LatticeAssigner LA(MTseed1,minval,maxval,random);
+ LattField F1(FieldSiteType::ColorVector);
+ LA.assign_field(F1,"ColorVectorField");
+ LattField F2(FieldSiteType::ColorSpinVector);
+ LA.reSeed(MTseed2);
+ LA.assign_field(F2,"ColorVectorField");
+
+ for (int dir=0;dir<4;dir++){
+    printLaph(make_str("Doing a forward shift of ColorVectorField in dir ",dir));
+    LattField FS(FieldSiteType::ColorVector);
+    lattice_shift(FS,F1,dir,'F');
+    checkShift(FS,F1,dir,'F');}
+ for (int dir=0;dir<4;dir++){
+    printLaph(make_str("Doing a backward shift of ColorVectorField in dir ",dir));
+    LattField FS(FieldSiteType::ColorVector);
+    lattice_shift(FS,F1,dir,'B');
+    checkShift(FS,F1,dir,'B');}
+ for (int dir=0;dir<4;dir++){
+    printLaph(make_str("Doing a forward shift of ColorSpinVectorField in dir ",dir));
+    LattField FS(FieldSiteType::ColorSpinVector);
+    lattice_shift(FS,F2,dir,'F');
+    checkShift(FS,F2,dir,'F');}
+ for (int dir=0;dir<4;dir++){
+    printLaph(make_str("Doing a backward shift of ColorSpinVectorField in dir ",dir));
+    LattField FS(FieldSiteType::ColorSpinVector);
+    lattice_shift(FS,F2,dir,'B');
+    checkShift(FS,F2,dir,'B');} 
+
+
+ for (int dir=0;dir<4;dir++){
+    printLaph(make_str("Doing a forward shift of ColorSpinVectorField with antiperiodic b.c. in dir ",dir));
+    LattField FS(FieldSiteType::ColorSpinVector);
+    lattice_shift(FS,F2,dir,'F',true);
+    checkShift(FS,F2,dir,'F',true);}
+ for (int dir=0;dir<4;dir++){
+    printLaph(make_str("Doing a backward shift of ColorSpinVectorField with antiperiodic b.c. in dir ",dir));
+    LattField FS(FieldSiteType::ColorSpinVector);
+    lattice_shift(FS,F2,dir,'B',true);
+    checkShift(FS,F2,dir,'B',true);} 
+}
+
+
+
+
+
+
+template <typename T>
+void su3color_mult(complex<T>* prod, const complex<T>* cdata1, const complex<T>* cdata2,
+                   int krange, int kstride, int istride, int jstride)
+{
+ for (int k=0;k<krange;++k)
+ for (int i=0;i<FieldNcolor;++i){
+    complex<T> z(0.0,0.0);
+    for (int j=0;j<FieldNcolor;++j){
+       z+=cdata1[FieldNcolor*i+j]*cdata2[jstride*j+kstride*k];}
+    prod[istride*i+kstride*k]=z;}
+}
+
+template <typename T>
+void su3color_adjmult(complex<T>* prod, const complex<T>* cdata1, const complex<T>* cdata2,
+                      int krange, int kstride, int istride, int jstride)
+{
+ for (int k=0;k<krange;++k)
+ for (int i=0;i<FieldNcolor;++i){
+    complex<T> z(0.0,0.0);
+    for (int j=0;j<FieldNcolor;++j){
+       z+=std::conj(cdata1[FieldNcolor*j+i])*cdata2[jstride*j+kstride*k];}
+    prod[istride*i+kstride*k]=z;}
+}
+
+    //  Lattice-site-wise color-matrix multiplies outfield = fieldL * fieldR.
+    //  fieldL must be of type color-matrix. Any spin indices go along untouched.
+
+void su3color_multiplier(LattField& outfield, const LattField& fieldL, const LattField& fieldR,
+                         char Lmat)
+{
+ if (fieldL.getFieldSiteType()!=FieldSiteType::ColorMatrix){
+    errorLaph("left field must be ColorMatrix in su3color_mult");}
+ if (fieldR.getFieldSiteType()==FieldSiteType::Complex){
+    errorLaph("right field in su3color_mult cannot be complex (non-color) field");}
+ outfield.reset(fieldR.getFieldSiteType());
+ if (fieldR.bytesPerWord()!=fieldL.bytesPerWord()){
+    errorLaph("su3color_mult requires same precision between left and right fields");}
+ int oinc=outfield.elemsPerSite();
+ int rinc=fieldR.elemsPerSite();
+ int linc=fieldL.elemsPerSite();
+ int nsites=LayoutInfo::getRankLatticeNumSites();
+ int kextent=0, kstride=0, jstride=0, istride=0;
+ if (fieldR.getFieldSiteType()==FieldSiteType::ColorMatrix){
+    kstride=1; kextent=3; istride=3; jstride=3;}
+ else if (fieldR.getFieldSiteType()==FieldSiteType::ColorVector){
+    kstride=1; kextent=1; istride=1; jstride=1;}
+ else if (fieldR.getFieldSiteType()==FieldSiteType::ColorSpinVector){
+    kstride=3; kextent=4; istride=1; jstride=1;}
+ if (fieldR.bytesPerWord()==sizeof(complex<double>)){
+    complex<double>* op=reinterpret_cast<complex<double>*>(outfield.getDataPtr());
+    const complex<double>* rp=reinterpret_cast<const complex<double>*>(fieldR.getDataConstPtr());
+    const complex<double>* lp=reinterpret_cast<const complex<double>*>(fieldL.getDataConstPtr());
+    void (*multfunc)(complex<double>*,const complex<double>*,const complex<double>*,int,int,int,int)
+         = (Lmat=='m')? &su3color_mult<double> : &su3color_adjmult<double>;
+    for (int ind=0;ind<nsites;++ind,op+=oinc,rp+=rinc,lp+=linc){
+       multfunc(op,lp,rp,kextent,kstride,istride,jstride);}}
+ else{
+    complex<float>* op=reinterpret_cast<complex<float>*>(outfield.getDataPtr());
+    const complex<float>* rp=reinterpret_cast<const complex<float>*>(fieldR.getDataConstPtr());
+    const complex<float>* lp=reinterpret_cast<const complex<float>*>(fieldL.getDataConstPtr());
+    void (*multfunc)(complex<float>*,const complex<float>*,const complex<float>*,int,int,int,int)
+         = (Lmat=='m')? &su3color_mult<float> : &su3color_adjmult<float>;
+    for (int ind=0;ind<nsites;++ind,op+=oinc,rp+=rinc,lp+=linc){
+       multfunc(op,lp,rp,kextent,kstride,istride,jstride);}}
+}
+
+
+    //  Lattice-site-wise color-matrix multiplies outfield = fieldL * fieldR.
+    //  fieldL must be of type color-matrix. Any spin indices go along untouched.
+
+void su3color_mult(LattField& outfield, const LattField& fieldL, const LattField& fieldR)
+{
+ su3color_multiplier(outfield,fieldL,fieldR,'m');
+}
+
+    //  Lattice-site-wise color-matrix multiplies outfield = colorAdj(fieldL) * fieldR.
+    //  fieldL must be of type color-matrix.  Any spin indices go along untouched.
+
+void su3color_adjmult(LattField& outfield, const LattField& fieldL, const LattField& fieldR)
+{
+ su3color_multiplier(outfield,fieldL,fieldR,'a');
+}
+
+
+    //   outfield(x) <=  U_dir(x) infield(x+mu)            if fwd_or_bwd=='F'
+    //   outfield(x) <=  U^dag_dir(x-mu) infield(x-mu)     if fwd_or_bwd=='B'
+
+    //   for 'F', su3mult( U[dir], shift(infield, mu, 'F') )
+    //   for 'B', shift(  su3mult( adj(U[dir]), infield ), mu, 'B')
+
+void lattice_cov_shift(LattField& outfield, const LattField& infield, 
+                       const vector<LattField>& gauge_field,
+                       int dir, char fwd_or_bwd,
+                       bool apply_antiperiodic_fermbc=false)
+{
+ if (int(gauge_field.size())!=LayoutInfo::Ndim){
+    errorLaph("invalid gauge field in lattice_cov_shift");}
+ for (uint dir=0;dir<gauge_field.size();++dir){
+    if (gauge_field[dir].getFieldSiteType()!=FieldSiteType::ColorMatrix){
+       errorLaph("invalid gauge field in lattice_cov_shift");}}
+ if (infield.getFieldSiteType()==FieldSiteType::Complex){
+    errorLaph("cannot covariantly shift a complex (non-color) field");}
+ LattField tmp;
+ if (fwd_or_bwd=='F'){
+    lattice_shift(tmp,infield,dir,'F',apply_antiperiodic_fermbc);
+    su3color_mult(outfield,gauge_field[dir],tmp);}
+ else if (fwd_or_bwd=='B'){
+    su3color_adjmult(tmp,gauge_field[dir],infield);
+    lattice_shift(outfield,tmp,dir,'B',apply_antiperiodic_fermbc);}
+ else{
+    errorLaph("lattice shift needs F or B for forward/backward");}
+}
+
+
+     //  covariant shift by a path of directions: each direction is an integer
+     //  having values    1,2,3,4 (forward directions) and -1,-2,-3,-4 (backwards)   
+     //  where 1 means x, 2 means y, 3 means z, and 4 means t
+
+void lattice_cov_shift(LattField& outfield, const LattField& infield, 
+                       const vector<LattField>& gauge_field,
+                       vector<int>& path)
+{
+ LattField tmp;
+ LattField *p1=0,*p2=0, *sw=0;
+ const LattField *pc;
+ if (path.size()%2){ p2=&outfield; pc=&infield;}
+ else{ p2=&tmp; pc=&infield;}
+ for (int seg=int(path.size())-1;seg>=0;--seg){
+    lattice_cov_shift(*p2,*pc,gauge_field,abs(path[seg])-1,path[seg]>0?'F':'B');
+    if (seg==int(path.size())-1){
+       if (path.size()%2){ p1=&tmp;}
+       else{ p1=&outfield;}}
+    sw=p1; p1=p2; p2=sw; pc=p1;}
+}
+
+
+template <typename T>
+void su3color_adjcopy(complex<T>* out, const complex<T>* in)
+{
+ for (int i=0;i<FieldNcolor;++i)
+ for (int j=0;j<FieldNcolor;++j){
+    out[FieldNcolor*i+j]=std::conj(in[FieldNcolor*j+i]);}
+}
+
+
+void su3color_adjcopy(LattField& outfield, const LattField& infield)
+{
+ if (infield.getFieldSiteType()!=FieldSiteType::ColorMatrix){
+    errorLaph("field must be ColorMatrix in su3color_adjcopy");}
+ outfield.reset(FieldSiteType::ColorMatrix);
+ int inc=infield.elemsPerSite();
+ int nsites=LayoutInfo::getRankLatticeNumSites();
+ if (infield.bytesPerWord()==sizeof(complex<double>)){
+    complex<double>* op=reinterpret_cast<complex<double>*>(outfield.getDataPtr());
+    const complex<double>* ip=reinterpret_cast<const complex<double>*>(infield.getDataConstPtr());
+    for (int ind=0;ind<nsites;++ind,op+=inc,ip+=inc){
+       su3color_adjcopy(op,ip);}}
+ else{
+    complex<float>* op=reinterpret_cast<complex<float>*>(outfield.getDataPtr());
+    const complex<float>* ip=reinterpret_cast<const complex<float>*>(infield.getDataConstPtr());
+    for (int ind=0;ind<nsites;++ind,op+=inc,ip+=inc){
+       su3color_adjcopy(op,ip);}}
+}
+
+
+
+void lattice_link_path(LattField& outfield, const vector<LattField>& gaugefield,
+                       vector<int>& dir_path)
+{
+ uint nshifts=dir_path.size();
+ if (nshifts==0){
+    errorLaph("lattice_link_path requires a non-trivial path");}
+ LattField temp;
+ vector<int>::const_reverse_iterator seg=dir_path.rbegin();
+ bool doprod=false;
+ for (uint k=0;k<dir_path.size();++k){
+    int dir=*seg;
+    if (dir>0){
+       if (doprod){
+          lattice_shift(temp,outfield,dir-1,'F');
+          su3color_mult(outfield,gaugefield[dir-1],temp);}
+       else{
+          outfield=gaugefield[dir-1];
+          doprod=true;}}
+    else{
+       if (doprod){
+          su3color_adjmult(temp,gaugefield[-dir-1],outfield);}
+       else{
+          su3color_adjcopy(temp,gaugefield[-dir-1]);
+          doprod=true;}
+       lattice_shift(outfield,temp,-dir-1,'B');}
+    ++seg;}
+}
+
+
+void lattice_addto(LattField& outfield, const LattField& infield, 
+                   const complex<double>& zcoef=complex<double>(1.0,0.0))
+{
+ if (outfield.getFieldSiteType()!=infield.getFieldSiteType()){
+    errorLaph("fields must be of same type to add");}
+ if (outfield.bytesPerWord()!=infield.bytesPerWord()){
+    errorLaph("addition requires same precision of fields");}
+ int nelem=LayoutInfo::getRankLatticeNumSites()*infield.elemsPerSite();
+ if (infield.bytesPerWord()==sizeof(complex<double>)){
+    complex<double>* op=reinterpret_cast<complex<double>*>(outfield.getDataPtr());
+    const complex<double>* ip=reinterpret_cast<const complex<double>*>(infield.getDataConstPtr());
+    for (int k=0;k<nelem;++k,++op,++ip){
+       *op+=zcoef*(*ip);}}
+  else{
+    complex<float>* op=reinterpret_cast<complex<float>*>(outfield.getDataPtr());
+    const complex<float>* ip=reinterpret_cast<const complex<float>*>(infield.getDataConstPtr());
+    complex<float> zf(float(zcoef.real()),float(zcoef.imag()));
+    for (int k=0;k<nelem;++k,++op,++ip){
+       *op+=zf*(*ip);}}
+}
+
+   //  *op = Gamma(spin_matrix_index) * (*ip)  site-wise
+   //
+   //        spin_matrix_index     matrix  (DeGrand-Rossi basis)
+   //               1              gamma[1]
+   //               2              gamma[2]     sigma[mu,nu] = i/2 [gamma[mu], gamma[nu]]
+   //               3              gamma[3]
+   //               4              gamma[4]
+   //               5              gamma[5] = gamma[4]*gamma[1]*gamma[2]*gamma[3]
+   //               6              sigma[1,2]
+   //               7              sigma[1,3]
+   //               8              sigma[1,4]
+   //               9              sigma[2,3]
+   //              10              sigma[2,4]
+   //              11              sigma[3,4]
+
+template <typename T>
+void spin_mult(complex<T>* op, const complex<T>* ip, const vector<pair<int,complex<T>>>& spinmat)
+{
+ int spinstride=FieldNcolor;
+ complex<T> *opp=op;
+ const complex<T> *ipp=ip;
+ for (int color=0;color<FieldNcolor;++color,++opp,++ipp){
+    for (int outspin=0;outspin<FieldNspin;++outspin){
+       *(opp+outspin*spinstride)=*(ipp+spinmat[outspin].first*spinstride)*spinmat[outspin].second;}}
+}
+
+
+template <typename T>
+void assign_spin_matrix(int spin_matrix_index, vector<pair<int,complex<T>>>& spin_mat)
+{
+ spin_mat.resize(4);
+ complex<T> I(0.0,1.0);
+ complex<T> one(1.0,0.0);
+ if (spin_matrix_index==1){
+    spin_mat[0]=pair<int,complex<T>>(3,I); spin_mat[1]=pair<int,complex<T>>(2,I);
+    spin_mat[2]=pair<int,complex<T>>(1,-I); spin_mat[3]=pair<int,complex<T>>(0,-I);}
+ else if (spin_matrix_index==2){
+    spin_mat[0]=pair<int,complex<T>>(3,-one); spin_mat[1]=pair<int,complex<T>>(2,one);
+    spin_mat[2]=pair<int,complex<T>>(1,one); spin_mat[3]=pair<int,complex<T>>(0,-one);}
+ else if (spin_matrix_index==3){
+    spin_mat[0]=pair<int,complex<T>>(2,I); spin_mat[1]=pair<int,complex<T>>(3,-I);
+    spin_mat[2]=pair<int,complex<T>>(0,-I); spin_mat[3]=pair<int,complex<T>>(1,I);}
+ else if (spin_matrix_index==4){
+    spin_mat[0]=pair<int,complex<T>>(2,one); spin_mat[1]=pair<int,complex<T>>(3,one);
+    spin_mat[2]=pair<int,complex<T>>(0,one); spin_mat[3]=pair<int,complex<T>>(1,one);}
+ else if (spin_matrix_index==5){
+    spin_mat[0]=pair<int,complex<T>>(0,-one); spin_mat[1]=pair<int,complex<T>>(1,-one);
+    spin_mat[2]=pair<int,complex<T>>(2,one); spin_mat[3]=pair<int,complex<T>>(3,one);}
+ else if (spin_matrix_index==6){
+    spin_mat[0]=pair<int,complex<T>>(0,one); spin_mat[1]=pair<int,complex<T>>(1,-one);
+    spin_mat[2]=pair<int,complex<T>>(2,one); spin_mat[3]=pair<int,complex<T>>(3,-one);}
+ else if (spin_matrix_index==7){
+    spin_mat[0]=pair<int,complex<T>>(1,-I); spin_mat[1]=pair<int,complex<T>>(0,I);
+    spin_mat[2]=pair<int,complex<T>>(3,-I); spin_mat[3]=pair<int,complex<T>>(2,I);}
+ else if (spin_matrix_index==8){
+    spin_mat[0]=pair<int,complex<T>>(1,-one); spin_mat[1]=pair<int,complex<T>>(0,-one);
+    spin_mat[2]=pair<int,complex<T>>(3,one); spin_mat[3]=pair<int,complex<T>>(2,one);}
+ else if (spin_matrix_index==9){
+    spin_mat[0]=pair<int,complex<T>>(1,one); spin_mat[1]=pair<int,complex<T>>(0,one);
+    spin_mat[2]=pair<int,complex<T>>(3,one); spin_mat[3]=pair<int,complex<T>>(2,one);}
+ else if (spin_matrix_index==10){
+    spin_mat[0]=pair<int,complex<T>>(1,-I); spin_mat[1]=pair<int,complex<T>>(0,I);
+    spin_mat[2]=pair<int,complex<T>>(3,I); spin_mat[3]=pair<int,complex<T>>(2,-I);}
+ else if (spin_matrix_index==11){
+    spin_mat[0]=pair<int,complex<T>>(0,-one); spin_mat[1]=pair<int,complex<T>>(1,one);
+    spin_mat[2]=pair<int,complex<T>>(2,one); spin_mat[3]=pair<int,complex<T>>(3,-one);}
+ else{
+    errorLaph("Unsupported Dirac gamma spin index");}
+}
+
+
+void lattice_spin_multiply(LattField& outfield, const LattField& infield, int spin_matrix_index)
+{
+ if (infield.getFieldSiteType()!=FieldSiteType::ColorSpinVector){
+    errorLaph("spin_multiply can only be done on a ColorSpinVector");}
+ outfield.reset(FieldSiteType::ColorSpinVector);
+ int nsites=LayoutInfo::getRankLatticeNumSites();
+ int nelem=infield.elemsPerSite();
+ if (infield.bytesPerWord()==sizeof(complex<double>)){
+    vector<pair<int,complex<double>>> spin_mat(4);
+    assign_spin_matrix<double>(spin_matrix_index,spin_mat);
+    complex<double>* op=reinterpret_cast<complex<double>*>(outfield.getDataPtr());
+    const complex<double>* ip=reinterpret_cast<const complex<double>*>(infield.getDataConstPtr());
+    for (int k=0;k<nsites;++k,op+=nelem,ip+=nelem){
+       spin_mult<double>(op,ip,spin_mat);}}
+  else{
+    vector<pair<int,complex<float>>> spin_mat(4);
+    assign_spin_matrix<float>(spin_matrix_index,spin_mat);
+    complex<float>* op=reinterpret_cast<complex<float>*>(outfield.getDataPtr());
+    const complex<float>* ip=reinterpret_cast<const complex<float>*>(infield.getDataConstPtr());
+    for (int k=0;k<nsites;++k,op+=nelem,ip+=nelem){
+       spin_mult<float>(op,ip,spin_mat);}}
+}
+
+
+void calcCloverLeaves(LattField& cloverleaf, const vector<LattField>& gaugefield,
+                      int dir1, int dir2)
+{
+ LattField Utmp;
+ vector<int> path(4);
+      // upper right leaf
+ path[0]=dir1; path[1]=dir2; path[2]=-dir1; path[3]=-dir2;
+ lattice_link_path(cloverleaf,gaugefield,path);
+      // upper left leaf
+ path[0]=dir2; path[1]=-dir1; path[2]=-dir2; path[3]=dir1;
+ lattice_link_path(Utmp,gaugefield,path);
+ lattice_addto(cloverleaf,Utmp);
+      // lower left leaf
+ path[0]=-dir1; path[1]=-dir2; path[2]=dir1; path[3]=dir2;
+ lattice_link_path(Utmp,gaugefield,path);
+ lattice_addto(cloverleaf,Utmp);
+      // lower right leaf
+ path[0]=-dir2; path[1]=dir1; path[2]=dir2; path[3]=-dir1;
+ lattice_link_path(Utmp,gaugefield,path);
+ lattice_addto(cloverleaf,Utmp);
+}
+
+
+void read_text_field(LattField& infield, const std::string& filename)
+{
+ printLaph(make_str("Starting read_text_field with filename ",filename));
+ ifstream fin;
+ int nelem_per_site;
+ if (isPrimaryRank()){
+    fin.open(filename);
+    string line;
+    getline(fin,line);
+    int nx,ny,nz,nt;
+    sscanf(line.c_str(),"Lattice size (%d,%d,%d,%d)  Elems per site = %d",
+           &nx,&ny,&nz,&nt,&nelem_per_site);
+    if  ((nx!=LayoutInfo::getLattSizes()[0])||(ny!=LayoutInfo::getLattSizes()[1])
+       ||(nz!=LayoutInfo::getLattSizes()[2])||(nt!=LayoutInfo::getLattSizes()[3])){
+       errorLaph("Wrong lattice size in input field file");}}
+#ifdef ARCH_PARALLEL
+ comm_broadcast(&nelem_per_site,sizeof(int));
+#endif
+
+ if (nelem_per_site==9){
+    infield.reset(FieldSiteType::ColorMatrix);}
+ else if (nelem_per_site==12){
+    infield.reset(FieldSiteType::ColorSpinVector);}
+ else if (nelem_per_site==3){
+    infield.reset(FieldSiteType::ColorVector);}
+ else if (nelem_per_site==1){
+    infield.reset(FieldSiteType::Complex);}
+ else{
+    errorLaph("Invalid field type for input");}
+ vector<int> coord(LayoutInfo::Ndim);
+ vector<char> sitedata(infield.bytesPerSite());
+ bool dp=(infield.bytesPerWord()==sizeof(complex<double>));
+ vector<double> buffer(2*nelem_per_site);
+ for (int ind=0;ind<LayoutInfo::getLatticeNumSites();++ind){
+    if (isPrimaryRank()){
+       string line;
+       getline(fin,line);
+       int sitenum;
+       sscanf(line.c_str()," site = %d coord =    %d  %d  %d  %d",&sitenum,
+              &coord[0],&coord[1],&coord[2],&coord[3]);
+       double vr,vi;
+       for (int j=0;j<nelem_per_site;++j){
+          getline(fin,line);  //cout << "line = "<<line<<endl;
+          sscanf(line.c_str()," field_comp[%*d] = ( %lf, %lf)",&vr,&vi);
+          buffer[2*j]=vr; buffer[2*j+1]=vi;}
+       if (dp){
+          double* dptr=reinterpret_cast<double*>(sitedata.data());
+          for (int j=0;j<2*nelem_per_site;++j,++dptr){
+             *dptr=buffer[j];}}
+       else{
+          float* dptr=reinterpret_cast<float*>(sitedata.data());
+          for (int j=0;j<2*nelem_per_site;++j,++dptr){
+             *dptr=buffer[j];}}}
+#ifdef ARCH_PARALLEL
+    comm_broadcast(coord.data(),LayoutInfo::Ndim*sizeof(int));
+    comm_broadcast(sitedata.data(),sitedata.size());
+#endif
+    infield.putSiteData(coord,sitedata);}
+ fin.close();
+}
+
+
+   //   Applies the clover Dirac operation to "infield", returning
+   //   the result in "outfield".  This operation is
+   //
+   //    outfield =  [ 1/(2*kappa) - (1/2) Dterm  + CFterm ] infield
+   //
+   //   where
+   //
+   //        Dterm = sum_mu [ (1-gamma_mu) U  + (1+gamma_mu) * U^dag ]
+   //
+   //        CFterm = csw (i/4)  sigma[mu,nu] F[mu,nu]
+   //
+   //            sigma[mu,nu] (i/2) [gamma_mu, gamma_nu]
+   //
+   //            F[mu,nu] = (1/8) ( Q[mu,nu]-Q[nu,mu] )
+   //
+   //            Q[mu,nu] = U(mu,nu,-mu,-nu) + U(nu,-mu,-nu,mu)
+   //                     + U(-mu,-nu,mu,nu) + U(-nu,mu,nu,-mu)
+   //
+   //   Lattice shifts must take the fermion temporal boundary
+   //   conditions into account.
+   
+
+void applyCloverDirac(LattField& outfield, const LattField& infield,
+                      const vector<LattField>& gauge_field,
+                      const GaugeConfigurationInfo& gaction,
+                      const QuarkActionInfo& qaction)
+{
+ if (int(gauge_field.size())!=LayoutInfo::Ndim){
+    errorLaph("invalid gauge field in applyCloverDirac");}
+ for (uint dir=0;dir<gauge_field.size();++dir){
+    if (gauge_field[dir].getFieldSiteType()!=FieldSiteType::ColorMatrix){
+       errorLaph("invalid gauge field in applyCloverDirac");}}
+ if (infield.getFieldSiteType()!=FieldSiteType::ColorSpinVector){
+    errorLaph("can apply clover Dirac operator only to a color-spin vector field");}
+ bool tbc1=qaction.isFermionTimeBCAntiPeriodic();
+ bool tbc2=gaction.isFermionTimeBCAntiPeriodic();
+ if (tbc1!=tbc2){
+    errorLaph("Inconsistent fermion time boundary conditions in QuarkActionInfo and GaugeConfigurationInfo",true);}
+ outfield.reset(FieldSiteType::ColorSpinVector);
+
+ if (qaction.getName()!="WILSON_CLOVER"){
+    errorLaph("Can only applyCloverDirac if action name is WILSON_CLOVER");}
+ bool timebc_antiperiodic=qaction.isFermionTimeBCAntiPeriodic();
+ double kappa=qaction.getRValues()[2];
+ double csw=qaction.getRValues()[4];
+ double anisotropy=qaction.getRValues()[3];
+ if (std::abs(anisotropy-1.0)>1e-12){
+    errorLaph("Current applyCloverDirac only applies for isotropic actions");}
+
+    //  Now for the clover Dirac operator acting on a color-spin field
+ LattField cloverleaf(FieldSiteType::ColorMatrix);
+ LattField cloverleaf2(FieldSiteType::ColorMatrix);
+ LattField phi(FieldSiteType::ColorSpinVector);
+ LattField phi2(FieldSiteType::ColorSpinVector);
+ LattField CFterm(FieldSiteType::ColorSpinVector);
+ LattField Dterm(FieldSiteType::ColorSpinVector);
+ setZeroField(CFterm);
+ setZeroField(Dterm);
+ int spin_index=6;
+ complex<double> cfclover(0.0,csw/16.0);
+ for (int dir1=1;dir1<=LayoutInfo::Ndim;++dir1)
+ for (int dir2=dir1+1;dir2<=LayoutInfo::Ndim;++dir2,++spin_index){
+    calcCloverLeaves(cloverleaf,gauge_field,dir1,dir2);
+    calcCloverLeaves(cloverleaf2,gauge_field,dir2,dir1);
+    lattice_addto(cloverleaf,cloverleaf2,complex<double>(-1.0,0.0));
+    su3color_mult(phi,cloverleaf,infield);
+    lattice_spin_multiply(phi2,phi,spin_index);
+    lattice_addto(CFterm,phi2,cfclover);}
+
+    //  Now the leading derivative and the Wilson term
+ for (int dir=1;dir<=4;++dir){
+    lattice_cov_shift(phi,infield,gauge_field,dir-1,'F',timebc_antiperiodic);
+    lattice_addto(Dterm,phi);
+    lattice_spin_multiply(phi2,phi,dir);
+    lattice_addto(Dterm,phi2,complex<double>(-1.0,0.0));
+    lattice_cov_shift(phi,infield,gauge_field,dir-1,'B',timebc_antiperiodic);
+    lattice_addto(Dterm,phi);
+    lattice_spin_multiply(phi2,phi,dir);
+    lattice_addto(Dterm,phi2);}
+
+ setZeroField(outfield);
+ lattice_addto(outfield,infield,complex<double>(1.0/(2.0*kappa),0.0));
+ lattice_addto(outfield,Dterm,complex<double>(-0.5,0.0));
+
+// vector<vector<int>> sites;
+// sites.push_back(vector<int>{4,7,3,12});
+// sites.push_back(vector<int>{11,15,7,19});
+// printField(outfield,"Dirac term",sites);
+
+ lattice_addto(outfield,CFterm);
+// printField(CFterm,"clover term",sites);
+}
+
+
+void testCloverDiracMatrix(XMLHandler& xml_in)
+{
+ if (xml_tag_count(xml_in,"TestCloverDiracMatrix")==0)
+ return;
+
+ XMLHandler xmlr(xml_in,"TestCloverDiracMatrix");
+ string infilestub;
+ xmlread(xmlr,"InFileStub",infilestub,"TestCloverDiracMatrix");
+ GaugeConfigurationInfo gaugeinfo(xmlr);
+ QuarkActionInfo quark(xmlr);
+ bool fulltests=false;
+ if (xml_tag_count(xmlr,"FullTest")!=0) fulltests=true;
+
+ printLaph(make_strf("%",gaugeinfo.output()));
+ printLaph(make_strf("\nQuarkAction:\n%s\n",quark.output()));
+
+   // read the ascii gauge field which was output by chroma
+ vector<LattField> gaugefield(LayoutInfo::Ndim);
+ for (int dir=0;dir<LayoutInfo::Ndim;++dir){
+    string filename(infilestub);
+    filename+="_gaugefield_"+make_string(dir);
+    read_text_field(gaugefield[dir],filename);}
+
+   // read the ascii fermion source field which was output by chroma
+ LattField phi;
+ string filename=infilestub+"_colorspinfield";
+ read_text_field(phi,filename);
+ LattField phi2B;
+
+ if (fulltests){
+   // test color matrix multiplies
+ printLaph("Testing multiplication of color matrix onto a color spin field");
+ LattField phi2;
+ int dir=1;
+ su3color_mult(phi2,gaugefield[dir],phi);
+ filename=infilestub+"_phi2";
+ read_text_field(phi2B,filename);
+ compare_fields(phi2,phi2B);
+
+ printLaph("Testing lattice addto");
+ LattField Temp(phi);
+ lattice_addto(Temp,phi2,complex<double>(3.3,-5.2));
+ filename=infilestub+"_addchecker";
+ read_text_field(phi2B,filename);
+ compare_fields(Temp,phi2B);
+
+ printLaph("Testing multiplication of adj color matrix onto a color spin field");
+ su3color_adjmult(phi2,gaugefield[dir],phi);
+ filename=infilestub+"_phi2_adj";
+ read_text_field(phi2B,filename);
+ compare_fields(phi2,phi2B);
+
+ printLaph("Testing multiplication of color matrix onto a color vector field");
+ LattField ev,ev2,ev2B;
+ filename=infilestub+"_colorvec";
+ read_text_field(ev,filename);
+ filename=infilestub+"_colorvec2";
+ read_text_field(ev2B,filename);
+ su3color_mult(ev2,gaugefield[dir],ev);
+ compare_fields(ev2,ev2B);
+ printLaph("Testing multiplication of adj color matrix onto a color vector field");
+ filename=infilestub+"_colorvec2_adj";
+ read_text_field(ev2B,filename);
+ su3color_adjmult(ev2,gaugefield[dir],ev);
+ compare_fields(ev2,ev2B);
+
+ printLaph("Testing multiplication of color matrix onto a color matrix field");
+ LattField CM,CM2;
+ su3color_mult(CM,gaugefield[dir],gaugefield[3]);
+ filename=infilestub+"_colormatrix2";
+ read_text_field(CM2,filename);
+ compare_fields(CM,CM2);
+ printLaph("Testing multiplication of adj color matrix onto a color matrix field");
+ su3color_adjmult(CM,gaugefield[dir],gaugefield[3]);
+ filename=infilestub+"_colormatrix2_adj";
+ read_text_field(CM2,filename);
+ compare_fields(CM,CM2);
+
+    // test spin multiplies
+
+ for (int spin_index=1;spin_index<12;++spin_index){
+    printLaph(make_str("Testing spin multiply ",spin_index));
+    lattice_spin_multiply(phi2,phi,spin_index);
+    filename=infilestub+"_spinmult_"+make_string(spin_index);
+    read_text_field(phi2B,filename);
+    compare_fields(phi2,phi2B);}
+
+    // test covariant shifts
+
+ for (dir=0;dir<4;++dir){
+    printLaph(make_str("Testing forward covariant shift of a color-spin vector field in direction ",dir));
+    vector<int> path; path.push_back(dir+1);
+    lattice_cov_shift(phi2,phi,gaugefield,path);
+    filename=infilestub+"_covshift_phi_fwd_"+make_string(dir);
+    read_text_field(phi2B,filename);
+    compare_fields(phi2,phi2B);}
+ for (dir=0;dir<4;++dir){
+    printLaph(make_str("Testing backward covariant shift of a color-spin vector field in direction ",dir));
+    vector<int> path; path.push_back(-(dir+1));
+    lattice_cov_shift(phi2,phi,gaugefield,path);
+    filename=infilestub+"_covshift_phi_bwd_"+make_string(dir);
+    read_text_field(phi2B,filename);
+    compare_fields(phi2,phi2B);}
+
+     // test link path
+ 
+ vector<int> path;
+ path.push_back(1); path.push_back(2); path.push_back(3);
+ printLaph("Testing link path 1,2,3");
+ LattField UU,UU2;
+ lattice_link_path(UU,gaugefield,path);
+ filename=infilestub+"_linkpath_123";
+ read_text_field(UU2,filename);
+ compare_fields(UU,UU2);
+
+ path.clear();
+ path.push_back(1); path.push_back(2); path.push_back(-1); path.push_back(-2);
+ printLaph("Testing link path 1,2,-1,-2");
+ lattice_link_path(UU,gaugefield,path);
+ filename=infilestub+"_linkpath_loop12";
+ read_text_field(UU2,filename);
+ compare_fields(UU,UU2);
+
+ path.clear();
+ printLaph("Checking path 4 3 1 -2 -4 cov displacement of color spin field");
+ path.push_back(4); path.push_back(3); path.push_back(1); 
+ path.push_back(-2); path.push_back(-4); 
+ lattice_cov_shift(phi2,phi,gaugefield,path);
+ filename=infilestub+"_linkpath_long1234";
+ read_text_field(phi2B,filename);
+ compare_fields(phi2,phi2B);
+ }
+
+      //  now for the main event: testing the clover dirac
+ 
+ printLaph("Now applying the clover Dirac operator on a color-spin field");
+ LattField phiout;
+ applyCloverDirac(phiout,phi,gaugefield,gaugeinfo,quark);
+
+      // read result from chroma and compare
+ filename=infilestub+"_cloverdirac_actedon";
+ read_text_field(phi2B,filename);
+ printLaph("Comparing results with those from chroma");
+ compare_fields(phiout,phi2B);
+
+      // now carry out same operation using quda and compare
+
+ printLaph("Comparing results with those from quda");
+
+      // Put gauge field on the device
+      // Create the array of pointers, and call the load function
+ printLaph("Assigning gauge field parameters");
+ vector<const char*> gauge_ptrs(LayoutInfo::Ndim);
+ for (int dir=0;dir<LayoutInfo::Ndim;++dir){
+    gauge_ptrs[dir]=gaugefield[dir].getDataConstPtr();}
+      // create the quda gauge params
+ QudaGaugeParam gauge_param = newQudaGaugeParam();
+ gauge_param.type = QUDA_WILSON_LINKS;
+ gauge_param.X[0] = LayoutInfo::getRankLattSizes()[0];
+ gauge_param.X[1] = LayoutInfo::getRankLattSizes()[1];
+ gauge_param.X[2] = LayoutInfo::getRankLattSizes()[2];
+ gauge_param.X[3] = LayoutInfo::getRankLattSizes()[3];
+ gauge_param.cpu_prec = QudaInfo::get_cuda_prec();
+ gauge_param.cuda_prec = QudaInfo::get_cuda_prec();
+ gauge_param.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
+ gauge_param.cuda_prec_precondition = QudaInfo::get_cuda_prec();
+ gauge_param.cuda_prec_eigensolver = QudaInfo::get_cuda_prec();
+ gauge_param.reconstruct = QudaInfo::get_link_recon();
+ gauge_param.reconstruct_sloppy = QudaInfo::get_link_recon_sloppy();
+ gauge_param.reconstruct_precondition = QudaInfo::get_link_recon();
+ gauge_param.reconstruct_eigensolver = QudaInfo::get_link_recon();
+ gauge_param.reconstruct_refinement_sloppy = QudaInfo::get_link_recon_sloppy();
+ gauge_param.anisotropy = quark.getRValues()[3];
+ gauge_param.tadpole_coeff = 1.0; 
+ gauge_param.ga_pad = 0;
+ gauge_param.mom_ga_pad = 0;
+ gauge_param.gauge_fix = QUDA_GAUGE_FIXED_NO;
+ gauge_param.gauge_order = QUDA_QDP_GAUGE_ORDER;
+ gauge_param.t_boundary = (quark.isFermionTimeBCAntiPeriodic())
+                  ? QUDA_ANTI_PERIODIC_T  : QUDA_PERIODIC_T;
+ gauge_param.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
+ gauge_param.cuda_prec_precondition = QudaInfo::get_cuda_prec_sloppy();
+ gauge_param.cuda_prec_eigensolver = QudaInfo::get_cuda_prec_sloppy();
+ gauge_param.cuda_prec_refinement_sloppy = QudaInfo::get_cuda_prec_sloppy();
+ gauge_param.reconstruct_sloppy = QudaInfo::get_link_recon_sloppy();
+ gauge_param.reconstruct_precondition = QudaInfo::get_link_recon_sloppy();
+ gauge_param.reconstruct_eigensolver = QudaInfo::get_link_recon_sloppy();
+ gauge_param.reconstruct_refinement_sloppy = QudaInfo::get_link_recon_sloppy();
+ int pad_size = 0;
+  // For multi-GPU, ga_pad must be large enough to store a time-slice
+#ifdef ARCH_PARALLEL
+ int x_face_size = gauge_param.X[1] * gauge_param.X[2] * gauge_param.X[3] / 2;
+ int y_face_size = gauge_param.X[0] * gauge_param.X[2] * gauge_param.X[3] / 2;
+ int z_face_size = gauge_param.X[0] * gauge_param.X[1] * gauge_param.X[3] / 2;
+ int t_face_size = gauge_param.X[0] * gauge_param.X[1] * gauge_param.X[2] / 2;
+ pad_size = std::max(std::max(x_face_size, y_face_size), std::max(z_face_size, t_face_size));
+#endif
+ gauge_param.ga_pad = pad_size;
+ gauge_param.struct_size = sizeof(gauge_param);
+
+ printLaph("Loading gauge field onto the device");
+    // quda hack to handle fermionic antiperiodic time b.c.
+ if (quark.isFermionTimeBCAntiPeriodic()){
+    gaugefield[LayoutInfo::Ndim-1].applyFermionTemporalAntiPeriodic();}
+ loadGaugeQuda((void *)gauge_ptrs.data(), &gauge_param);
+    // undo hack on host field (but not device field)
+ if (quark.isFermionTimeBCAntiPeriodic()){
+    gaugefield[LayoutInfo::Ndim-1].applyFermionTemporalAntiPeriodic();}
+
+ printLaph("Assigning quda invert parameters");
+ QudaInvertParam inv_param=newQudaInvertParam();
+ quark.setQudaInvertParam(inv_param);
+ inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
+ inv_param.cpu_prec = QudaInfo::get_cpu_prec();
+ inv_param.cuda_prec = QudaInfo::get_cuda_prec();
+ inv_param.solution_type = QUDA_MAT_SOLUTION;
+ inv_param.solve_type = QUDA_NORMOP_PC_SOLVE;
+ inv_param.matpc_type = QUDA_MATPC_EVEN_EVEN;
+ inv_param.tune = QUDA_TUNE_YES;
+ inv_param.inv_type = QUDA_CG_INVERTER;
+ inv_param.tol = 1e-11;
+ inv_param.reliable_delta = 0.1;    //  mixed precision parameter (how often
+ inv_param.maxiter = 50000;             // compute high precision residual
+ inv_param.pipeline = 0;
+ inv_param.dagger = QUDA_DAG_NO;
+ inv_param.verbosity = QUDA_VERBOSE;
+ inv_param.compute_true_res=true;
+ inv_param.preserve_source = QUDA_PRESERVE_SOURCE_NO;
+ inv_param.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
+ inv_param.cuda_prec_refinement_sloppy = QudaInfo::get_cuda_prec_sloppy();
+ inv_param.cuda_prec_precondition = QudaInfo::get_cuda_prec();
+ inv_param.cuda_prec_eigensolver = QudaInfo::get_cuda_prec();
+ inv_param.struct_size = sizeof(inv_param);
+
+ printLaph("Calculating and loading clover field onto device");
+ loadCloverQuda(NULL, NULL, &inv_param); 
+
+ //printLaph(make_str("gaugePrecise TBoundary is ",gaugePrecise->TBoundary()));
+
+ void *h_out=phi2B.getDataPtr();
+ void *h_in=phi.getDataPtr();
+ printLaph("Applying the clover dirac operator on device");
+ MatQuda(h_out,h_in,&inv_param);
+
+// dslashQuda(h_out,h_in,&inv_param,QUDA_EVEN_PARITY);
+ compare_fields(phi2B,phiout);
+
+ //vector<vector<int>> sites;
+ //sites.push_back(vector<int>{4,7,3,12});
+ //sites.push_back(vector<int>{11,15,7,19});
+ //printField(phi2B,"Full result from quda",sites);
+
+
+}
+
+    //  Applies the 3d spatial Laplacian with a smeared gauge field
+    //  onto "infield", returning result in "outfield".  These fields
+    //  must be color vectors
+
+void applyMinusSpatialLaplacian(LattField& outfield, const LattField& infield,
+                                const vector<LattField>& smeared_gauge_field)
+{
+ if (int(smeared_gauge_field.size())!=LayoutInfo::Ndim){
+    errorLaph("invalid number of components in smeared gauge field in applySpatialLaplacian");}
+ for (uint dir=0;dir<smeared_gauge_field.size();++dir){
+    if (smeared_gauge_field[dir].getFieldSiteType()!=FieldSiteType::ColorMatrix){
+       errorLaph(make_strf("invalid field type in smeared gauge field[%d] in applySpatialLaplacian",dir));}}
+ if (infield.getFieldSiteType()!=FieldSiteType::ColorVector){
+    errorLaph("can apply spatial laplacian operator only to a color vector field");}
+ outfield.reset(FieldSiteType::ColorVector);
+
+ setZeroField(outfield);
+ lattice_addto(outfield,infield,complex<double>(6.0,0.0));
+ LattField phi(FieldSiteType::ColorVector);
+
+    //  Apply the spatial covariant shifts
+ for (int dir=1;dir<=3;++dir){
+    lattice_cov_shift(phi,infield,smeared_gauge_field,dir-1,'F');
+    lattice_addto(outfield,phi,complex<double>(-1.0,0.0));
+    lattice_cov_shift(phi,infield,smeared_gauge_field,dir-1,'B');
+    lattice_addto(outfield,phi,complex<double>(-1.0,0.0));}
+}
+
+
+void testMinusSpatialLaplacian(XMLHandler& xml_in)
+{
+ if (xml_tag_count(xml_in,"TestMinusSpatialLaplacian")==0)
+ return;
+
+ XMLHandler xmlr(xml_in,"TestMinusSpatialLaplacian");
+ string infilestub;
+ xmlread(xmlr,"InFileStub",infilestub,"TestMinusSpatialLaplacian");
+
+   // read the ascii gauge field which was output by chroma
+ vector<LattField> usmear(LayoutInfo::Ndim);
+ for (int dir=0;dir<LayoutInfo::Ndim;++dir){
+    string filename(infilestub);
+    filename+="_usmear_"+make_string(dir);
+    read_text_field(usmear[dir],filename);}
+
+   // read the ascii fermion source field which was output by chroma
+ LattField phi;
+ string filename=infilestub+"_colorfield";
+ read_text_field(phi,filename);
+
+      //  now for the main event: testing the clover dirac
+ 
+ printLaph("Now applying minus the 3d spatial Laplacian on a color field");
+ LattField phiout;
+ applyMinusSpatialLaplacian(phiout,phi,usmear);
+
+      // read result from chroma and compare
+ LattField phiout2;
+ filename=infilestub+"_minusSpatialLaplacian_actedon";
+ read_text_field(phiout2,filename);
+ printLaph("Comparing results with those from chroma");
+ compare_fields(phiout,phiout2);
+
+      // now carry out same operation using quda and compare
+
+ printLaph("Comparing results with those from quda");
+/*
+      // Put gauge field on the device
+      // Create the array of pointers, and call the load function
+ printLaph("Assigning gauge field parameters");
+ vector<const char*> gauge_ptrs(LayoutInfo::Ndim);
+ for (int dir=0;dir<LayoutInfo::Ndim;++dir){
+    gauge_ptrs[dir]=usmear[dir].getDataConstPtr();}
+      // create the quda gauge params
+ QudaGaugeParam gauge_param = newQudaGaugeParam();
+ gauge_param.type = QUDA_WILSON_LINKS;
+ gauge_param.X[0] = LayoutInfo::getRankLattSizes()[0];
+ gauge_param.X[1] = LayoutInfo::getRankLattSizes()[1];
+ gauge_param.X[2] = LayoutInfo::getRankLattSizes()[2];
+ gauge_param.X[3] = LayoutInfo::getRankLattSizes()[3];
+ gauge_param.cpu_prec = QudaInfo::get_cuda_prec();
+ gauge_param.cuda_prec = QudaInfo::get_cuda_prec();
+ gauge_param.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
+ gauge_param.cuda_prec_precondition = QudaInfo::get_cuda_prec();
+ gauge_param.cuda_prec_eigensolver = QudaInfo::get_cuda_prec();
+ gauge_param.reconstruct = QudaInfo::get_link_recon();
+ gauge_param.reconstruct_sloppy = QudaInfo::get_link_recon_sloppy();
+ gauge_param.reconstruct_precondition = QudaInfo::get_link_recon();
+ gauge_param.reconstruct_eigensolver = QudaInfo::get_link_recon();
+ gauge_param.reconstruct_refinement_sloppy = QudaInfo::get_link_recon_sloppy();
+ gauge_param.anisotropy = quark.getRValues()[3];
+ gauge_param.tadpole_coeff = 1.0; 
+ gauge_param.ga_pad = 0;
+ gauge_param.mom_ga_pad = 0;
+ gauge_param.gauge_fix = QUDA_GAUGE_FIXED_NO;
+ gauge_param.gauge_order = QUDA_QDP_GAUGE_ORDER;
+ gauge_param.t_boundary = (quark.isFermionTimeBCAntiPeriodic())
+                  ? QUDA_ANTI_PERIODIC_T  : QUDA_PERIODIC_T;
+ gauge_param.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
+ gauge_param.cuda_prec_precondition = QudaInfo::get_cuda_prec_sloppy();
+ gauge_param.cuda_prec_eigensolver = QudaInfo::get_cuda_prec_sloppy();
+ gauge_param.cuda_prec_refinement_sloppy = QudaInfo::get_cuda_prec_sloppy();
+ gauge_param.reconstruct_sloppy = QudaInfo::get_link_recon_sloppy();
+ gauge_param.reconstruct_precondition = QudaInfo::get_link_recon_sloppy();
+ gauge_param.reconstruct_eigensolver = QudaInfo::get_link_recon_sloppy();
+ gauge_param.reconstruct_refinement_sloppy = QudaInfo::get_link_recon_sloppy();
+ int pad_size = 0;
+  // For multi-GPU, ga_pad must be large enough to store a time-slice
+#ifdef ARCH_PARALLEL
+ int x_face_size = gauge_param.X[1] * gauge_param.X[2] * gauge_param.X[3] / 2;
+ int y_face_size = gauge_param.X[0] * gauge_param.X[2] * gauge_param.X[3] / 2;
+ int z_face_size = gauge_param.X[0] * gauge_param.X[1] * gauge_param.X[3] / 2;
+ int t_face_size = gauge_param.X[0] * gauge_param.X[1] * gauge_param.X[2] / 2;
+ pad_size = std::max(std::max(x_face_size, y_face_size), std::max(z_face_size, t_face_size));
+#endif
+ gauge_param.ga_pad = pad_size;
+ gauge_param.struct_size = sizeof(gauge_param);
+
+ printLaph("Loading gauge field onto the device");
+    // quda hack to handle fermionic antiperiodic time b.c.
+ if (quark.isFermionTimeBCAntiPeriodic()){
+    usmear[LayoutInfo::Ndim-1].applyFermionTemporalAntiPeriodic();}
+ loadGaugeQuda((void *)gauge_ptrs.data(), &gauge_param);
+    // undo hack on host field (but not device field)
+ if (quark.isFermionTimeBCAntiPeriodic()){
+    usmear[LayoutInfo::Ndim-1].applyFermionTemporalAntiPeriodic();}
+
+ printLaph("Assigning quda invert parameters");
+ QudaInvertParam inv_param=newQudaInvertParam();
+ quark.setQudaInvertParam(inv_param);
+ inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
+ inv_param.cpu_prec = QudaInfo::get_cpu_prec();
+ inv_param.cuda_prec = QudaInfo::get_cuda_prec();
+ inv_param.solution_type = QUDA_MAT_SOLUTION;
+ inv_param.solve_type = QUDA_NORMOP_PC_SOLVE;
+ inv_param.matpc_type = QUDA_MATPC_EVEN_EVEN;
+ inv_param.tune = QUDA_TUNE_YES;
+ inv_param.inv_type = QUDA_CG_INVERTER;
+ inv_param.tol = 1e-11;
+ inv_param.reliable_delta = 0.1;    //  mixed precision parameter (how often
+ inv_param.maxiter = 50000;             // compute high precision residual
+ inv_param.pipeline = 0;
+ inv_param.dagger = QUDA_DAG_NO;
+ inv_param.verbosity = QUDA_VERBOSE;
+ inv_param.compute_true_res=true;
+ inv_param.preserve_source = QUDA_PRESERVE_SOURCE_NO;
+ inv_param.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
+ inv_param.cuda_prec_refinement_sloppy = QudaInfo::get_cuda_prec_sloppy();
+ inv_param.cuda_prec_precondition = QudaInfo::get_cuda_prec();
+ inv_param.cuda_prec_eigensolver = QudaInfo::get_cuda_prec();
+ inv_param.struct_size = sizeof(inv_param);
+
+ printLaph("Calculating and loading clover field onto device");
+ loadCloverQuda(NULL, NULL, &inv_param); 
+
+ //printLaph(make_str("gaugePrecise TBoundary is ",gaugePrecise->TBoundary()));
+
+ void *h_out=phi2B.getDataPtr();
+ void *h_in=phi.getDataPtr();
+ printLaph("Applying the clover dirac operator on device");
+ MatQuda(h_out,h_in,&inv_param);
+
+// dslashQuda(h_out,h_in,&inv_param,QUDA_EVEN_PARITY);
+ compare_fields(phi2B,phiout);
+*/
+
+ printLaph("Tests of getTimeSlicedInnerProducts");
+    // read the 2nd ascii fermion source field which was output by chroma
+ LattField phi2;
+ filename=infilestub+"_colorfield2";
+ read_text_field(phi2,filename);
+
+ vector<complex<double>> iprods=getTimeSlicedInnerProducts(phi2,phi);
+ for (int t=0;t<int(iprods.size());++t){
+    printLaph(make_strf(" Inner prod for t=%d is (%20.15f, %20.15f)",t,
+              real(iprods[t]),imag(iprods[t])));}
+
+}
+
+// **************************************************************************
+}
+#endif
