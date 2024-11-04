@@ -1,0 +1,105 @@
+<QudaLaph>
+  <EchoXML/>
+  <LatticeLayoutInfo>
+     <XYZTExtents>24 24 24 48</XYZTExtents>
+  </LatticeLayoutInfo>
+  <QudaInfo>
+     <CPUPrecision>double</CPUPrecision>
+     <CUDAPrecision>double</CUDAPrecision>
+     <CUDASloppyPrecision>single</CUDASloppyPrecision>
+  </QudaInfo>
+  <Verbosity>low</Verbosity>
+  <Task>
+     <Name>LAPH_QUARK_LINE_ENDS</Name>
+     <QuarkLineEndInfo>
+        <GaugeConfigurationInfo>
+           <EnsembleName>CLS_A653</EnsembleName>
+           <FileFormat>CERN</FileFormat>
+           <ConfigType>WilsonImproved</ConfigType>
+           <FileName>/latticeQCD/raid4/laph/cls21_A653_r000/cfgs/A653r000n1</FileName>
+           <ConfigNumber>1</ConfigNumber>
+           <FermionTimeBC>antiperiodic</FermionTimeBC>
+        </GaugeConfigurationInfo>
+        <GluonStoutSmearingInfo>
+           <LinkIterations>20</LinkIterations>
+           <LinkStapleWeight>0.1</LinkStapleWeight>
+        </GluonStoutSmearingInfo>
+        <SmearedGaugeFileName>/latticeQCD/raid4/laph/cls21_A653_r000/smeared_gauge_field/1/smeared_gauge_field4D_1_qudalaphB</SmearedGaugeFileName>
+        <QuarkLaphSmearingInfo>
+           <LaphSigmaCutoff>0.32</LaphSigmaCutoff>
+           <NumberLaphEigvecs> 32 </NumberLaphEigvecs>
+        </QuarkLaphSmearingInfo>
+        <SmearedQuarkFileStub>/latticeQCD/raid4/laph/cls21_A653_r000/smeared_quark_field/1_Nev32/smeared_quark_field_1</SmearedQuarkFileStub>
+        <QuarkActionInfo>
+           <Name> WILSON_CLOVER </Name>
+           <Flavor> ud </Flavor>
+           <Kappa>0.1365716</Kappa>
+           <clovCoeff>2.0668577</clovCoeff>
+           <TimeBC> antiperiodic </TimeBC>
+         </QuarkActionInfo>
+        <FileListInfo>
+           <FileNameStub>/latticeQCD/raid4/laph/cls21_A653_r000/quark_sinks/1/quark_sinks_test_mpi</FileNameStub>
+           <MinFileNumber>0</MinFileNumber>
+           <MaxFileNumber>1000</MaxFileNumber>
+        </FileListInfo>
+     <!--   <InverterInfo>            
+           <Name>CG</Name> 
+           <Tolerance>1.0e-10</Tolerance>
+           <MaxIterations>35000</MaxIterations>
+        </InverterInfo> -->
+    <!--    <InverterInfo>            
+           <Name>BICGSTAB</Name> 
+           <Tolerance>1.0e-11</Tolerance>
+           <MaxIterations>35000</MaxIterations>
+        </InverterInfo> -->
+   <!--     <InverterInfo>            
+           <Name>GCR</Name> 
+           <Tolerance>1.0e-11</Tolerance>
+           <MaxIterations>35000</MaxIterations>
+           <NKrylov>24</NKrylov>
+        </InverterInfo> -->
+
+        <InverterInfo>            
+           <Name>GCR_MULTIGRID</Name> 
+        </InverterInfo>
+
+        <LaphDilutionScheme>
+           <TimeDilution>
+              <DilutionType>full</DilutionType>
+           </TimeDilution>
+           <EigvecDilution>
+              <DilutionType> interlace </DilutionType>
+              <NumberProjectors> 4 </NumberProjectors>
+           </EigvecDilution>
+           <SpinDilution>
+              <DilutionType>full</DilutionType>
+           </SpinDilution>
+        </LaphDilutionScheme>
+        <Verbosity>full</Verbosity>
+     </QuarkLineEndInfo> 
+     <SinkComputations>
+        <NumSinksBeforeProject>  4 </NumSinksBeforeProject>
+        <NumSinksInProjectBatch> 4 </NumSinksInProjectBatch>
+        <NumEigsInProjectBatch>  4 </NumEigsInProjectBatch>
+       <NoiseList_TimeProjIndexList>
+         <LaphNoiseList>
+           <LaphNoiseInfo>
+             <Seed>21117</Seed>
+             <ZNGroup>4</ZNGroup>
+           </LaphNoiseInfo>
+            <LaphNoiseInfo>
+               <ZNGroup>4</ZNGroup>
+               <Seed>9494</Seed>
+            </LaphNoiseInfo>
+            <LaphNoiseInfo>
+               <ZNGroup>4</ZNGroup>
+               <Seed>20019</Seed>
+            </LaphNoiseInfo>
+         </LaphNoiseList> 
+         <TimeProjIndexList>
+           <Values>23</Values>
+         </TimeProjIndexList>
+       </NoiseList_TimeProjIndexList>
+     </SinkComputations>
+  </Task> 
+</QudaLaph>
