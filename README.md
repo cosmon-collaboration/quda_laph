@@ -24,8 +24,8 @@ Compilation macros:
 
 Once a quda_laph executable is created, it can be run as follows:
 
-(parallel)  mpirun -n 4 --host host1,host2,host3,host4  quda_laph  -npartitions 1 1 2 2 -i input.xml >& output.log
-(serial)    quda_laph -i input.xml >& output.log
+- (parallel)  mpirun -n 4 --host host1,host2,host3,host4  quda_laph  -npartitions 1 1 2 2 -i input.xml >& output.log
+- (serial)    quda_laph -i input.xml >& output.log
 
 The tasks to be performed by quda_laph must be specified in an input XML file.  The header
 files provide information on the necessary form of the XML file.  Sample input XML files
