@@ -14,7 +14,7 @@ OpenMP threads can be compiled.
 IMPORTANT:  currently, you must use the feature/trlm_3d branch!!
 
 There are few BLAS routines used on the CPU, so either gsl or openblas should be available
-for the quda_laph compile.  There are ruby build scripts while provide cmake compilation
+for the quda_laph compile.  There are ruby build scripts which provide cmake compilation
 information and set needed macros.
 
 Compilation macros:
