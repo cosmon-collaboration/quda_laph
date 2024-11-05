@@ -1,0 +1,145 @@
+<QudaLaph>
+
+  <EchoXML/>
+  <LatticeLayoutInfo>
+     <XYZTExtents>64 64 64 192</XYZTExtents>
+  </LatticeLayoutInfo>
+  <QudaInfo>
+     <CPUPrecision>double</CPUPrecision>
+     <CUDAPrecision>double</CUDAPrecision>
+     <CUDASloppyPrecision>single</CUDASloppyPrecision>
+  </QudaInfo>
+  <Verbosity>none</Verbosity>
+
+  <Task>
+     <Name>SMEAR_GAUGE_FIELD</Name>
+     <GaugeConfigurationInfo>
+        <EnsembleName>CLS_J250</EnsembleName>
+        <FileFormat>CERN</FileFormat>
+        <ConfigType>WilsonImproved</ConfigType>
+        <FileName>/gpfs/alpine2/nph162/proj-shared/cls21_J250_r000/cfgs/J250r000n5</FileName>
+        <ConfigNumber>5</ConfigNumber>
+     </GaugeConfigurationInfo>
+     <GluonStoutSmearingInfo>
+        <LinkIterations>36</LinkIterations>
+        <LinkStapleWeight>0.1</LinkStapleWeight>
+     </GluonStoutSmearingInfo>
+     <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>
+  </Task> 
+
+  <Task>
+     <Name>SMEAR_QUARK_FIELD</Name>
+     <GaugeConfigurationInfo>
+        <EnsembleName>CLS_J250</EnsembleName>
+        <FileFormat>CERN</FileFormat>
+        <ConfigType>WilsonImproved</ConfigType>
+        <FileName>/gpfs/alpine2/nph162/proj-shared/cls21_J250_r000/cfgs/J250r000n5</FileName>
+        <ConfigNumber>5</ConfigNumber>
+     </GaugeConfigurationInfo>
+     <GluonStoutSmearingInfo>
+        <LinkIterations>36</LinkIterations>
+        <LinkStapleWeight>0.1</LinkStapleWeight>
+     </GluonStoutSmearingInfo>
+     <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>
+     <QuarkLaphSmearingInfo>
+        <LaphSigmaCutoff>0.295</LaphSigmaCutoff>
+        <NumberLaphEigvecs>288</NumberLaphEigvecs>
+     </QuarkLaphSmearingInfo>
+     <SmearedQuarkFileStub>NOM_smeared_quark_field</SmearedQuarkFileStub>
+     <LaphEigenSolverInfo>
+        <ResidualTolerance>1.0e-11</ResidualTolerance>
+        <MaxIterations>48</MaxIterations>
+        <KrylovDimension>348</KrylovDimension>
+        <ChebyshevOrder>28</ChebyshevOrder>
+	<MaxEigenvalue>12.5</MaxEigenvalue>
+        <StartingVectorType>equal_components</StartingVectorType>
+	<!--  <CheckSolution>true</CheckSolution> -->
+        <CutoffEigenvalue>0.10</CutoffEigenvalue>
+        <OutputVerbosity>0</OutputVerbosity>
+       </LaphEigenSolverInfo>
+  </Task> 
+
+  <Task>
+     <Name>LAPH_QUARK_PERAMBULATORS</Name>
+     <QuarkPerambulatorInfo>
+        <GaugeConfigurationInfo>
+           <EnsembleName>CLS_J250</EnsembleName>
+           <FileFormat>CERN</FileFormat>
+           <ConfigType>WilsonImproved</ConfigType>
+           <FileName>/gpfs/alpine2/nph162/proj-shared/cls21_J250_r000/cfgs/J250r000n5</FileName>
+           <ConfigNumber>5</ConfigNumber>
+           <FermionTimeBC>antiperiodic</FermionTimeBC>
+        </GaugeConfigurationInfo>
+        <GluonStoutSmearingInfo>
+           <LinkIterations>36</LinkIterations>
+           <LinkStapleWeight>0.1</LinkStapleWeight>
+        </GluonStoutSmearingInfo>
+        <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>
+        <QuarkLaphSmearingInfo>
+           <LaphSigmaCutoff>0.295</LaphSigmaCutoff>
+           <NumberLaphEigvecs>288</NumberLaphEigvecs>
+        </QuarkLaphSmearingInfo>
+        <SmearedQuarkFileStub>NOM_smeared_quark_field</SmearedQuarkFileStub>
+        <QuarkActionInfo>
+           <Name> WILSON_CLOVER </Name>
+           <Flavor> ud </Flavor>
+           <Kappa>0.1372067</Kappa>
+           <clovCoeff>1.8248654</clovCoeff>
+           <TimeBC> antiperiodic </TimeBC>
+         </QuarkActionInfo>
+        <FileListInfo>
+           <FileNameStub>/gpfs/alpine2/nph162/proj-shared/cls21_J250_r000/quark_perambulators/5/quark_peramb</FileNameStub>
+           <MinFileNumber>0</MinFileNumber>
+           <MaxFileNumber>1000</MaxFileNumber>
+        </FileListInfo>
+        <InverterInfo>                                                              
+           <Name>GCR_MULTIGRID</Name>                                              
+           <Tolerance>1.0e-11</Tolerance>
+           <MaxIterations>200</MaxIterations>                                      
+           <NKrylov>24</NKrylov>                                                   
+           <MGPreconditioner>                                                      
+              <NumLevels>2</NumLevels>              
+              <Level0>                                                             
+                 <XYZTBlockExtents>4 4 4 4</XYZTBlockExtents>          
+                 <NullSpaceDim>S</NullSpaceDim>          
+                 <NullSpaceSolveSteps>500</NullSpaceSolveSteps>                    
+                 <CoarseSolverTolerance>0.25</CoarseSolverTolerance>               
+                 <CoarseSolverMaxIterations>50</CoarseSolverMaxIterations>         
+                 <NumPreSmooth>0</NumPreSmooth>                                    
+                 <NumPostSmooth>4</NumPostSmooth>                                  
+              </Level0>                                                            
+              <Level1>                                       
+                 <CoarseSolverTolerance>0.25</CoarseSolverTolerance>               
+                 <CoarseSolverMaxIterations>50</CoarseSolverMaxIterations>         
+                 <TRLMDeflation>
+                    <NumVectors> 128 </NumVectors>                                         
+                    <Tolerance> 1e-6 </Tolerance>                                          
+                    <MaxIterations> 200 </MaxIterations>                                   
+                    <ChebyshevOrder> 16 </ChebyshevOrder>                                   
+                    <CutoffEigenvalue> 0.1 </CutoffEigenvalue>                             
+                 </TRLMDeflation>             
+              </Level1>                                                            
+              <LoadNullVectors>false</LoadNullVectors>       
+              <GenerateAllLevels>true</GenerateAllLevels>     
+              <PreOrthoNullVectors>true</PreOrthoNullVectors>                      
+              <PostOrthoNullVectors>true</PostOrthoNullVectors>                    
+	      <SetupMinimizeMemory>false</SetupMinimizeMemory>                      
+              <RunVerify>false</RunVerify>           
+           </MGPreconditioner>                                                     
+        </InverterInfo>                                                             
+	<Verbosity>none</Verbosity>
+       <ExtraSolutionChecks/>
+     </QuarkPerambulatorInfo>
+     <ComputationSet>
+        <NumSinksBeforeProject>  4 </NumSinksBeforeProject>
+        <NumSinksInProjectBatch> 4 </NumSinksInProjectBatch>
+        <NumEigsInProjectBatch>  4 </NumEigsInProjectBatch>
+        <Computation>
+           <SourceTime>12</SourceTime>
+           <SourceLaphEigvecIndexMin>26</SourceLaphEigvecIndexMin>
+           <SourceLaphEigvecIndexMax>28</SourceLaphEigvecIndexMax>
+        </Computation>
+     </ComputationSet>
+  </Task>
+
+</QudaLaph>
