@@ -90,31 +90,26 @@ class Launcher
      @srcdir=@qudadir+"/source"
      @builddir=@qudadir+"/build/"+nowstr
      @installdir=@qudadir+"/install/"+nowstr
-     @qmpdir=""
   elsif (@machine=="perlmutter")
      @qudadir="/global/cfs/cdirs/m2986/stoch_nn/colin/quda"
      @srcdir="/global/cfs/cdirs/m2986/stoch_nn/colin/quda/source"
      @builddir=@qudadir+"/build/"+nowstr
      @installdir="/global/cfs/cdirs/m2986/stoch_nn/colin/quda/install/perlmutter/"+nowstr
-     @qmpdir=""
   elsif (@machine=="summit")
      @qudadir="/autofs/nccs-svm1_proj/nph162/colin/quda"
      @srcdir="/autofs/nccs-svm1_proj/nph162/colin/quda/source"
      @builddir=@qudadir+"/build/"+nowstr
      @installdir="/autofs/nccs-svm1_proj/nph162/colin/quda/install/"+nowstr
-     @qmpdir="/autofs/nccs-svm1_proj/nph162/colin/usqcd_2023/install/DATE-2024-3-21/qmp_omp/lib/cmake/QMP"
   elsif (@machine=="frontier")
      @qudadir="/autofs/nccs-svm1_proj/nph165/colin/quda"
      @srcdir="/autofs/nccs-svm1_proj/nph165/colin/quda/source"
      @builddir=@qudadir+"/build/"+nowstr
      @installdir="/autofs/nccs-svm1_proj/nph165/colin/quda/install/"+nowstr
-     @qmpdir="/autofs/nccs-svm1_proj/nph165/colin/usqcd_2023/install/DATE-2024-3-21/qmp_omp/lib/cmake/QMP"
   elsif (@machine=="bridges")
      @qudadir="/jet/home/mornings/quda"
      @srcdir=@qudadir+"/source"
      @builddir=@qudadir+"/build/"+nowstr
      @installdir=@qudadir+"/install/"+nowstr
-     @qmpdir=""
   else
      abort("Unsupported machine ")
   end
@@ -141,7 +136,6 @@ class Launcher
   puts
   commchoices=Array.new
   commchoices.push("mpi-parallel")
-  commchoices.push("qmp-parallel")
   commchoices.push("none-serial")
   puts "Which type of communication to use?"
   nchoices=commchoices.size
@@ -152,36 +146,8 @@ class Launcher
   choice = gets.to_i
   abort("Invalid entry") if (choice<1)||(choice>nchoices)
   @comm=commchoices[choice-1]
-  commstr = { "mpi-parallel" => "mpi", "none-serial" => "ser", "qmp-parallel" => "qmp" }
+  commstr = { "mpi-parallel" => "mpi", "none-serial" => "ser" }
   suffix = "_"+commstr[@comm]
-
-  if (@comm=="qmp-parallel")
-     puts
-     puts " The QMP installation cmake directory for this machine is "
-     puts
-     puts "        "+@qmpdir
-     puts
-     puts " Hit <enter> to accept the default, or enter a different path: "
-     print " QMP installation cmake directory? "
-     reply=gets.chomp.strip
-     if (reply!="")
-        @qmpdir=reply
-        puts " The current QMP installation cmake directory is "
-        puts "        "+@qmpdir
-     end
-  end
-
-      # include QDP interface?
-
-#  puts
-#  puts " Include QDP interface? (y/n) "
-#  reply=gets.chomp.strip
-#  if (reply=="y")
-#     @qdpinterface="ON"
-#     suffix+="_qdp"
-#  else
-#     @qdpinterface="OFF"
-#  end
 
   @builddir=@builddir+suffix
   @installdir=@installdir+suffix
@@ -292,7 +258,7 @@ class Launcher
 
   elsif (@machine=="summit")
   
-     if (@comm=="mpi-parallel")||(@comm=="qmp-parallel")
+     if (@comm=="mpi-parallel")
         @cc="mpicc"
         @cxx="mpiCC"
      elsif (@comm=="none-serial")
@@ -310,7 +276,7 @@ class Launcher
 
   elsif (@machine=="frontier")
   
-     if (@comm=="mpi-parallel")||(@comm=="qmp-parallel")
+     if (@comm=="mpi-parallel")
         @cc="hipcc"
         @cxx="hipcc"
      elsif (@comm=="none-serial")
@@ -343,13 +309,8 @@ class Launcher
 
    if (@comm=="mpi-parallel")
       mpi="ON"
-      qmp="OFF"
-   elsif (@comm=="qmp-parallel")
-      mpi="OFF"
-      qmp="ON"
    else
       mpi="OFF"
-      qmp="OFF"
    end
 
    if (@gpu=="cuda")
@@ -394,7 +355,7 @@ class Launcher
        " -DQUDA_INTERFACE_CPS=OFF"+
        " -DQUDA_INTERFACE_QDP=ON"+
        " -DQUDA_INTERFACE_TIFR=OFF"+
-       " -DQUDA_QMP="+qmp+
+       " -DQUDA_QMP=OFF"+
        " -DQUDA_QIO=OFF"+
        " -DQUDA_OPENMP=ON"+
        " -DQUDA_MULTIGRID=ON"+
@@ -413,10 +374,6 @@ class Launcher
        " -DQUDA_BACKWARDS=ON"+
        " -DCMAKE_EXE_LINKER_FLAGS=\""+@linkerflags+"\""
 
-   if (@comm=="qmp-parallel")
-      cmd+=" -DQMP_DIR=\""+@qmpdir+"\""
-   end
-   
    puts cmd
 
      # do cmake
