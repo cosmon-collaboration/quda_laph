@@ -9,26 +9,44 @@ set(CMAKE_CXX_STANDARD 17)
 include(GNUInstallDirs)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
-set(ARCH "SERIAL" CACHE STRING "Must call with either -DARCH=PARALLEL or -DARCH=SERIAL")
+set(ARCH "PARALLEL" CACHE STRING "Must call with either -DARCH=PARALLEL or -DARCH=SERIAL")
+set(HOSTCBLAS "OPENBLAS" CACHE STRING "Must define HOSTCBLAS")
+set(BLAS_INC "/usr/include/openblas/" CACHE STRING "Includ directory for BLAS library")
+set(BLAS_LIB "/usr/lib/openblas/" CACHE STRING "Lib directory for blas library")
+set(GPUTOOLKIT_DIR "/usr/local/cuda-11.4/" CACHE STRING "Specify where GPYU toolkit is")
+set(QUDA_DIR "" CACHE STRING "Tell us where the Quda install is")
+option(OPENMP "Compile in openmp?" ON )
+
+set(CMAKE_BUILD_TYPE "Release" )
+set(CMAKE_VERBOSE_MAKEFILE ON)
+
+## default compile options
+add_compile_options(-march=native -Wall)
+
+if(OPENMP)
+  add_compile_options(-fopenmp)
+endif()
 
 if(ARCH STREQUAL "PARALLEL")
-   message(STATUS "parallel build")
-   add_compile_definitions(ARCH_PARALLEL)
-   add_compile_definitions(MPI_COMMS)
-   add_compile_definitions(MULTI_GPU)
+  message(STATUS "parallel build")
+  set(CMAKE_C_COMPILER mpicc)
+  set(CMAKE_CXX_COMPILER mpic++)
+  add_compile_definitions(ARCH_PARALLEL)
+  add_compile_definitions(MPI_COMMS)
+  add_compile_definitions(MULTI_GPU)
 elseif(ARCH STREQUAL "SERIAL")
-   message(STATUS "serial build")
-   add_compile_definitions(ARCH_SERIAL)
+  message(STATUS "serial build")
+  set(CMAKE_C_COMPILER gcc)
+  set(CMAKE_CXX_COMPILER g++)
+  add_compile_definitions(ARCH_SERIAL)
 else()
    message( FATAL_ERROR "Must define ARCH to be PARALLEL or SERIAL" )
 endif()
 
-set(GPUTOOLKIT_DIR "" CACHE STRING "Specify where GPYU toolkit is")
 if(NOT GPUTOOLKIT_DIR)
    message(FATAL_ERROR "GPUTOOLKIT_DIR must be set")
 endif()
 
-set(QUDA_DIR "" CACHE STRING "Tell us where the Quda install is")
 if(NOT QUDA_DIR)
    message(FATAL_ERROR "QUDA_DIR must be set")
 endif()
@@ -46,21 +64,6 @@ include_directories(${QUDA_INCDIR})
 include_directories(${GPUTOOLKIT_INCDIR})
 link_directories(${QUDA_LIBDIR})
 link_directories(${GPUTOOLKIT_LIBDIR})
-
-#  openmp library
-#set(OMP_LIB /usr/lib64/libgomp.so.1)
-#add_library(omplib SHARED IMPORTED)
-#set_target_properties( omplib PROPERTIES IMPORTED_LOCATION ${OMP_LIB} )
-
-#  CBLAS library
-#add_library(cblas SHARED IMPORTED)
-#set_target_properties(cblas PROPERTIES
-#                      IMPORTED_LOCATION ${CBLAS_LIB}
-#                      INTERFACE_INCLUDE_DIRECTORIES ${CBLAS_INC})
-
-#set(QUDA_DIR ${QUDA_DIR}/lib/cmake/QUDA)
-#find_package(QUDA REQUIRED)
-#find_package(MPI REQUIRED)
 
 add_executable(quda_laph)
 
@@ -103,13 +106,8 @@ target_link_libraries(quda_laph PUBLIC gputoolkitlib)
 target_link_libraries(quda_laph PUBLIC quda)
 
 ## BLAS studd can go down here
-set(HOSTCBLAS "OPENBLAS" CACHE STRING "Must define HOSTCBLAS")
-set(BLAS_INC "" CACHE STRING "Includ directory for BLAS library")
 include_directories(${BLAS_INC})
-
-set(BLAS_LIB "" CACHE STRING "Lib directory for blas library")
 link_directories(${BLAS_LIB})
-
 if(HOSTCBLAS STREQUAL "GSL")
    message(STATUS "using GSL cblas on hosts")
    add_compile_definitions(USE_GSL_CBLAS)
