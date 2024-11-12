@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.6)
+cmake_minimum_required(VERSION 3.18)
 
 project(QudaLaph
     VERSION 1.0
@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD 17)
 include(GNUInstallDirs)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
-option(ARCH "Must call with either -DARCH=PARALLEL or -DARCH=SERIAL" "PARALLEL")
+set(ARCH "SERIAL" CACHE STRING "Must call with either -DARCH=PARALLEL or -DARCH=SERIAL")
 
 if(ARCH STREQUAL "PARALLEL")
    message(STATUS "parallel build")
@@ -23,21 +23,12 @@ else()
    message( FATAL_ERROR "Must define ARCH to be PARALLEL or SERIAL" )
 endif()
 
-option(HOSTCBLAS "Must define HOSTCBLAS")
-
-if(HOSTCBLAS STREQUAL "GSL")
-   message(STATUS "using GSL cblas on hosts")
-   add_compile_definitions(USE_GSL_CBLAS)
-elseif(HOSTCBLAS STREQUAL "OPENBLAS")
-   message(STATUS "using OPENblas on hosts")
-   add_compile_definitions(USE_OPENBLAS)
-else()
-   message( FATAL_ERROR "Must define HOSTCBLAS to be GSL or OPENBLAS" )
-endif()
-
+set(GPUTOOLKIT_DIR "" CACHE STRING "Specify where GPYU toolkit is")
 if(NOT GPUTOOLKIT_DIR)
    message(FATAL_ERROR "GPUTOOLKIT_DIR must be set")
 endif()
+
+set(QUDA_DIR "" CACHE STRING "Tell us where the Quda install is")
 if(NOT QUDA_DIR)
    message(FATAL_ERROR "QUDA_DIR must be set")
 endif()
@@ -62,13 +53,13 @@ link_directories(${GPUTOOLKIT_LIBDIR})
 #set_target_properties( omplib PROPERTIES IMPORTED_LOCATION ${OMP_LIB} )
 
 #  CBLAS library
-add_library(cblas SHARED IMPORTED)
-set_target_properties(cblas PROPERTIES
-                      IMPORTED_LOCATION ${CBLAS_LIB}
-                      INTERFACE_INCLUDE_DIRECTORIES ${CBLAS_INC})
+#add_library(cblas SHARED IMPORTED)
+#set_target_properties(cblas PROPERTIES
+#                      IMPORTED_LOCATION ${CBLAS_LIB}
+#                      INTERFACE_INCLUDE_DIRECTORIES ${CBLAS_INC})
 
-set(QUDA_DIR ${QUDA_DIR}/lib/cmake/QUDA)
-find_package(QUDA REQUIRED)
+#set(QUDA_DIR ${QUDA_DIR}/lib/cmake/QUDA)
+#find_package(QUDA REQUIRED)
 #find_package(MPI REQUIRED)
 
 add_executable(quda_laph)
@@ -110,3 +101,23 @@ target_sources(quda_laph PRIVATE
 target_link_libraries(quda_laph PUBLIC cblas)
 target_link_libraries(quda_laph PUBLIC gputoolkitlib)
 target_link_libraries(quda_laph PUBLIC quda)
+
+## BLAS studd can go down here
+set(HOSTCBLAS "OPENBLAS" CACHE STRING "Must define HOSTCBLAS")
+set(BLAS_INC "" CACHE STRING "Includ directory for BLAS library")
+include_directories(${BLAS_INC})
+
+set(BLAS_LIB "" CACHE STRING "Lib directory for blas library")
+link_directories(${BLAS_LIB})
+
+if(HOSTCBLAS STREQUAL "GSL")
+   message(STATUS "using GSL cblas on hosts")
+   add_compile_definitions(USE_GSL_CBLAS)
+   target_link_libraries(quda_laph PUBLIC -lgsl -lgslcblas)
+elseif(HOSTCBLAS STREQUAL "OPENBLAS")
+   message(STATUS "using OPENblas on hosts")
+   add_compile_definitions(USE_OPENBLAS)
+   target_link_libraries(quda_laph PUBLIC -lopenblas)
+else()
+   message( FATAL_ERROR "Must define HOSTCBLAS to be GSL or OPENBLAS" )
+endif()
