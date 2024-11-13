@@ -9,16 +9,32 @@ set(CMAKE_CXX_STANDARD 17)
 include(GNUInstallDirs)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
-set(ARCH "PARALLEL" CACHE STRING "Must call with either -DARCH=PARALLEL or -DARCH=SERIAL")
-set(HOSTCBLAS "OPENBLAS" CACHE STRING "Must define HOSTCBLAS")
+option(PARALLEL_BUILD "Compile in openmp?" ON )
+
+set(VALID_BLAS_LIBS
+  OPENBLAS
+  GSLCBLAS)
+set(HOSTCBLAS "OPENBLAS" CACHE STRING "Choose the host BLAS library${VALID_BLAS_LIBS}")
+set_property(CACHE HOSTCBLAS PROPERTY STRINGS ${VALID_BLAS_LIBS})
+
 set(BLAS_INC "/usr/include/openblas/" CACHE STRING "Includ directory for BLAS library")
 set(BLAS_LIB "/usr/lib/openblas/" CACHE STRING "Lib directory for blas library")
 set(GPUTOOLKIT_DIR "/usr/local/cuda-11.4/" CACHE STRING "Specify where GPYU toolkit is")
 set(QUDA_DIR "" CACHE STRING "Tell us where the Quda install is")
+
 option(OPENMP "Compile in openmp?" ON )
 
-set(CMAKE_BUILD_TYPE "Release" )
+set(VALID_BUILD_TYPES
+  DEVEL
+  RELEASE
+  DEBUG)
+set(CMAKE_BUILD_TYPE "RELEASE" CACHE STRING "Choose the type of build, options are: ${VALID_BUILD_TYPES}")
+set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS ${VALID_BUILD_TYPES})
+
 set(CMAKE_VERBOSE_MAKEFILE ON)
+enable_language(CXX)
+
+set(CMAKE_INSTALL_PREFIX "." )
 
 ## default compile options
 add_compile_options(-march=native -Wall)
@@ -27,28 +43,18 @@ if(OPENMP)
   add_compile_options(-fopenmp)
 endif()
 
-if(ARCH STREQUAL "PARALLEL")
+if(PARALLEL_BUILD)
   message(STATUS "parallel build")
   set(CMAKE_C_COMPILER mpicc)
   set(CMAKE_CXX_COMPILER mpic++)
   add_compile_definitions(ARCH_PARALLEL)
   add_compile_definitions(MPI_COMMS)
   add_compile_definitions(MULTI_GPU)
-elseif(ARCH STREQUAL "SERIAL")
+else()
   message(STATUS "serial build")
   set(CMAKE_C_COMPILER gcc)
   set(CMAKE_CXX_COMPILER g++)
   add_compile_definitions(ARCH_SERIAL)
-else()
-   message( FATAL_ERROR "Must define ARCH to be PARALLEL or SERIAL" )
-endif()
-
-if(NOT GPUTOOLKIT_DIR)
-   message(FATAL_ERROR "GPUTOOLKIT_DIR must be set")
-endif()
-
-if(NOT QUDA_DIR)
-   message(FATAL_ERROR "QUDA_DIR must be set")
 endif()
 
 set(QUDA_LIBDIR ${QUDA_DIR}/lib)
@@ -105,10 +111,15 @@ target_link_libraries(quda_laph PUBLIC cblas)
 target_link_libraries(quda_laph PUBLIC gputoolkitlib)
 target_link_libraries(quda_laph PUBLIC quda)
 
+## link openmp gomp library
+if(OPENMP)
+  target_link_libraries(quda_laph PUBLIC -lgomp)
+endif()
+
 ## BLAS studd can go down here
 include_directories(${BLAS_INC})
 link_directories(${BLAS_LIB})
-if(HOSTCBLAS STREQUAL "GSL")
+if(HOSTCBLAS STREQUAL "GSLCBLAS")
    message(STATUS "using GSL cblas on hosts")
    add_compile_definitions(USE_GSL_CBLAS)
    target_link_libraries(quda_laph PUBLIC -lgsl -lgslcblas)
@@ -117,5 +128,5 @@ elseif(HOSTCBLAS STREQUAL "OPENBLAS")
    add_compile_definitions(USE_OPENBLAS)
    target_link_libraries(quda_laph PUBLIC -lopenblas)
 else()
-   message( FATAL_ERROR "Must define HOSTCBLAS to be GSL or OPENBLAS" )
+   message( FATAL_ERROR "Must define HOSTCBLAS to be ${VALID_BLAS_LIBS}")
 endif()
