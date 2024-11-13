@@ -4,15 +4,11 @@
 #include "stop_watch.h"
 #include "field_ops.h"
 
-#if defined(USE_GSL_CBLAS)
-#include "gsl_cblas.h"
-#elif defined(USE_OPENBLAS)
-#include "cblas.h"
-#endif
+#include "QudaLaphBlas.h"
 
 
-    // STILL TO DO:  single asynchronous thread for output so can continue next computations
-    //                   while output occurs
+// STILL TO DO:  single asynchronous thread for output so can continue next computations
+//                   while output occurs
 
 
 using namespace std;
@@ -134,12 +130,6 @@ bool QuarkHandler::StorageKey::operator!=(const QuarkHandler::StorageKey& rhs) c
  return multiNotEqual(rkey,rhs.rkey,  disp,rhs.disp,  
                       disp_length,rhs.disp_length,  fkey,rhs.fkey);
 } 
-
-
-// *************************************************************************
-
-
-
 
 QuarkHandler::QuarkHandler()
           : uPtr(0), gSmearPtr(0), qSmearPtr(0), dilPtr(0), qactionPtr(0),
@@ -370,7 +360,6 @@ void QuarkHandler::clear()
  delete DHputPtr; DHputPtr=0;
 }
 
-
   // ********************************
   // *
   // *    sub-handler connections  (private)
@@ -496,46 +485,6 @@ void QuarkHandler::setGamma5HermiticityMode()
  clearData();
  normal_mode=false;
 }
-/*
-void QuarkHandler::getFileMap(XmlWriter& xmlout) const
-{
- if (isInfoSet()) DHgetPtr->getFileMap(xmlout);
-}
-
-void QuarkHandler::outputKeys(XmlWriter& xmlout)
-{
- if (isInfoSet()) DHgetPtr->outputKeys(xmlout);
-}
-
-set<QuarkHandler::FileKey> QuarkHandler::getNoisesAndTimeProjectors() const
-{
- check_info_set("getNoisesAndTimeProjectors");
- return DHgetPtr->getFileKeys();
-}
-
-void QuarkHandler::getNoisesAndTimeProjectors(set<LaphNoiseInfo>& noises,
-                                              set<int>& time_proj_indices) const
-{
- check_info_set("getNoisesAndTimeProjectors");
- set<NoiseAndTimeProjector> nt=DHgetPtr->getFileKeys();
- for (set<NoiseAndTimeProjector>::const_iterator it=nt.begin();
-      it!=nt.end();++it){
-    noises.insert(it->noise);
-    time_proj_indices.insert(it->time_proj_index);}
-}
-
-void QuarkHandler::getNoisesAndSourceTimes(set<LaphNoiseInfo>& noises,
-                                           set<int>& source_times) const
-{
- check_info_set("getNoisesAndSourceTimes");
- set<NoiseAndTimeProjector> nt=DHgetPtr->getFileKeys();
- for (set<NoiseAndTimeProjector>::const_iterator it=nt.begin();
-      it!=nt.end();++it){
-    noises.insert(it->noise);
-    const list<int>& onts=getOnTimes(it->time_proj_index);
-    source_times.insert(onts.begin(),onts.end());}
-}
-*/
 
 map<int,QuarkHandler::FileKey> QuarkHandler::getSuffixMap() const
 {
@@ -558,27 +507,6 @@ void QuarkHandler::outputSuffixMap()
                it->first,it->second.noise.getSeed(),it->second.time_proj_index));}
  printLaph("\n");
 }
-
-/*
-void QuarkHandler::outputSuffixMap(TextFileWriter& fout)
-{
- check_info_set("getSuffixMap");
- map<int,QuarkHandler::FileKey> suffixmap=DHgetPtr->getSuffixMap();
- fout <<"\nSuffix map:\n";
- for (map<int,QuarkHandler::FileKey>::const_iterator it=suffixmap.begin();
-      it!=suffixmap.end();++it){
-    fout << "suffix "<<it->first<<":  LaphNoiseInfo seed = "
-      << it->second.noise.getSeed()<<"  time proj index = "
-      << it->second.time_proj_index << "\n";}
- fout << "\n";
-}
-
-void QuarkHandler::getFileMap(XmlWriter& xmlout) const
-{
- if (isInfoSet()) DHputPtr->getFileMap(xmlout);
-}
-
-*/
 
 bool QuarkHandler::isInfoSet() const
 {
@@ -679,19 +607,6 @@ int QuarkHandler::getTimeExtent() const
  return uPtr->getTimeExtent();
 }
 
-/*
-void QuarkHandler::getHeader(XmlWriter& xmlout) const
-{
- if (isInfoSet()){
-    push(xmlout,"QuarkHandlerDataFile");
-    uPtr->output(xmlout);
-    gSmearPtr->output(xmlout);
-    qSmearPtr->output(xmlout);
-    dilPtr->output(xmlout);
-    qactionPtr->output(xmlout);
-    pop(xmlout);}
-}
-*/
 bool QuarkHandler::checkHeader(XMLHandler& xmlin, int suffix)
 {
  XMLHandler xml_in(xmlin);
@@ -726,25 +641,18 @@ void QuarkHandler::writeHeader(XMLHandler& xmlout,
  fkey.output(xmltmp); xmlout.put_child(xmltmp);
 }
 
-
- // ************************************************************************************
-
-
 void QuarkHandler::setUpPreconditioning(QudaInvertParam& invParam)
 {
  if (invertPtr->getName()=="GCR_MULTIGRID"){
     if (invertPtr->QudaMGInfoPtr){
-       if (preconditioner){
-          destroyMultigridQuda(preconditioner);}
-       printLaph("Initializing the fabulous Multigrid preconditioner!");
-       preconditioner=newMultigridQuda(&invertPtr->QudaMGInfoPtr->mg_param);
-       invParam.preconditioner=preconditioner;}
+      if (preconditioner){
+	destroyMultigridQuda(preconditioner);}
+      printLaph("Initializing the fabulous Multigrid preconditioner!");
+      preconditioner=newMultigridQuda(&invertPtr->QudaMGInfoPtr->mg_param);
+      invParam.preconditioner=preconditioner;}
     else{
-       throw(std::invalid_argument("setUpPreconditioning failed since invParam not set"));}}
+      throw(std::invalid_argument("setUpPreconditioning failed since invParam not set"));}}
 }
-
-
- // ************************************************************************************
 
 void QuarkHandler::computeSinks(bool verbose, bool extra_soln_check)
 {   
@@ -841,8 +749,6 @@ void QuarkHandler::computeSinks(bool verbose, bool extra_soln_check)
  printLaph(make_str("Projection onto LapH eigvecs time = ",evprojtime," seconds"));
  printLaph(make_str("          Total file writing time = ",writetime," seconds\n\n"));
 }
-
-
     //  do inversions for all spin-laph-eigenvector dilution indices
     //  but for one noise, one time projector index
 
@@ -1055,19 +961,22 @@ void QuarkHandler::make_source(LattField& ferm_src, const Array<cmplx>& laph_noi
 
  for (list<int>::const_iterator it0=on_times.begin();it0!=on_times.end();it0++){
     if (((*it0)>=mytmin)&&((*it0)<=mytmax)){
-       int tloc=((*it0)-mytmin);
-       int parshift=loc_npsites*((start_parity+tloc)%2);
-       int start1=((tstride*tloc)/2) + parshift;
-       int stop1=((1+tstride*(tloc+1))/2) + parshift;
-       int n1=stop1-start1;
-       parshift=loc_npsites*((start_parity+1+tloc)%2);
-       int start2=((1+tstride*tloc)/2) + parshift;
-       int stop2=((tstride*(tloc+1))/2) + parshift;
-       int n2=stop2-start2;
-       int xstart1=start1*incx*cbytes;
-       int xstart2=start2*incx*cbytes;
-       char* ystart1=ferm_src.getDataPtr()+start1*incy*cbytes;
-       char* ystart2=ferm_src.getDataPtr()+start2*incy*cbytes;
+
+      const int tloc=((*it0)-mytmin);
+      int parshift=loc_npsites*((start_parity+tloc)%2);
+      const int start1=((tstride*tloc)/2) + parshift;
+      const int stop1=((1+tstride*(tloc+1))/2) + parshift;
+      const int n1=stop1-start1;
+
+      parshift=loc_npsites*((start_parity+1+tloc)%2);
+
+      const int start2=((1+tstride*tloc)/2) + parshift;
+      const int stop2=((tstride*(tloc+1))/2) + parshift;
+      const int n2=stop2-start2;
+      const int xstart1=start1*incx*cbytes;
+      const int xstart2=start2*incx*cbytes;
+      char* ystart1=ferm_src.getDataPtr()+start1*incy*cbytes;
+      char* ystart2=ferm_src.getDataPtr()+start2*incy*cbytes;
        
        for (list<int>::const_iterator vmask= on_eigs.begin(); vmask!=on_eigs.end(); vmask++){
           char* x0=reinterpret_cast<char*>(evList[*vmask]);
@@ -1081,13 +990,17 @@ void QuarkHandler::make_source(LattField& ferm_src, const Array<cmplx>& laph_noi
              char* y1=ystart1+(*smask)*incx*cbytes;
              char* y2=ystart2+(*smask)*incx*cbytes;
              for (int c=0;c<FieldNcolor;++c){
-                if (dp){
-                   cblas_zaxpy(n1,(dcmplx*)(zrho),(dcmplx*)(x1),incx,(dcmplx*)(y1),incy);
-                   cblas_zaxpy(n2,(dcmplx*)(zrho),(dcmplx*)(x2),incx,(dcmplx*)(y2),incy);}
-                else{
-                   cblas_caxpy(n1,(fcmplx*)(zrho),(fcmplx*)(x1),incx,(fcmplx*)(y1),incy);
-                   cblas_caxpy(n2,(fcmplx*)(zrho),(fcmplx*)(x2),incx,(fcmplx*)(y2),incy);}
-                x1+=cbytes; y1+=cbytes; x2+=cbytes; y2+=cbytes;}}}}}
+	       // branching in the hot part of the code is inneficient
+	       if (dp){
+		 cblas_zaxpy(n1,(dcmplx*)(zrho),(dcmplx*)(x1),incx,(dcmplx*)(y1),incy);
+		 cblas_zaxpy(n2,(dcmplx*)(zrho),(dcmplx*)(x2),incx,(dcmplx*)(y2),incy);
+	       } else {
+		 cblas_caxpy(n1,(fcmplx*)(zrho),(fcmplx*)(x1),incx,(fcmplx*)(y1),incy);
+		 cblas_caxpy(n2,(fcmplx*)(zrho),(fcmplx*)(x2),incx,(fcmplx*)(y2),incy);
+	       }
+	       x1+=cbytes; y1+=cbytes; x2+=cbytes; y2+=cbytes;
+	     }
+	  }}}}
  printLaph("Source for this inversion created");
 }
 
@@ -1106,11 +1019,7 @@ void QuarkHandler::clearData()
  DHgetPtr->clearData();
 }
 
-
-// ***************************************************************
-
-  //  static pointers (set to null in default constructor)
-
+//  static pointers (set to null in default constructor)
 unique_ptr<GluonSmearingHandler> QuarkHandler::gSmearHandler;
 unique_ptr<QuarkSmearingHandler> QuarkHandler::qSmearHandler;
 unique_ptr<GaugeConfigurationHandler> QuarkHandler::gaugeHandler;
@@ -1118,8 +1027,5 @@ unique_ptr<GaugeConfigurationHandler> QuarkHandler::gaugeHandler;
 int QuarkHandler::gSmearCounter=0;
 int QuarkHandler::qSmearCounter=0;
 int QuarkHandler::gaugeCounter=0;
-//bool QuarkHandler::keepInMemory=false;
-
-// ***************************************************************
 }
  

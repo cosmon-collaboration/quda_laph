@@ -2,12 +2,7 @@
 #include "multi_compare.h"
 #include "stop_watch.h"
 #include "field_ops.h"
-
-#if defined(USE_GSL_CBLAS)
-#include "gsl_cblas.h"
-#elif defined(USE_OPENBLAS)
-#include "cblas.h"
-#endif
+#include "QudaLaphBlas.h"
 
 using namespace std;
 

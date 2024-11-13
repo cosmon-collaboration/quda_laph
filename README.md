@@ -26,7 +26,7 @@ this will open a dialog where you can configure options such as:
 There is usually some simple information so that you can choose which options suit you. This will then perform the
 includes, set the macros in Quda_Laph and do the appropriate linking.
 
-## 
+## Running
 
 Once a quda_laph executable is created, it can be run as follows:
 
