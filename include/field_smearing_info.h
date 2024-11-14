@@ -1,11 +1,10 @@
 #ifndef FIELD_SMEARING_H
 #define FIELD_SMEARING_H
 
-#include "xml_handler.h"
 #include "quda.h"
+#include "xml_handler.h"
 
 namespace LaphEnv {
-
 
 // *******************************************************************
 // *                                                                 *
@@ -54,30 +53,26 @@ namespace LaphEnv {
 // *                                                                 *
 // *******************************************************************
 
-
-class GluonSmearingInfo
-{
+class GluonSmearingInfo {
 
   int linkIterations;
 
   double linkStapleWeight;
 
- public:  
+public:
+  GluonSmearingInfo(const XMLHandler &xml_in);
 
-  GluonSmearingInfo(const XMLHandler& xml_in);
+  GluonSmearingInfo(const GluonSmearingInfo &in);
 
-  GluonSmearingInfo(const GluonSmearingInfo& in);
+  GluonSmearingInfo &operator=(const GluonSmearingInfo &in);
 
-  GluonSmearingInfo& operator=(const GluonSmearingInfo& in);
+  ~GluonSmearingInfo() {}
 
-  ~GluonSmearingInfo(){}
+  void checkEqual(const GluonSmearingInfo &in) const;
 
-  void checkEqual(const GluonSmearingInfo& in) const;
+  bool operator==(const GluonSmearingInfo &in) const;
 
-  bool operator==(const GluonSmearingInfo& in) const;
-
-
-    // output functions
+  // output functions
 
   int getNumberOfLinkIterations() const { return linkIterations; }
 
@@ -87,75 +82,64 @@ class GluonSmearingInfo
 
   std::string output(int indent = 0) const;
 
-  void output(XMLHandler& xmlout) const;
+  void output(XMLHandler &xmlout) const;
 
   std::string getHeader() const { return output(0); }
 
-  void getHeader(XMLHandler& xmlout) const { return output(xmlout); }
+  void getHeader(XMLHandler &xmlout) const { return output(xmlout); }
 
   void setQudaGaugeSmearParam(QudaGaugeSmearParam &gauge_smear_param) const;
 
-
- private:
-
-  void extract_info_from_reader(XMLHandler& xml_in);
-
+private:
+  void extract_info_from_reader(XMLHandler &xml_in);
 };
 
-
-
-class QuarkSmearingInfo
-{
+class QuarkSmearingInfo {
 
   int laphNumEigvecs;
 
   double laphSigma;
 
- public:  
+public:
+  QuarkSmearingInfo(const XMLHandler &xml_in);
 
-  QuarkSmearingInfo(const XMLHandler& xml_in);
+  QuarkSmearingInfo(const QuarkSmearingInfo &in);
 
-  QuarkSmearingInfo(const QuarkSmearingInfo& in);
+  QuarkSmearingInfo &operator=(const QuarkSmearingInfo &in);
 
-  QuarkSmearingInfo& operator=(const QuarkSmearingInfo& in);
+  void increaseUpdate(const QuarkSmearingInfo &in);
 
-  void increaseUpdate(const QuarkSmearingInfo& in);
+  ~QuarkSmearingInfo() {}
 
-  ~QuarkSmearingInfo(){}
+  void checkEqual(const QuarkSmearingInfo &in) const;
 
-  void checkEqual(const QuarkSmearingInfo& in) const;
+  bool operator==(const QuarkSmearingInfo &in) const;
 
-  bool operator==(const QuarkSmearingInfo& in) const;
+  // same as checkEqual, but in.laphNumEigvecs >= laphNumEigvecs
+  // is needed only
 
-    // same as checkEqual, but in.laphNumEigvecs >= laphNumEigvecs 
-    // is needed only
+  void checkOK(const QuarkSmearingInfo &in) const;
 
-  void checkOK(const QuarkSmearingInfo& in) const;
+  // output functions
 
+  int getNumberOfLaplacianEigenvectors() const { return laphNumEigvecs; }
 
-    // output functions
-
-  int getNumberOfLaplacianEigenvectors() const {return laphNumEigvecs;}
-  
   double getLaphSigmaCutoff() const { return laphSigma; }
 
   std::string getSmearingType() const { return "LAPH"; }
 
   std::string output(int indent = 0) const;
 
-  void output(XMLHandler& xmlout) const;
+  void output(XMLHandler &xmlout) const;
 
   std::string getHeader() const { return output(0); }
 
-  void getHeader(XMLHandler& xmlout) const { return output(xmlout); }
+  void getHeader(XMLHandler &xmlout) const { return output(xmlout); }
 
- private:
-
-  void extract_info_from_reader(XMLHandler& xml_in);
-
+private:
+  void extract_info_from_reader(XMLHandler &xml_in);
 };
 
-
 // **************************************************
-}
+} // namespace LaphEnv
 #endif

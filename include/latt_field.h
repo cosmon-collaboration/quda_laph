@@ -1,8 +1,8 @@
 #ifndef FIELD_CONTAINER_H
 #define FIELD_CONTAINER_H
 
-#include <vector>
 #include <cstddef>
+#include <vector>
 
 namespace LaphEnv {
 
@@ -34,112 +34,109 @@ namespace LaphEnv {
 // *                                                                        *
 // **************************************************************************
 
-
 typedef enum FieldSiteType_s {
-   Complex, 
-   ColorMatrix, 
-   ColorVector, 
-   ColorSpinVector, 
-   Unknown }  FieldSiteType;
+  Complex,
+  ColorMatrix,
+  ColorVector,
+  ColorSpinVector,
+  Unknown
+} FieldSiteType;
 
-  // global variables for field
+// global variables for field
 
-const int FieldNspin=4;
-const int FieldNcolor=3;
-
+const int FieldNspin = 4;
+const int FieldNcolor = 3;
 
 // ***********************************************************************
 
+class LattField {
 
-class LattField
-{
-   
-   std::vector<char> m_data;
-   
-   FieldSiteType m_sitetype;
-   
-   size_t m_site_elems;  // how many complex numbers at each site
-   
-   size_t m_site_bytes;  // number of bytes at each site
+  std::vector<char> m_data;
 
-   static int cpu_prec_bytes;
+  FieldSiteType m_sitetype;
 
- public:
+  size_t m_site_elems; // how many complex numbers at each site
 
-   LattField(FieldSiteType sitetype=Unknown);
+  size_t m_site_bytes; // number of bytes at each site
 
-         // caution with copy: memory usage
-   LattField(const LattField& in) : m_data(in.m_data), m_sitetype(in.m_sitetype), 
-                                    m_site_elems(in.m_site_elems),
-                                    m_site_bytes(in.m_site_bytes){}
-   
-   LattField& operator=(const LattField& in)
-    {m_data=in.m_data; m_sitetype=in.m_sitetype; 
-     m_site_elems=in.m_site_elems;
-     m_site_bytes=in.m_site_bytes; return *this;}           
-   
-   size_t bytesPerSite() const
-    {return m_site_bytes;}
-   
-   size_t elemsPerSite() const
-    {return m_site_elems;}
+  static int cpu_prec_bytes;
 
-   static size_t bytesPerWord()                  // bytes of complex
-    {return cpu_prec_bytes;}
+public:
+  LattField(FieldSiteType sitetype = Unknown);
 
-   FieldSiteType getFieldSiteType() const
-    {return m_sitetype;}
+  // caution with copy: memory usage
+  LattField(const LattField &in)
+      : m_data(in.m_data), m_sitetype(in.m_sitetype),
+        m_site_elems(in.m_site_elems), m_site_bytes(in.m_site_bytes) {}
 
-   std::vector<char>& getDataRef() {return m_data;}
+  LattField &operator=(const LattField &in) {
+    m_data = in.m_data;
+    m_sitetype = in.m_sitetype;
+    m_site_elems = in.m_site_elems;
+    m_site_bytes = in.m_site_bytes;
+    return *this;
+  }
 
-   const std::vector<char>& getDataConstRef() const {return m_data;}
-   
-   const char* getDataConstPtr() const {return m_data.data();}
-   
-   char* getDataPtr() {return m_data.data();}
-   
-   LattField& reset(FieldSiteType sitetype);
-   
-   LattField& clear();
+  size_t bytesPerSite() const { return m_site_bytes; }
 
-     // Next two routines are useful for testing/checks (slow though); gets
-     // and puts data into the right location according to the lattice site "coord";
-     // even/odd checkboard with x,y,z,t column major
+  size_t elemsPerSite() const { return m_site_elems; }
 
-   std::vector<char> getSiteData(const std::vector<int>& latt_coord) const;
-   
-   void putSiteData(const std::vector<int>& latt_coord, const std::vector<char>& siteData);
+  static size_t bytesPerWord() // bytes of complex
+  {
+    return cpu_prec_bytes;
+  }
 
-   static int get_cpu_prec_bytes() {return cpu_prec_bytes;}
+  FieldSiteType getFieldSiteType() const { return m_sitetype; }
 
- private:
-  
-   void do_resize();
-   
-   void calc_site_elems();
+  std::vector<char> &getDataRef() { return m_data; }
 
-   void applyFermionTemporalAntiPeriodic();
+  const std::vector<char> &getDataConstRef() const { return m_data; }
 
-   LattField& reset_by_precision(FieldSiteType sitetype, char prec);
+  const char *getDataConstPtr() const { return m_data.data(); }
 
-   LattField& reset_by_bytes_per_site(int bytes_per_site);
-   
-   void to_single_precision(std::vector<char>& buffer);
-   
-   void to_double_precision(std::vector<char>& buffer);
+  char *getDataPtr() { return m_data.data(); }
 
-   LattField& to_quda_precision();
+  LattField &reset(FieldSiteType sitetype);
 
-   friend class IOFMHandler;
-   
-   friend class GaugeCERNConfigReader;
-   
-   friend class QudaInfo;
-   
-   friend class GaugeConfigurationHandler;
+  LattField &clear();
 
+  // Next two routines are useful for testing/checks (slow though); gets
+  // and puts data into the right location according to the lattice site
+  // "coord"; even/odd checkboard with x,y,z,t column major
+
+  std::vector<char> getSiteData(const std::vector<int> &latt_coord) const;
+
+  void putSiteData(const std::vector<int> &latt_coord,
+                   const std::vector<char> &siteData);
+
+  static int get_cpu_prec_bytes() { return cpu_prec_bytes; }
+
+private:
+  void do_resize();
+
+  void calc_site_elems();
+
+  void applyFermionTemporalAntiPeriodic();
+
+  LattField &reset_by_precision(FieldSiteType sitetype, char prec);
+
+  LattField &reset_by_bytes_per_site(int bytes_per_site);
+
+  void to_single_precision(std::vector<char> &buffer);
+
+  void to_double_precision(std::vector<char> &buffer);
+
+  LattField &to_quda_precision();
+
+  friend class IOFMHandler;
+
+  friend class GaugeCERNConfigReader;
+
+  friend class QudaInfo;
+
+  friend class GaugeConfigurationHandler;
 };
 
 // *************************************************************
-}
+} // namespace LaphEnv
 #endif

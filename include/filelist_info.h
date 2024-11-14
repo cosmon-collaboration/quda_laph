@@ -5,7 +5,6 @@
 
 namespace LaphEnv {
 
-
 // ****************************************************************
 // *                                                              *
 // *  "FileListInfo" stores information about a list of files     *
@@ -27,70 +26,58 @@ namespace LaphEnv {
 // *                                                              *
 // ****************************************************************
 
+class FileListInfo {
 
-class FileListInfo
-{
+  std::string m_file_stub; // stub of files to handle
+  int m_max_file_number;
+  int m_min_file_number;
+  bool m_overwrite_mode;
 
-   std::string m_file_stub;            // stub of files to handle
-   int m_max_file_number;
-   int m_min_file_number;
-   bool m_overwrite_mode;         
+public:
+  FileListInfo(const XMLHandler &xml_in);
 
+  FileListInfo(const XMLHandler &xml_in, const std::string &outertag);
 
- public:
+  FileListInfo(const std::string &stub, int min_suffix, int max_suffix,
+               bool over_write = false);
 
+  FileListInfo(const FileListInfo &fin);
 
-   FileListInfo(const XMLHandler& xml_in);
+  FileListInfo &operator=(const FileListInfo &fin);
 
-   FileListInfo(const XMLHandler& xml_in, const std::string& outertag);
+  void setOverWrite() { m_overwrite_mode = true; }
 
-   FileListInfo(const std::string& stub, int min_suffix, int max_suffix,
-                bool over_write=false);
+  void setNoOverWrite() { m_overwrite_mode = false; }
 
-   FileListInfo(const FileListInfo& fin);
+  ~FileListInfo() {}
 
-   FileListInfo& operator=(const FileListInfo& fin);
+  std::string getFileStub() const { return m_file_stub; }
 
-   void setOverWrite() {m_overwrite_mode=true;}
+  int getMaxFileNumber() const { return m_max_file_number; }
 
-   void setNoOverWrite() {m_overwrite_mode=false;}
+  int getMinFileNumber() const { return m_min_file_number; }
 
-   ~FileListInfo(){}
+  bool isModeOverwrite() const { return m_overwrite_mode; }
 
+  bool operator==(const FileListInfo &rhs) const;
 
+  std::string getFileName(int suffix) const;
 
-   std::string getFileStub() const { return m_file_stub; }
+  int getFirstAvailableSuffix(bool global_mode = true) const;
 
-   int getMaxFileNumber() const { return m_max_file_number; }
-  
-   int getMinFileNumber() const { return m_min_file_number; }
+  int getFirstAvailableSuffixNOM() const;
 
-   bool isModeOverwrite() const { return m_overwrite_mode; }
+  void output(XMLHandler &xmlout) const;
 
-   bool operator==(const FileListInfo& rhs) const;
+  std::string str() const;
 
+private:
+  void set_info(const XMLHandler &xml_in);
 
-
-   std::string getFileName(int suffix) const;
-
-   int getFirstAvailableSuffix(bool global_mode=true) const;
-
-   int getFirstAvailableSuffixNOM() const;
-
-   void output(XMLHandler& xmlout) const;
-
-   std::string str() const;
-
- private:
-
-   void set_info(const XMLHandler& xml_in);
-
-   void set_info(const std::string& stub, int min_suffix, 
-                 int max_suffix, bool over_write);
-
+  void set_info(const std::string &stub, int min_suffix, int max_suffix,
+                bool over_write);
 };
 
-
 // ***************************************************************
-}
-#endif  
+} // namespace LaphEnv
+#endif

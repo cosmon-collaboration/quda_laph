@@ -33,22 +33,18 @@
 // *                                                                *
 // ******************************************************************
 
-
 namespace LaphEnv {
 
 // ************************************************
 
+void doSmearGaugeField(XMLHandler &xmltask);
 
-void doSmearGaugeField(XMLHandler& xmltask);
+void doSmearQuarkField(XMLHandler &xmltask);
 
-void doSmearQuarkField(XMLHandler& xmltask);
+void doLaphQuarkLineEnds(XMLHandler &xmltask);
 
-void doLaphQuarkLineEnds(XMLHandler& xmltask);
-
-void doLaphQuarkPerambulators(XMLHandler& xmltask);
-
-
+void doLaphQuarkPerambulators(XMLHandler &xmltask);
 
 // ***********************************************************
-}
+} // namespace LaphEnv
 #endif

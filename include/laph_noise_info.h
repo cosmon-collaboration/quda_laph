@@ -3,11 +3,9 @@
 
 #include "gauge_configuration_info.h"
 
-typedef unsigned long   uint32;
-
+typedef unsigned long uint32;
 
 namespace LaphEnv {
-
 
 // *******************************************************************
 // *                                                                 *
@@ -59,59 +57,57 @@ namespace LaphEnv {
 // *                                                                 *
 // *******************************************************************
 
-   // internal representation: right 6 bits are ZN group, other bits
-   // are the seed
+// internal representation: right 6 bits are ZN group, other bits
+// are the seed
 
-class LaphNoiseInfo
-{
+class LaphNoiseInfo {
 
   uint32 store;
 
- public:  
+public:
+  LaphNoiseInfo();
 
-  LaphNoiseInfo(); 
-
-  LaphNoiseInfo(const XMLHandler& xml_in);
+  LaphNoiseInfo(const XMLHandler &xml_in);
 
   LaphNoiseInfo(int znGroup, int seed);
 
-  LaphNoiseInfo(const LaphNoiseInfo& in);
+  LaphNoiseInfo(const LaphNoiseInfo &in);
 
-  LaphNoiseInfo& operator=(const LaphNoiseInfo& in);
+  LaphNoiseInfo &operator=(const LaphNoiseInfo &in);
 
-  ~LaphNoiseInfo(){}
+  ~LaphNoiseInfo() {}
 
-  void checkEqual(const LaphNoiseInfo& in) const;
+  void checkEqual(const LaphNoiseInfo &in) const;
 
-  bool operator==(const LaphNoiseInfo& in) const;
+  bool operator==(const LaphNoiseInfo &in) const;
 
-  bool operator!=(const LaphNoiseInfo& in) const;
+  bool operator!=(const LaphNoiseInfo &in) const;
 
-  bool operator<(const LaphNoiseInfo& in) const;
+  bool operator<(const LaphNoiseInfo &in) const;
 
+  // output functions
 
-    // output functions
+  uint32 getSeed(const GaugeConfigurationInfo &G) const;
 
-  uint32 getSeed(const GaugeConfigurationInfo& G) const;
+  unsigned int getZNGroup() const {
+    const unsigned int GP = 0x3Fu;
+    return (store & GP);
+  }
 
-  unsigned int getZNGroup() const 
-   { const unsigned int GP=0x3Fu; return (store & GP); }
-
-  uint32 getSeed() const { return (store>>6); }
+  uint32 getSeed() const { return (store >> 6); }
 
   std::string output(int indent = 0) const;
 
   std::string str() const;
 
-  void output(XMLHandler& xmlout) const;
+  void output(XMLHandler &xmlout) const;
 
-  std::string getHeader() const { return str();}
+  std::string getHeader() const { return str(); }
 
-  void getHeader(XMLHandler& xmlout) const { output(xmlout);}
+  void getHeader(XMLHandler &xmlout) const { output(xmlout); }
 
- private:
-
-  void extract_info_from_reader(XMLHandler& xml_in);
+private:
+  void extract_info_from_reader(XMLHandler &xml_in);
 
   void encode(int znGroup, int seed);
 
@@ -124,11 +120,8 @@ class LaphNoiseInfo
   friend class TetraquarkHandler;
   friend class TetraquarkOneInternalLoopHandler;
   friend class TetraquarkTwoInternalLoopHandler;
-
 };
 
-
-
 // **************************************************
-}
+} // namespace LaphEnv
 #endif

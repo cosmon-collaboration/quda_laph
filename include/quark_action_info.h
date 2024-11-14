@@ -1,8 +1,8 @@
 #ifndef LAPH_QUARK_ACTION_INFO_H
 #define LAPH_QUARK_ACTION_INFO_H
 
-#include "xml_handler.h"
 #include "quda.h"
+#include "xml_handler.h"
 
 namespace LaphEnv {
 
@@ -29,60 +29,51 @@ namespace LaphEnv {
 // *       <TimeBC> antiperiodic </TimeBC> (or periodic)              *
 // *    </QuarkActionInfo>                                            *
 // *                                                                  *
-// ********************************************************************                           
+// ********************************************************************
 
+class QuarkActionInfo {
 
+  std::vector<std::string> svalues;
 
-class QuarkActionInfo
-{
+  std::vector<int> ivalues;
 
-    std::vector<std::string> svalues;
-    
-    std::vector<int> ivalues;
-    
-    std::vector<double> rvalues;
-    
+  std::vector<double> rvalues;
 
-  public:
-  
-    QuarkActionInfo(const XMLHandler& xmlin);
+public:
+  QuarkActionInfo(const XMLHandler &xmlin);
 
-    QuarkActionInfo(const QuarkActionInfo& rhs);
+  QuarkActionInfo(const QuarkActionInfo &rhs);
 
-    QuarkActionInfo& operator=(const QuarkActionInfo& rhs);
+  QuarkActionInfo &operator=(const QuarkActionInfo &rhs);
 
-    ~QuarkActionInfo() {}
-    
-    std::string getName() const {return svalues[0];}
-    
-    bool isFermionTimeBCAntiPeriodic() const {return ivalues[1]==0;}
-    
-    double getSolutionRescaleFactor() const {return rvalues[0];}
+  ~QuarkActionInfo() {}
 
-    void checkEqual(const QuarkActionInfo& rhs) const;
+  std::string getName() const { return svalues[0]; }
 
-    bool operator==(const QuarkActionInfo& rhs) const;
+  bool isFermionTimeBCAntiPeriodic() const { return ivalues[1] == 0; }
 
-    std::string output(int indent = 0) const;
+  double getSolutionRescaleFactor() const { return rvalues[0]; }
 
-    void output(XMLHandler& xmlout) const;
+  void checkEqual(const QuarkActionInfo &rhs) const;
 
-    void setQudaInvertParam(QudaInvertParam& invParam) const;
-    
-    const std::vector<double>& getRValues() const {return rvalues;}
+  bool operator==(const QuarkActionInfo &rhs) const;
 
+  std::string output(int indent = 0) const;
 
-  private:
+  void output(XMLHandler &xmlout) const;
 
-    void set_info_wilson_clover(XMLHandler& xmlr);
+  void setQudaInvertParam(QudaInvertParam &invParam) const;
 
-    void output_wilson_clover(XMLHandler& xmlout) const;
- 
-    void setQudaInvertParam_wilson_clover(QudaInvertParam& invParam) const;
+  const std::vector<double> &getRValues() const { return rvalues; }
 
+private:
+  void set_info_wilson_clover(XMLHandler &xmlr);
+
+  void output_wilson_clover(XMLHandler &xmlout) const;
+
+  void setQudaInvertParam_wilson_clover(QudaInvertParam &invParam) const;
 };
 
-
 // ****************************************************************
-}
+} // namespace LaphEnv
 #endif

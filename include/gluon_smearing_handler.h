@@ -1,12 +1,11 @@
 #ifndef GLUON_SMEARING_HANDLER_H
 #define GLUON_SMEARING_HANDLER_H
 
-#include "gauge_configuration_handler.h"
-#include "field_smearing_info.h"
 #include "data_io_handler.h"
+#include "field_smearing_info.h"
+#include "gauge_configuration_handler.h"
 
 namespace LaphEnv {
-
 
 // *****************************************************************
 // *                                                               *
@@ -22,112 +21,98 @@ namespace LaphEnv {
 // *                                                               *
 // *****************************************************************
 
+class GluonSmearingHandler {
 
+  typedef UIntKey RecordKey; // dummy key for IOMap
 
-class GluonSmearingHandler
-{
+  // pointers to internal infos (managed by this handler
+  // with new and delete)
 
-   typedef UIntKey  RecordKey;   // dummy key for IOMap
-   
-       // pointers to internal infos (managed by this handler
-       // with new and delete)
+  const GluonSmearingInfo *smearPtr;
+  const GaugeConfigurationInfo *uPtr;
+  std::string h_filename;
+  bool m_read_mode;
 
-   const GluonSmearingInfo *smearPtr;
-   const GaugeConfigurationInfo *uPtr;
-   std::string h_filename;
-   bool m_read_mode;
+  // storage and/or references to internal data
 
-       // storage and/or references to internal data
+  DataGetHandlerSFO<GluonSmearingHandler, RecordKey, std::vector<LattField>>
+      *dh_ptr;
 
-   DataGetHandlerSFO<GluonSmearingHandler,RecordKey,
-                     std::vector<LattField>> *dh_ptr;
+  // prevent copying ... handler might contain large
+  // amounts of data
 
-       // prevent copying ... handler might contain large
-       // amounts of data
+  GluonSmearingHandler(const GluonSmearingHandler &) = delete;
+  GluonSmearingHandler &operator=(const GluonSmearingHandler &) = delete;
 
-   GluonSmearingHandler(const GluonSmearingHandler&) = delete;
-   GluonSmearingHandler& operator=(const GluonSmearingHandler&) = delete;
+public:
+  GluonSmearingHandler();
 
+  GluonSmearingHandler(const GluonSmearingInfo &gluon_smearing,
+                       const GaugeConfigurationInfo &gauge,
+                       const std::string &smearedFieldFileName,
+                       bool readmode = true);
 
- public:
+  void setInfo(const GluonSmearingInfo &gluon_smearing,
+               const GaugeConfigurationInfo &gauge,
+               const std::string &smearedFieldFileName, bool readmode = true);
 
+  ~GluonSmearingHandler();
 
-   GluonSmearingHandler();
+  void clear(); // clears everything in the handler
 
-   GluonSmearingHandler(const GluonSmearingInfo& gluon_smearing,
-                        const GaugeConfigurationInfo& gauge,
-                        const std::string& smearedFieldFileName,
-                        bool readmode=true); 
+  // access to the info
 
-   void setInfo(const GluonSmearingInfo& gluon_smearing,
-                const GaugeConfigurationInfo& gauge,
-                const std::string& smearedFieldFileName,
-                bool readmode=true);
+  bool isInfoSet() const;
 
-   ~GluonSmearingHandler();
+  const GluonSmearingInfo &getGluonSmearingInfo() const;
 
-   void clear();  // clears everything in the handler
+  const GaugeConfigurationInfo &getGaugeConfigurationInfo() const;
 
+  std::string getFileName() const { return h_filename; }
 
-           // access to the info
+  // Computes the smeared gauge field and puts it into the file
+  // whose name is stored in "h_filename".  If "h_filename"
+  // starts with "NOM_", results are actually put into the
+  // "NamedObjMap" with identifier "Laph--SmearedGaugeField".
 
-   bool isInfoSet() const;
+  void computeSmearedGaugeField();
 
-   const GluonSmearingInfo& getGluonSmearingInfo() const;
+  const std::vector<LattField> &getSmearedGaugeField() const;
 
-   const GaugeConfigurationInfo& getGaugeConfigurationInfo() const;
+  // remove one time slice, or clear all of the smeared gauge
+  // fields time slices from memory
 
-   std::string getFileName() const {return h_filename;}
+  void clearData();
 
-           // Computes the smeared gauge field and puts it into the file
-           // whose name is stored in "h_filename".  If "h_filename" 
-           // starts with "NOM_", results are actually put into the
-           // "NamedObjMap" with identifier "Laph--SmearedGaugeField".
+  void copyDataToDevice();
 
-   void computeSmearedGaugeField();
+  void eraseDataOnDevice();
 
-   const std::vector<LattField>& getSmearedGaugeField() const;
-   
-           // remove one time slice, or clear all of the smeared gauge 
-           // fields time slices from memory
+  bool isDataOnDevice() const { return QudaInfo::smeared_gauge_on_device; }
 
-   void clearData();
+private:
+  void set_info(const GluonSmearingInfo &gluon_smearing,
+                const GaugeConfigurationInfo &gauge,
+                const std::string &smearedFieldFileName, bool readmode);
 
-   void copyDataToDevice();
-    
-   void eraseDataOnDevice();
-    
-   bool isDataOnDevice() const {return QudaInfo::smeared_gauge_on_device;}
+  void filefail(const std::string &message);
 
+  void check_info_set(const std::string &name) const;
 
- private:
+  bool checkHeader(XMLHandler &xmlr);
 
-   void set_info(const GluonSmearingInfo& gluon_smearing,
-                 const GaugeConfigurationInfo& gauge,
-                 const std::string& smearedFieldFileName,
-                 bool readmode);
+  void writeHeader(XMLHandler &xmlw);
 
-   void filefail(const std::string& message);
-
-   void check_info_set(const std::string& name) const;
- 
-   bool checkHeader(XMLHandler& xmlr);
-
-   void writeHeader(XMLHandler& xmlw);
-
-   friend class DataGetHandlerSF<GluonSmearingHandler,UIntKey,
-                                 std::vector<LattField>>;
-   friend class DataPutHandlerSF<GluonSmearingHandler,UIntKey,
-                                 std::vector<LattField>>;
-   friend class DataGetHandlerSFNOM<GluonSmearingHandler,UIntKey,
-                                    std::vector<LattField>>;
-   friend class DataPutHandlerSFNOM<GluonSmearingHandler,UIntKey,
-                                    std::vector<LattField>>;
-
+  friend class DataGetHandlerSF<GluonSmearingHandler, UIntKey,
+                                std::vector<LattField>>;
+  friend class DataPutHandlerSF<GluonSmearingHandler, UIntKey,
+                                std::vector<LattField>>;
+  friend class DataGetHandlerSFNOM<GluonSmearingHandler, UIntKey,
+                                   std::vector<LattField>>;
+  friend class DataPutHandlerSFNOM<GluonSmearingHandler, UIntKey,
+                                   std::vector<LattField>>;
 };
 
-
-
 // *******************************************************************
-}
-#endif  
+} // namespace LaphEnv
+#endif
