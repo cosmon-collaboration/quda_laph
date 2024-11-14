@@ -25,36 +25,32 @@ namespace LaphEnv {
 // *                                                                     *
 // ***********************************************************************
 
+class StopWatch {
 
-class StopWatch
-{
+  quda::Timer<false> m_timer;
 
-    quda::Timer<false> m_timer;
-    
-    StopWatch(const StopWatch &intimer) = delete;    // no copy constructor
-    
-    StopWatch& operator=(const StopWatch &in) = delete;
+  StopWatch(const StopWatch &intimer) = delete; // no copy constructor
 
- public:
- 
-    StopWatch() {}
-    
-    ~StopWatch() {}
- 
-    void start();  // warning if running
-    
-    void stop();   // warning if stopped
-    
-    void reset();  // error if running (must be stopped)
-    
-    double getTimeInSeconds() const;   // error if running (must be stopped)
-    
-    double getLastIntervalInSeconds() const; // ok if running
-    
-    bool isRunning() const;
+  StopWatch &operator=(const StopWatch &in) = delete;
 
+public:
+  StopWatch() {}
+
+  ~StopWatch() {}
+
+  void start(); // warning if running
+
+  void stop(); // warning if stopped
+
+  void reset(); // error if running (must be stopped)
+
+  double getTimeInSeconds() const; // error if running (must be stopped)
+
+  double getLastIntervalInSeconds() const; // ok if running
+
+  bool isRunning() const;
 };
 
 // **********************************************************************
-}
+} // namespace LaphEnv
 #endif

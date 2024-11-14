@@ -1,11 +1,10 @@
 #ifndef DILUTION_HANDLER_H
 #define DILUTION_HANDLER_H
 
-#include "field_smearing_info.h"
 #include "dilution_scheme_info.h"
+#include "field_smearing_info.h"
 
 namespace LaphEnv {
-
 
 // *******************************************************************
 // *                                                                 *
@@ -54,119 +53,102 @@ namespace LaphEnv {
 // *                                                                 *
 // *******************************************************************
 
+class DilutionHandler {
 
-class DilutionHandler
-{
+  DilutionSchemeInfo *dilPtr;
+  int Textent; //, minTime, maxTime;
+  int nEigvecs;
+  int nSpinProjectors;
+  int nEigvecProjectors;
+  int nTimeProjectors;
+  uint Nspin;
 
-   DilutionSchemeInfo *dilPtr;
-   int Textent; //, minTime, maxTime;
-   int nEigvecs;
-   int nSpinProjectors;
-   int nEigvecProjectors;
-   int nTimeProjectors;
-   uint Nspin;
+  std::vector<std::list<int>> spinProjs; // holds the spin dilution projectors
+  std::vector<std::list<int>>
+      eigvecProjs;                       // holds the eigvec dilution projectors
+  std::vector<std::list<int>> timeProjs; // holds the time dilution projectors
 
-   std::vector<std::list<int> > spinProjs;     // holds the spin dilution projectors
-   std::vector<std::list<int> > eigvecProjs;   // holds the eigvec dilution projectors
-   std::vector<std::list<int> > timeProjs;     // holds the time dilution projectors
+  std::vector<int> spin_proj_indices;
+  std::vector<int> eigvec_proj_indices;
 
-   std::vector<int> spin_proj_indices;
-   std::vector<int> eigvec_proj_indices;
+  std::vector<int> which_time_proj;
+  std::vector<int> which_spin_proj;
+  std::vector<int> which_eigvec_proj;
 
-   std::vector<int> which_time_proj;
-   std::vector<int> which_spin_proj;
-   std::vector<int> which_eigvec_proj;
+  // prevent copying
 
-      // prevent copying
+  DilutionHandler(const DilutionHandler &in);
+  DilutionHandler &operator=(const DilutionHandler &in);
 
-   DilutionHandler(const DilutionHandler& in);
-   DilutionHandler& operator=(const DilutionHandler& in);
+public:
+  DilutionHandler();
 
+  DilutionHandler(const DilutionSchemeInfo &dilScheme,
+                  const QuarkSmearingInfo &qSmear,
+                  bool UpperSpinComponentsOnly = false);
 
- public:  
+  void setInfo(const DilutionSchemeInfo &dilScheme,
+               const QuarkSmearingInfo &qSmear,
+               bool UpperSpinComponentsOnly = false);
 
-   DilutionHandler();
+  ~DilutionHandler();
 
-   DilutionHandler(const DilutionSchemeInfo& dilScheme,
-                   const QuarkSmearingInfo& qSmear,
-                   bool UpperSpinComponentsOnly=false);
+  void clear();
 
-   void setInfo(const DilutionSchemeInfo& dilScheme,
-                const QuarkSmearingInfo& qSmear,
-                bool UpperSpinComponentsOnly=false);
+  // access to the info
 
-   ~DilutionHandler();
+  bool isInfoSet() const;
 
-   void clear();
+  const DilutionSchemeInfo &getDilutionSchemeInfo() const;
 
+  int getNumberOfSpinEigvecProjectors() const;
 
-           // access to the info
+  int getNumberOfTimeProjectors() const;
 
-   bool isInfoSet() const;
+  int getNumberOfSpinProjectors() const;
 
-   const DilutionSchemeInfo& getDilutionSchemeInfo() const;
+  int getNumberOfEigvecProjectors() const;
 
-   int getNumberOfSpinEigvecProjectors() const;
+  int getSpinProjectorIndex(int spineigvec_index) const;
 
-   int getNumberOfTimeProjectors() const;
+  int getEigvecProjectorIndex(int spineigvec_index) const;
 
-   int getNumberOfSpinProjectors() const;
+  int getTimeProjectorIndex(int time_val) const;
 
-   int getNumberOfEigvecProjectors() const;
+  const std::list<int> &getOnSpinIndices(int spineigvec_index) const;
 
+  const std::list<int> &getOnEigvecIndices(int spineigvec_index) const;
 
-   int getSpinProjectorIndex(int spineigvec_index) const;
+  const std::list<int> &getSourceOnEigvecIndices(int eigvec_index) const;
 
-   int getEigvecProjectorIndex(int spineigvec_index) const;
+  const std::list<int> &getOnTimes(int time_proj_index) const;
 
-   int getTimeProjectorIndex(int time_val) const;
+  bool isOnSpin(int spineigvec_index, int spin_val) const;
 
+  bool isOnEigvec(int spineigvec_index, int eigvec_index) const;
 
-   const std::list<int>& getOnSpinIndices(int spineigvec_index) const;
+  bool isOnTime(int time_proj_index, int time_val) const;
 
-   const std::list<int>& getOnEigvecIndices(int spineigvec_index) const;
+  bool isValidTimeProjectorIndex(int time_proj_index) const;
 
-   const std::list<int>& getSourceOnEigvecIndices(int eigvec_index) const;
+  bool isValidSpinEigvecProjectorIndex(int spineigvec_index) const;
 
-   const std::list<int>& getOnTimes(int time_proj_index) const;
+  bool isFullTimeDilution() const;
 
- 
-   bool isOnSpin(int spineigvec_index, int spin_val) const;
+private:
+  void set_info(const DilutionSchemeInfo &dilScheme,
+                const QuarkSmearingInfo &qSmear, bool UpperSpinComponentsOnly);
 
-   bool isOnEigvec(int spineigvec_index, int eigvec_index) const;
+  void setProjectorMasks(std::vector<std::list<int>> &projs, int dil_type,
+                         int nBasis, std::vector<int> &projind, int &nproj);
 
-   bool isOnTime(int time_proj_index, int time_val) const;
+  void check_info_set(const std::string &name) const;
 
+  void check_valid_spineig(int spineigvec_index) const;
 
-   bool isValidTimeProjectorIndex(int time_proj_index) const;
-
-   bool isValidSpinEigvecProjectorIndex(int spineigvec_index) const;
-
-   bool isFullTimeDilution() const;
-
-
-
- private:
-
-   void set_info(const DilutionSchemeInfo& dilScheme,
-                 const QuarkSmearingInfo& qSmear,
-                 bool UpperSpinComponentsOnly);
-
-
-   void setProjectorMasks(std::vector<std::list<int> >& projs, int dil_type, 
-                          int nBasis, std::vector<int>& projind, int& nproj);
-
-   void check_info_set(const std::string& name) const;
-
-   void check_valid_spineig(int spineigvec_index) const;
-
-   void check_valid_timeproj(int timeprojindex) const;
-
- 
+  void check_valid_timeproj(int timeprojindex) const;
 };
 
-
-
 // **************************************************
-}
+} // namespace LaphEnv
 #endif

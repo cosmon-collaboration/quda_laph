@@ -1,9 +1,9 @@
 #ifndef LAPH_STDIO_H
 #define LAPH_STDIO_H
 
-#include <string>
-#include <sstream>
 #include <iomanip>
+#include <sstream>
+#include <string>
 
 // *********************************************************************
 // *                                                                   *
@@ -100,128 +100,136 @@
 // *                                                                   *
 // *********************************************************************
 
-
 namespace LaphEnv {
 
-     //  make a string from various components; useful for printing out
-     //  informational messages or error messages
+//  make a string from various components; useful for printing out
+//  informational messages or error messages
 
-std::string make_str(const std::string& mesg);
+std::string make_str(const std::string &mesg);
 
 template <typename T1>
-std::string make_str(const std::string& startmesg, const T1& arg1)
-{
- std::stringstream sout;
- sout << startmesg << arg1;
- return sout.str();
+std::string make_str(const std::string &startmesg, const T1 &arg1) {
+  std::stringstream sout;
+  sout << startmesg << arg1;
+  return sout.str();
 }
 
 template <typename T1, typename T2>
-std::string make_str(const std::string& startmesg, const T1& arg1, const T2& arg2)
-{
- std::stringstream sout;
- sout << startmesg << arg1 << arg2;
- return sout.str();
+std::string make_str(const std::string &startmesg, const T1 &arg1,
+                     const T2 &arg2) {
+  std::stringstream sout;
+  sout << startmesg << arg1 << arg2;
+  return sout.str();
 }
 
 template <typename T1, typename T2, typename T3>
-std::string make_str(const std::string& startmesg, const T1& arg1, const T2& arg2, const T3& arg3)
-{
- std::stringstream sout;
- sout << startmesg << arg1 << arg2 << arg3;
- return sout.str();
+std::string make_str(const std::string &startmesg, const T1 &arg1,
+                     const T2 &arg2, const T3 &arg3) {
+  std::stringstream sout;
+  sout << startmesg << arg1 << arg2 << arg3;
+  return sout.str();
 }
 
 template <typename T1, typename T2, typename T3, typename T4>
-std::string make_str(const std::string& startmesg, const T1& arg1, const T2& arg2, const T3& arg3,
-                     const T4& arg4)
-{
- std::stringstream sout;
- sout << startmesg << arg1 << arg2 << arg3 << arg4;
- return sout.str();
+std::string make_str(const std::string &startmesg, const T1 &arg1,
+                     const T2 &arg2, const T3 &arg3, const T4 &arg4) {
+  std::stringstream sout;
+  sout << startmesg << arg1 << arg2 << arg3 << arg4;
+  return sout.str();
 }
 
 template <typename T1, typename T2, typename T3, typename T4, typename T5>
-std::string make_str(const std::string& startmesg, const T1& arg1, const T2& arg2, const T3& arg3,
-                     const T4& arg4, const T5& arg5)
-{
- std::stringstream sout;
- sout << startmesg << arg1 << arg2 << arg3 << arg4 << arg5;
- return sout.str();
+std::string make_str(const std::string &startmesg, const T1 &arg1,
+                     const T2 &arg2, const T3 &arg3, const T4 &arg4,
+                     const T5 &arg5) {
+  std::stringstream sout;
+  sout << startmesg << arg1 << arg2 << arg3 << arg4 << arg5;
+  return sout.str();
 }
 
-template <typename T1, typename T2, typename T3, typename T4, typename T5, typename T6>
-std::string make_str(const std::string& startmesg, const T1& arg1, const T2& arg2, const T3& arg3,
-                     const T4& arg4, const T5& arg5, const T6& arg6)
-{
- std::stringstream sout;
- sout << startmesg << arg1 << arg2 << arg3 << arg4 << arg5 << arg6;
- return sout.str();
+template <typename T1, typename T2, typename T3, typename T4, typename T5,
+          typename T6>
+std::string make_str(const std::string &startmesg, const T1 &arg1,
+                     const T2 &arg2, const T3 &arg3, const T4 &arg4,
+                     const T5 &arg5, const T6 &arg6) {
+  std::stringstream sout;
+  sout << startmesg << arg1 << arg2 << arg3 << arg4 << arg5 << arg6;
+  return sout.str();
 }
 
-template <typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7>
-std::string make_str(const std::string& startmesg, const T1& arg1, const T2& arg2, const T3& arg3,
-                     const T4& arg4, const T5& arg5, const T6& arg6, const T7& arg7)
-{
- std::stringstream sout;
- sout << startmesg << arg1 << arg2 << arg3 << arg4 << arg5 << arg6 << arg7;
- return sout.str();
+template <typename T1, typename T2, typename T3, typename T4, typename T5,
+          typename T6, typename T7>
+std::string make_str(const std::string &startmesg, const T1 &arg1,
+                     const T2 &arg2, const T3 &arg3, const T4 &arg4,
+                     const T5 &arg5, const T6 &arg6, const T7 &arg7) {
+  std::stringstream sout;
+  sout << startmesg << arg1 << arg2 << arg3 << arg4 << arg5 << arg6 << arg7;
+  return sout.str();
 }
 
-template <typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8>
-std::string make_str(const std::string& startmesg, const T1& arg1, const T2& arg2, const T3& arg3,
-                     const T4& arg4, const T5& arg5, const T6& arg6, const T7& arg7, const T8& arg8)
-{
- std::stringstream sout;
- sout << startmesg << arg1 << arg2 << arg3 << arg4 << arg5 << arg6 << arg7 << arg8;
- return sout.str();
+template <typename T1, typename T2, typename T3, typename T4, typename T5,
+          typename T6, typename T7, typename T8>
+std::string make_str(const std::string &startmesg, const T1 &arg1,
+                     const T2 &arg2, const T3 &arg3, const T4 &arg4,
+                     const T5 &arg5, const T6 &arg6, const T7 &arg7,
+                     const T8 &arg8) {
+  std::stringstream sout;
+  sout << startmesg << arg1 << arg2 << arg3 << arg4 << arg5 << arg6 << arg7
+       << arg8;
+  return sout.str();
 }
 
-template <typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8,
-          typename T9>
-std::string make_str(const std::string& startmesg, const T1& arg1, const T2& arg2, const T3& arg3,
-                     const T4& arg4, const T5& arg5, const T6& arg6, const T7& arg7, const T8& arg8,
-                     const T9& arg9)
-{
- std::stringstream sout;
- sout << startmesg << arg1 << arg2 << arg3 << arg4 << arg5 << arg6 << arg7 << arg8 << arg9;
- return sout.str();
+template <typename T1, typename T2, typename T3, typename T4, typename T5,
+          typename T6, typename T7, typename T8, typename T9>
+std::string make_str(const std::string &startmesg, const T1 &arg1,
+                     const T2 &arg2, const T3 &arg3, const T4 &arg4,
+                     const T5 &arg5, const T6 &arg6, const T7 &arg7,
+                     const T8 &arg8, const T9 &arg9) {
+  std::stringstream sout;
+  sout << startmesg << arg1 << arg2 << arg3 << arg4 << arg5 << arg6 << arg7
+       << arg8 << arg9;
+  return sout.str();
 }
 
-template <typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8,
-          typename T9, typename T10>
-std::string make_str(const std::string& startmesg, const T1& arg1, const T2& arg2, const T3& arg3,
-                     const T4& arg4, const T5& arg5, const T6& arg6, const T7& arg7, const T8& arg8,
-                     const T9& arg9, const T10& arg10)
-{
- std::stringstream sout;
- sout << startmesg << arg1 << arg2 << arg3 << arg4 << arg5 << arg6 << arg7 << arg8 << arg9 << arg10;
- return sout.str();
+template <typename T1, typename T2, typename T3, typename T4, typename T5,
+          typename T6, typename T7, typename T8, typename T9, typename T10>
+std::string make_str(const std::string &startmesg, const T1 &arg1,
+                     const T2 &arg2, const T3 &arg3, const T4 &arg4,
+                     const T5 &arg5, const T6 &arg6, const T7 &arg7,
+                     const T8 &arg8, const T9 &arg9, const T10 &arg10) {
+  std::stringstream sout;
+  sout << startmesg << arg1 << arg2 << arg3 << arg4 << arg5 << arg6 << arg7
+       << arg8 << arg9 << arg10;
+  return sout.str();
 }
 
-template <typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8,
-          typename T9, typename T10, typename T11>
-std::string make_str(const std::string& startmesg, const T1& arg1, const T2& arg2, const T3& arg3,
-                     const T4& arg4, const T5& arg5, const T6& arg6, const T7& arg7, const T8& arg8,
-                     const T9& arg9, const T10& arg10, const T11& arg11)
-{
- std::stringstream sout;
- sout << startmesg << arg1 << arg2 << arg3 << arg4 << arg5 << arg6 << arg7 << arg8 << arg9 << arg10 << arg11;
- return sout.str();
+template <typename T1, typename T2, typename T3, typename T4, typename T5,
+          typename T6, typename T7, typename T8, typename T9, typename T10,
+          typename T11>
+std::string make_str(const std::string &startmesg, const T1 &arg1,
+                     const T2 &arg2, const T3 &arg3, const T4 &arg4,
+                     const T5 &arg5, const T6 &arg6, const T7 &arg7,
+                     const T8 &arg8, const T9 &arg9, const T10 &arg10,
+                     const T11 &arg11) {
+  std::stringstream sout;
+  sout << startmesg << arg1 << arg2 << arg3 << arg4 << arg5 << arg6 << arg7
+       << arg8 << arg9 << arg10 << arg11;
+  return sout.str();
 }
 
-template <typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7, typename T8,
-          typename T9, typename T10, typename T11, typename T12>
-std::string make_str(const std::string& startmesg, const T1& arg1, const T2& arg2, const T3& arg3,
-                     const T4& arg4, const T5& arg5, const T6& arg6, const T7& arg7, const T8& arg8,
-                     const T9& arg9, const T10& arg10, const T11& arg11, const T12& arg12)
-{
- std::stringstream sout;
- sout << startmesg << arg1 << arg2 << arg3 << arg4 << arg5 << arg6 << arg7 << arg8 << arg9 
-      << arg10 << arg11 << arg12;
- return sout.str();
+template <typename T1, typename T2, typename T3, typename T4, typename T5,
+          typename T6, typename T7, typename T8, typename T9, typename T10,
+          typename T11, typename T12>
+std::string make_str(const std::string &startmesg, const T1 &arg1,
+                     const T2 &arg2, const T3 &arg3, const T4 &arg4,
+                     const T5 &arg5, const T6 &arg6, const T7 &arg7,
+                     const T8 &arg8, const T9 &arg9, const T10 &arg10,
+                     const T11 &arg11, const T12 &arg12) {
+  std::stringstream sout;
+  sout << startmesg << arg1 << arg2 << arg3 << arg4 << arg5 << arg6 << arg7
+       << arg8 << arg9 << arg10 << arg11 << arg12;
+  return sout.str();
 }
-
 
 inline int to_c_str(int arg) { return arg; }
 
@@ -243,108 +251,100 @@ inline float to_c_str(float arg) { return arg; }
 
 inline double to_c_str(double arg) { return arg; }
 
-inline const char* to_c_str(const char* arg) { return arg; }
+inline const char *to_c_str(const char *arg) { return arg; }
 
-inline const char* to_c_str(const std::string& arg)
-{
- return arg.c_str();
-}
+inline const char *to_c_str(const std::string &arg) { return arg.c_str(); }
 
-std::string charstar_to_string(const char* buffer, int checklength);
-
+std::string charstar_to_string(const char *buffer, int checklength);
 
 template <typename T1>
-std::string make_strf(const std::string& fmt, const T1& arg1)
-{
- const int bufsize=1024;
- char buffer[bufsize];
- sprintf(buffer,fmt.c_str(),to_c_str(arg1));
- return charstar_to_string(buffer,bufsize);
+std::string make_strf(const std::string &fmt, const T1 &arg1) {
+  const int bufsize = 1024;
+  char buffer[bufsize];
+  sprintf(buffer, fmt.c_str(), to_c_str(arg1));
+  return charstar_to_string(buffer, bufsize);
 }
 
 template <typename T1, typename T2>
-std::string make_strf(const std::string& fmt, const T1& arg1, const T2& arg2)
-{
- const int bufsize=1024;
- char buffer[bufsize];
- sprintf(buffer,fmt.c_str(),to_c_str(arg1),to_c_str(arg2));
- return charstar_to_string(buffer,bufsize);
+std::string make_strf(const std::string &fmt, const T1 &arg1, const T2 &arg2) {
+  const int bufsize = 1024;
+  char buffer[bufsize];
+  sprintf(buffer, fmt.c_str(), to_c_str(arg1), to_c_str(arg2));
+  return charstar_to_string(buffer, bufsize);
 }
 
 template <typename T1, typename T2, typename T3>
-std::string make_strf(const std::string& fmt, const T1& arg1, const T2& arg2, const T3& arg3)
-{
- const int bufsize=1024;
- char buffer[bufsize];
- sprintf(buffer,fmt.c_str(),to_c_str(arg1),to_c_str(arg2),to_c_str(arg3));
- return charstar_to_string(buffer,bufsize);
+std::string make_strf(const std::string &fmt, const T1 &arg1, const T2 &arg2,
+                      const T3 &arg3) {
+  const int bufsize = 1024;
+  char buffer[bufsize];
+  sprintf(buffer, fmt.c_str(), to_c_str(arg1), to_c_str(arg2), to_c_str(arg3));
+  return charstar_to_string(buffer, bufsize);
 }
 
 template <typename T1, typename T2, typename T3, typename T4>
-std::string make_strf(const std::string& fmt, const T1& arg1, const T2& arg2, const T3& arg3,
-                      const T4& arg4)
-{
- const int bufsize=1024;
- char buffer[bufsize];
- sprintf(buffer,fmt.c_str(),to_c_str(arg1),to_c_str(arg2),to_c_str(arg3),to_c_str(arg4));
- return charstar_to_string(buffer,bufsize);
+std::string make_strf(const std::string &fmt, const T1 &arg1, const T2 &arg2,
+                      const T3 &arg3, const T4 &arg4) {
+  const int bufsize = 1024;
+  char buffer[bufsize];
+  sprintf(buffer, fmt.c_str(), to_c_str(arg1), to_c_str(arg2), to_c_str(arg3),
+          to_c_str(arg4));
+  return charstar_to_string(buffer, bufsize);
 }
 
 template <typename T1, typename T2, typename T3, typename T4, typename T5>
-std::string make_strf(const std::string& fmt, const T1& arg1, const T2& arg2, const T3& arg3,
-                      const T4& arg4, const T5& arg5)
-{
- const int bufsize=1024;
- char buffer[bufsize];
- sprintf(buffer,fmt.c_str(),to_c_str(arg1),to_c_str(arg2),to_c_str(arg3),to_c_str(arg4),
-         to_c_str(arg5));
- return charstar_to_string(buffer,bufsize);
+std::string make_strf(const std::string &fmt, const T1 &arg1, const T2 &arg2,
+                      const T3 &arg3, const T4 &arg4, const T5 &arg5) {
+  const int bufsize = 1024;
+  char buffer[bufsize];
+  sprintf(buffer, fmt.c_str(), to_c_str(arg1), to_c_str(arg2), to_c_str(arg3),
+          to_c_str(arg4), to_c_str(arg5));
+  return charstar_to_string(buffer, bufsize);
 }
 
-template <typename T1, typename T2, typename T3, typename T4, typename T5, typename T6>
-std::string make_strf(const std::string& fmt, const T1& arg1, const T2& arg2, const T3& arg3,
-                      const T4& arg4, const T5& arg5, const T6& arg6)
-{
- const int bufsize=1024;
- char buffer[bufsize];
- sprintf(buffer,fmt.c_str(),to_c_str(arg1),to_c_str(arg2),to_c_str(arg3),to_c_str(arg4),
-         to_c_str(arg5),to_c_str(arg6));
- return charstar_to_string(buffer,bufsize);
+template <typename T1, typename T2, typename T3, typename T4, typename T5,
+          typename T6>
+std::string make_strf(const std::string &fmt, const T1 &arg1, const T2 &arg2,
+                      const T3 &arg3, const T4 &arg4, const T5 &arg5,
+                      const T6 &arg6) {
+  const int bufsize = 1024;
+  char buffer[bufsize];
+  sprintf(buffer, fmt.c_str(), to_c_str(arg1), to_c_str(arg2), to_c_str(arg3),
+          to_c_str(arg4), to_c_str(arg5), to_c_str(arg6));
+  return charstar_to_string(buffer, bufsize);
 }
 
-template <typename T1, typename T2, typename T3, typename T4, typename T5, typename T6,
-          typename T7>
-std::string make_strf(const std::string& fmt, const T1& arg1, const T2& arg2, const T3& arg3,
-                      const T4& arg4, const T5& arg5, const T6& arg6, const T7& arg7)
-{
- const int bufsize=1024;
- char buffer[bufsize];
- sprintf(buffer,fmt.c_str(),to_c_str(arg1),to_c_str(arg2),to_c_str(arg3),to_c_str(arg4),
-         to_c_str(arg5),to_c_str(arg6),to_c_str(arg7));
- return charstar_to_string(buffer,bufsize);
+template <typename T1, typename T2, typename T3, typename T4, typename T5,
+          typename T6, typename T7>
+std::string make_strf(const std::string &fmt, const T1 &arg1, const T2 &arg2,
+                      const T3 &arg3, const T4 &arg4, const T5 &arg5,
+                      const T6 &arg6, const T7 &arg7) {
+  const int bufsize = 1024;
+  char buffer[bufsize];
+  sprintf(buffer, fmt.c_str(), to_c_str(arg1), to_c_str(arg2), to_c_str(arg3),
+          to_c_str(arg4), to_c_str(arg5), to_c_str(arg6), to_c_str(arg7));
+  return charstar_to_string(buffer, bufsize);
 }
 
-template <typename T1, typename T2, typename T3, typename T4, typename T5, typename T6,
-          typename T7, typename T8>
-std::string make_strf(const std::string& fmt, const T1& arg1, const T2& arg2, const T3& arg3,
-                      const T4& arg4, const T5& arg5, const T6& arg6, const T7& arg7,
-                      const T8& arg8)
-{
- const int bufsize=1024;
- char buffer[bufsize];
- sprintf(buffer,fmt.c_str(),to_c_str(arg1),to_c_str(arg2),to_c_str(arg3),to_c_str(arg4),
-         to_c_str(arg5),to_c_str(arg6),to_c_str(arg7),to_c_str(arg8));
- return charstar_to_string(buffer,bufsize);
+template <typename T1, typename T2, typename T3, typename T4, typename T5,
+          typename T6, typename T7, typename T8>
+std::string make_strf(const std::string &fmt, const T1 &arg1, const T2 &arg2,
+                      const T3 &arg3, const T4 &arg4, const T5 &arg5,
+                      const T6 &arg6, const T7 &arg7, const T8 &arg8) {
+  const int bufsize = 1024;
+  char buffer[bufsize];
+  sprintf(buffer, fmt.c_str(), to_c_str(arg1), to_c_str(arg2), to_c_str(arg3),
+          to_c_str(arg4), to_c_str(arg5), to_c_str(arg6), to_c_str(arg7),
+          to_c_str(arg8));
+  return charstar_to_string(buffer, bufsize);
 }
 
 // *************************************************************
 
+void printLaph(const std::string &mesg);
 
-void printLaph(const std::string& mesg);
-
-void errorLaph(const std::string& mesg, bool abort=true);
-
+void errorLaph(const std::string &mesg, bool abort = true);
 
 // *************************************************************
-}
+} // namespace LaphEnv
 #endif

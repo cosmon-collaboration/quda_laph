@@ -1,12 +1,10 @@
 #ifndef LAPH_EIGEN_INFO_H
 #define LAPH_EIGEN_INFO_H
 
-#include "xml_handler.h"
 #include "field_smearing_info.h"
-
+#include "xml_handler.h"
 
 namespace LaphEnv {
-
 
 // *******************************************************************
 // *                                                                 *
@@ -53,7 +51,7 @@ namespace LaphEnv {
 // *                                                                 *
 // *   The above transformation maps the unwanted spectrum to the    *
 // *   range -1 .. 1, and the desired part lies above 1.             *
-// *   Then Chebyshev polynomials can be applied.  Eigenvalues       * 
+// *   Then Chebyshev polynomials can be applied.  Eigenvalues       *
 // *   lying between -1 and 1 are suppressed (stay between -1..1),   *
 // *   and the desired eigenvalues above 1 get spaced out to         *
 // *   large values above 1 to speed up convergence.                 *
@@ -63,7 +61,7 @@ namespace LaphEnv {
 // *   the use of Chebyshev polynomials of any order, both even      *
 // *   and odd.)                                                     *
 // *                                                                 *
-// *   To apply the Chebyshev acceleration, a fairly reasonable      * 
+// *   To apply the Chebyshev acceleration, a fairly reasonable      *
 // *   estimate of the large eigenvalue of -Delta is needed.         *
 // *                                                                 *
 // *   Setting "ChebyshevOrder" to a value of 1 or less means that   *
@@ -86,9 +84,7 @@ namespace LaphEnv {
 // *                                                                 *
 // *******************************************************************
 
-
-class LaphEigenSolverInfo
-{
+class LaphEigenSolverInfo {
 
   int maxIterations;
   int dimKrylov;
@@ -100,25 +96,21 @@ class LaphEigenSolverInfo
   bool check_solution;
   int outputVerbosity;
 
+public:
+  LaphEigenSolverInfo(const XMLHandler &xml_in);
 
- public:  
+  LaphEigenSolverInfo(const LaphEigenSolverInfo &in);
 
-  LaphEigenSolverInfo(const XMLHandler& xml_in);
+  LaphEigenSolverInfo &operator=(const LaphEigenSolverInfo &in);
 
-  LaphEigenSolverInfo(const LaphEigenSolverInfo& in);
+  ~LaphEigenSolverInfo() {}
 
-  LaphEigenSolverInfo& operator=(const LaphEigenSolverInfo& in);
-
-  ~LaphEigenSolverInfo(){}
-
-
-
-    // output functions
+  // output functions
 
   int getMaximumIterations() const { return maxIterations; }
 
-  int getKrylovDimension() const {return dimKrylov;}
-  
+  int getKrylovDimension() const { return dimKrylov; }
+
   double getResidualTolerance() const { return tolerance; }
 
   int getChebyshevOrder() const { return chebyshevOrder; }
@@ -130,25 +122,20 @@ class LaphEigenSolverInfo
   std::string getStartingVectorType() const { return startVector; }
 
   int getOutputVerbosity() const { return outputVerbosity; }
-  
-  bool doCheckSolution() const { return check_solution;}
+
+  bool doCheckSolution() const { return check_solution; }
 
   std::string output(int indent = 0) const;
 
-  void output(XMLHandler& xmlout) const;
+  void output(XMLHandler &xmlout) const;
 
-  void setQudaParam(QudaInvertParam& invParam, QudaEigParam& eigParam,
-                    const QuarkSmearingInfo& qsmear) const;
+  void setQudaParam(QudaInvertParam &invParam, QudaEigParam &eigParam,
+                    const QuarkSmearingInfo &qsmear) const;
 
- private:
-
-  void extract_info_from_reader(XMLHandler& xmlr);
-
-
+private:
+  void extract_info_from_reader(XMLHandler &xmlr);
 };
 
-
-
 // **************************************************
-}
+} // namespace LaphEnv
 #endif

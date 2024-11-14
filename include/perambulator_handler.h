@@ -1,22 +1,20 @@
 #ifndef PERAMBULATOR_HANDLER_H
 #define PERAMBULATOR_HANDLER_H
 
-#include "gauge_configuration_info.h"
-#include "gauge_configuration_handler.h"
-#include "xml_handler.h"
 #include "field_smearing_info.h"
-#include "gluon_smearing_handler.h"
-#include "quark_smearing_handler.h"
-#include "quark_action_info.h"
-#include "inverter_info.h"
 #include "filelist_info.h"
+#include "gauge_configuration_handler.h"
+#include "gauge_configuration_info.h"
+#include "gluon_smearing_handler.h"
+#include "inverter_info.h"
 #include "laph_stdio.h"
+#include "quark_action_info.h"
+#include "quark_smearing_handler.h"
 #include "quda.h"
+#include "xml_handler.h"
 #include <set>
 
-
 namespace LaphEnv {
-
 
 // *****************************************************************
 // *                                                               *
@@ -118,267 +116,259 @@ namespace LaphEnv {
 // *                                                               *
 // *****************************************************************
 
+class PerambulatorHandler {
 
-class PerambulatorHandler
-{
+public:
+  enum Mode { ReadOnly, Merge, Compute };
 
- public:
+  // sink spin is 1,2,3,4  (but stored as 0,1,2,3 in right-most two bits)
+  // sink time (next 15 bits)
+  // source_laphev_index (next 15 bits)
 
-   enum Mode { ReadOnly, Merge, Compute };
+  class RecordKey {
+    unsigned long code; // at least 32 bit integer
 
+  public:
+    RecordKey() : code(0) {}
+    RecordKey(int spin, int time, int srcev_index) {
+      encode(spin, time, srcev_index);
+    }
+    RecordKey(const RecordKey &in) : code(in.code) {}
+    RecordKey &operator=(const RecordKey &in) {
+      code = in.code;
+      return *this;
+    }
+    RecordKey &set(int spin, int time, int srcev_index) {
+      encode(spin, time, srcev_index);
+      return *this;
+    }
+    ~RecordKey() {}
 
-       // sink spin is 1,2,3,4  (but stored as 0,1,2,3 in right-most two bits)
-       // sink time (next 15 bits)
-       // source_laphev_index (next 15 bits)
+    bool operator<(const RecordKey &rhs) const { return (code < rhs.code); }
+    bool operator==(const RecordKey &rhs) const { return (code == rhs.code); }
+    bool operator!=(const RecordKey &rhs) const { return (code != rhs.code); }
 
-   class RecordKey
-   {
-      unsigned long code;   // at least 32 bit integer
+    unsigned int getSinkSpin() const {
+      const unsigned long spinmask = 0x3ul;
+      return (code & spinmask) + 1;
+    }
+    unsigned int getSinkTime() const {
+      const unsigned long mask15bit = 0x7FFFul;
+      return (code >> 2) & mask15bit;
+    }
+    unsigned int getSourceLaphEigvecIndex() const { return (code >> 17); }
 
-    public:
+    void output(XMLHandler &xmlw) const;
 
-      RecordKey() : code(0) {}
-      RecordKey(int spin, int time, int srcev_index)
-       {encode(spin,time,srcev_index);}
-      RecordKey(const RecordKey& in) : code(in.code) {}
-      RecordKey& operator=(const RecordKey& in) {code=in.code; return *this;}
-      RecordKey& set(int spin, int time, int srcev_index)
-       {encode(spin,time,srcev_index); return *this;}
-      ~RecordKey() {}
-
-      bool operator<(const RecordKey& rhs) const {return (code<rhs.code);}
-      bool operator==(const RecordKey& rhs) const {return (code==rhs.code);}
-      bool operator!=(const RecordKey& rhs) const {return (code!=rhs.code);}
-
-      unsigned int getSinkSpin() const
-       {const unsigned long spinmask=0x3ul; return (code&spinmask)+1;}
-      unsigned int getSinkTime() const 
-       {const unsigned long mask15bit=0x7FFFul; return (code>>2)&mask15bit;}
-      unsigned int getSourceLaphEigvecIndex() const {return (code>>17);}
-
-      void output(XMLHandler& xmlw) const;
-      
-      explicit RecordKey(const unsigned int* buf) {code=*buf;}
-      static int numints() {return 1;}
-      size_t numbytes() const {return sizeof(unsigned int);}
-      void copyTo(unsigned int* buf) const {*buf=code;}
+    explicit RecordKey(const unsigned int *buf) { code = *buf; }
+    static int numints() { return 1; }
+    size_t numbytes() const { return sizeof(unsigned int); }
+    void copyTo(unsigned int *buf) const { *buf = code; }
 
     //  void applyGamma5Herm(int& g5sign)
     //  {const unsigned long spinmask=0x3ul;
     //   g5sign=((code&spinmask)<2)?-1:1;
     //   code^=0x2ul;}   // flip the bit second from right
 
-    private:
-
-      void encode(int spin, int time, int srcev_index)
-      {
-       const int imax=32768;
-       if  ((spin<1)||(spin>4)||(time<0)||(srcev_index<0)){
-          errorLaph("invalid indices in QuarkHandler::RecordKey");}
-       if  ((time>=imax)||(srcev_index>=imax)){
-          errorLaph("indices in QuarkHandler::RecordKey exceed maximum");}
-       code=srcev_index; code<<=15; 
-       code|=time; code<<=2; code|=spin-1;
+  private:
+    void encode(int spin, int time, int srcev_index) {
+      const int imax = 32768;
+      if ((spin < 1) || (spin > 4) || (time < 0) || (srcev_index < 0)) {
+        errorLaph("invalid indices in QuarkHandler::RecordKey");
       }
+      if ((time >= imax) || (srcev_index >= imax)) {
+        errorLaph("indices in QuarkHandler::RecordKey exceed maximum");
+      }
+      code = srcev_index;
+      code <<= 15;
+      code |= time;
+      code <<= 2;
+      code |= spin - 1;
+    }
+  };
+
+  struct FileKey {
+    int src_time;
+    int src_spin;
+
+    FileKey() : src_time(0), src_spin(1) {}
+    FileKey(int in_srctime, int in_srcspin);
+    FileKey(XMLHandler &xmlr);
+    FileKey(const FileKey &rhs);
+    FileKey &operator=(const FileKey &rhs);
+    ~FileKey() {}
+    void output(XMLHandler &xmlw) const;
+    bool operator<(const FileKey &rhs) const;
+    bool operator==(const FileKey &rhs) const;
+    bool operator!=(const FileKey &rhs) const;
+  };
+
+  struct PerambComputation {
+    int src_time;
+    std::set<int> src_lapheigvec_indices;
+    PerambComputation(int in_src_time, const std::set<int> &src_evinds)
+        : src_time(in_src_time), src_lapheigvec_indices(src_evinds) {}
+  };
 
-   };
+  struct PerambComputations {
+    std::list<PerambComputation> computations;
+    uint nSinkLaphBatch; // number of inversions before projecting on Laph evs
+    uint nSinkQudaBatch; // number of quark sinks to project at a time as one
+                         // batch
+    uint nEigQudaBatch;  // number of Laph evs to project at a time as one batch
+  };
 
+  typedef std::vector<std::complex<double>>
+      DataType; // store in double precision even if single precision
 
-   struct FileKey
-   {
-      int src_time;
-      int src_spin;
+private:
+  // pointers to internal infos (managed by this handler
+  // with new and delete)
 
-      FileKey() : src_time(0), src_spin(1)  {}
-      FileKey(int in_srctime, int in_srcspin);
-      FileKey(XMLHandler& xmlr);
-      FileKey(const FileKey& rhs);
-      FileKey& operator=(const FileKey& rhs);
-      ~FileKey(){}
-      void output(XMLHandler& xmlw) const;
-      bool operator<(const FileKey& rhs) const;
-      bool operator==(const FileKey& rhs) const;
-      bool operator!=(const FileKey& rhs) const;
-   };
+  const GaugeConfigurationInfo *uPtr;
+  const GluonSmearingInfo *gSmearPtr;
+  const QuarkSmearingInfo *qSmearPtr;
+  const QuarkActionInfo *qactionPtr;
+  const FileListInfo *fPtr;
+  const InverterInfo *invertPtr;
+  uint Nspin;
+  Mode mode;
+  void *preconditioner;
 
-   struct PerambComputation {
-      int src_time;
-      std::set<int> src_lapheigvec_indices;
-      PerambComputation(int in_src_time, const std::set<int>& src_evinds)
-               : src_time(in_src_time), src_lapheigvec_indices(src_evinds) {}
-   };
+  // structure containing the computations to perform
+  PerambComputations perambComps;
 
-   struct PerambComputations {
-      std::list<PerambComputation> computations;
-      uint nSinkLaphBatch;   // number of inversions before projecting on Laph evs
-      uint nSinkQudaBatch;   // number of quark sinks to project at a time as one batch
-      uint nEigQudaBatch;    // number of Laph evs to project at a time as one batch
-   };
+  // necessary quda data
+  QudaInvertParam quda_inv_param;
 
-  typedef std::vector<std::complex<double>> DataType;   // store in double precision even if single precision
+  // sub-handler pointers
 
- private:
+  static std::unique_ptr<QuarkSmearingHandler> qSmearHandler;
+  static std::unique_ptr<GaugeConfigurationHandler> gaugeHandler;
 
-       // pointers to internal infos (managed by this handler
-       // with new and delete)
+  static int qSmearCounter;
+  static int gaugeCounter;
 
-   const GaugeConfigurationInfo *uPtr;
-   const GluonSmearingInfo *gSmearPtr;
-   const QuarkSmearingInfo *qSmearPtr;
-   const QuarkActionInfo *qactionPtr;
-   const FileListInfo *fPtr;
-   const InverterInfo *invertPtr;
-   uint Nspin;
-   Mode mode;
-   void* preconditioner;
+  // Prevent copying ... handler might contain large
+  // amounts of data
 
-       // structure containing the computations to perform
-   PerambComputations perambComps;
+  PerambulatorHandler(const PerambulatorHandler &);
+  PerambulatorHandler &operator=(const PerambulatorHandler &);
 
-       // necessary quda data
-   QudaInvertParam quda_inv_param;
+  // data I/O handler pointers
 
-       // sub-handler pointers
+  DataPutHandlerMF<PerambulatorHandler, FileKey, RecordKey, DataType> *DHputPtr;
+  DataGetHandlerMF<PerambulatorHandler, FileKey, RecordKey, DataType> *DHgetPtr;
 
-   static std::unique_ptr<QuarkSmearingHandler> qSmearHandler;
-   static std::unique_ptr<GaugeConfigurationHandler> gaugeHandler;
+public:
+  PerambulatorHandler();
 
-   static int qSmearCounter;
-   static int gaugeCounter;
+  PerambulatorHandler(const GaugeConfigurationInfo &gaugeinfo,
+                      const GluonSmearingInfo &gluonsmear,
+                      const QuarkSmearingInfo &quarksmear,
+                      const QuarkActionInfo &quark, const FileListInfo &flist,
+                      const std::string &smeared_quark_filestub,
+                      bool upper_spin_components_only = false,
+                      Mode in_mode = ReadOnly,
+                      const std::string &gauge_str = "default_gauge_field");
 
-       // Prevent copying ... handler might contain large
-       // amounts of data
+  void setInfo(const GaugeConfigurationInfo &gaugeinfo,
+               const GluonSmearingInfo &gluonsmear,
+               const QuarkSmearingInfo &quarksmear,
+               const QuarkActionInfo &quark, const FileListInfo &flist,
+               const std::string &smeared_quark_filestub,
+               bool upper_spin_components_only = false, Mode in_mode = ReadOnly,
+               const std::string &gauge_str = "default_gauge_field");
 
-   PerambulatorHandler(const PerambulatorHandler&);
-   PerambulatorHandler& operator=(const PerambulatorHandler&);
+  ~PerambulatorHandler();
 
+  void clear();
 
-       // data I/O handler pointers
+  bool isInfoSet() const;
 
-   DataPutHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType> *DHputPtr;
-   DataGetHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType> *DHgetPtr;
+  const GaugeConfigurationInfo &getGaugeConfigurationInfo() const;
 
+  const GluonSmearingInfo &getGluonSmearingInfo() const;
 
- public:
+  const QuarkSmearingInfo &getQuarkSmearingInfo() const;
 
+  const QuarkActionInfo &getQuarkActionInfo() const;
 
-   PerambulatorHandler();
+  const FileListInfo &getFileListInfo() const;
 
-   PerambulatorHandler(const GaugeConfigurationInfo& gaugeinfo,
-                       const GluonSmearingInfo& gluonsmear,
-                       const QuarkSmearingInfo& quarksmear,
-                       const QuarkActionInfo& quark,
-                       const FileListInfo& flist,
-                       const std::string& smeared_quark_filestub,
-                       bool upper_spin_components_only=false,
-                       Mode in_mode=ReadOnly,
-                       const std::string& gauge_str="default_gauge_field");
+  uint getNumberOfLaplacianEigenvectors() const;
 
-   void setInfo(const GaugeConfigurationInfo& gaugeinfo,
-                const GluonSmearingInfo& gluonsmear,
-                const QuarkSmearingInfo& quarksmear,
-                const QuarkActionInfo& quark,
-                const FileListInfo& flist,
-                const std::string& smeared_quark_filestub,
-                bool upper_spin_components_only=false,
-                Mode in_mode=ReadOnly,
-                const std::string& gauge_str="default_gauge_field");
+  int getTimeExtent() const;
 
-   ~PerambulatorHandler();
+  // void getHeader(XMLHandler& xmlout) const;
 
-   void clear();
+  void getFileMap(XMLHandler &xmlout) const;
 
-   bool isInfoSet() const;
+  void outputSuffixMap();
 
-   const GaugeConfigurationInfo& getGaugeConfigurationInfo() const;
+  std::map<int, FileKey> getSuffixMap() const;
 
-   const GluonSmearingInfo& getGluonSmearingInfo() const;
+  // void outputSuffixMap(TextFileWriter& fout);
 
-   const QuarkSmearingInfo& getQuarkSmearingInfo() const;
+  void setInverter(const InverterInfo &invinfo);
 
-   const QuarkActionInfo& getQuarkActionInfo() const;
+  const InverterInfo &getInverterInfo() const;
 
-   const FileListInfo& getFileListInfo() const;
+  void setUpPreconditioning(QudaInvertParam &invParam);
 
-   uint getNumberOfLaplacianEigenvectors() const;
+  void clearComputationSet();
 
-   int getTimeExtent() const;
+  void setComputationSet(const XMLHandler &xmlcmp);
 
-   //void getHeader(XMLHandler& xmlout) const;
+  // compute quark perambulators (exact distillation); useful for smearing
+  // studies
 
+  void computePerambulators(bool verbose = false,
+                            bool extra_soln_check = false);
 
-   void getFileMap(XMLHandler& xmlout) const;
+  //   void mergeData(const FileListInfo& input_files);
 
-   void outputSuffixMap();
+private:
+  void set_info(const GaugeConfigurationInfo &gaugeinfo,
+                const GluonSmearingInfo &gluonsmear,
+                const QuarkSmearingInfo &quarksmear,
+                const QuarkActionInfo &quark, const FileListInfo &flist,
+                const std::string &smeared_quark_filestub,
+                bool upper_spin_components_only, const std::string &gauge_str,
+                Mode in_mode);
 
-   std::map<int,FileKey> getSuffixMap() const;
+  bool checkHeader(XMLHandler &xmlr, int suffix);
+  void writeHeader(XMLHandler &xmlout, const FileKey &fkey, int suffix);
 
-   //void outputSuffixMap(TextFileWriter& fout);
+  void check_info_set(const std::string &name) const;
 
-   void setInverter(const InverterInfo& invinfo);
+  //  sub-handler connections
 
-   const InverterInfo& getInverterInfo() const;
+  void connectGaugeConfigurationHandler();
+  void connectQuarkSmearingHandler(const std::string &smeared_quark_filestub);
 
-   void setUpPreconditioning(QudaInvertParam& invParam);
+  void disconnectGaugeConfigurationHandler();
+  void disconnectQuarkSmearingHandler();
 
-   void clearComputationSet();
-      
-   void setComputationSet(const XMLHandler& xmlcmp);
+  void computePerambulators(int src_time, const std::set<int> &src_evindices,
+                            const std::vector<void *> &evList, bool verbose,
+                            bool extra_soln_check, double &makesrc_time,
+                            double &inv_time, double &evproj_time,
+                            double &write_time);
 
+  // Makes the source in the Dirac-Pauli basis.  The source is
+  // gamma_4 times the usual source since we use the chi = psi-bar gamma_4
+  // field operator.   "src_spin" is 1,2,3,4
 
-        // compute quark perambulators (exact distillation); useful for smearing studies
+  void make_source(LattField &ferm_src, const void *ev_src_ptr, int src_time,
+                   int src_spin);
 
-   void computePerambulators(bool verbose=false, bool extra_soln_check=false);
-
-//   void mergeData(const FileListInfo& input_files);
-
-
- private:
-
-
-   void set_info(const GaugeConfigurationInfo& gaugeinfo,
-                 const GluonSmearingInfo& gluonsmear,
-                 const QuarkSmearingInfo& quarksmear,
-                 const QuarkActionInfo& quark,
-                 const FileListInfo& flist,
-                 const std::string& smeared_quark_filestub,
-                 bool upper_spin_components_only,
-                 const std::string& gauge_str, Mode in_mode);
-
-
-   bool checkHeader(XMLHandler& xmlr, int suffix);
-   void writeHeader(XMLHandler& xmlout, const FileKey& fkey,
-                    int suffix);
-
-   void check_info_set(const std::string& name) const;
-
-         //  sub-handler connections
-
-   void connectGaugeConfigurationHandler();
-   void connectQuarkSmearingHandler(const std::string& smeared_quark_filestub);
-
-   void disconnectGaugeConfigurationHandler();
-   void disconnectQuarkSmearingHandler();
-
-   void computePerambulators(int src_time, const std::set<int>& src_evindices,
-                             const std::vector<void*>& evList, bool verbose,
-                             bool extra_soln_check, double& makesrc_time, double& inv_time,
-                             double& evproj_time, double& write_time);
-
-          // Makes the source in the Dirac-Pauli basis.  The source is
-	  // gamma_4 times the usual source since we use the chi = psi-bar gamma_4
-	  // field operator.   "src_spin" is 1,2,3,4
-
-   void make_source(LattField& ferm_src, const void* ev_src_ptr, 
-                    int src_time, int src_spin);
-
-   friend class DataPutHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType>;
-   friend class DataGetHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType>;
-
+  friend class DataPutHandlerMF<PerambulatorHandler, FileKey, RecordKey,
+                                DataType>;
+  friend class DataGetHandlerMF<PerambulatorHandler, FileKey, RecordKey,
+                                DataType>;
 };
 
-
-
 // **************************************************************************************
-}
-#endif  
+} // namespace LaphEnv
+#endif

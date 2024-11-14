@@ -1,15 +1,14 @@
 #ifndef QUARK_SMEARING_HANDLER_H
 #define QUARK_SMEARING_HANDLER_H
 
-#include "xml_handler.h"
-#include "field_smearing_info.h"
-#include "gauge_configuration_info.h"
 #include "array.h"
 #include "data_io_handler.h"
+#include "field_smearing_info.h"
+#include "gauge_configuration_info.h"
 #include "laph_eigen_info.h"
+#include "xml_handler.h"
 
 namespace LaphEnv {
-
 
 // *****************************************************************
 // *                                                               *
@@ -64,316 +63,311 @@ namespace LaphEnv {
 // *                                                               *
 // *****************************************************************
 
+class QuarkSmearingHandler {
 
-class QuarkSmearingHandler
-{
-
-   struct TimeKey
-   {
+  struct TimeKey {
     int value;
 
     TimeKey() : value(0) {}
     TimeKey(int in_val) : value(in_val) {}
-    TimeKey(XMLHandler& xmlr)
-    {xmlread(xmlr,"TimeSlice",value,"QuarkSmearingHandler::TimeKey");}
-    TimeKey(const TimeKey& in) : value(in.value) {}
+    TimeKey(XMLHandler &xmlr) {
+      xmlread(xmlr, "TimeSlice", value, "QuarkSmearingHandler::TimeKey");
+    }
+    TimeKey(const TimeKey &in) : value(in.value) {}
     ~TimeKey() {}
 
-    bool operator<(const TimeKey& rhs) const
-    {return (value<rhs.value);}
+    bool operator<(const TimeKey &rhs) const { return (value < rhs.value); }
 
-    bool operator==(const TimeKey& rhs) const
-    {return (value==rhs.value);}
+    bool operator==(const TimeKey &rhs) const { return (value == rhs.value); }
 
-    void output(XMLHandler& xmlw) const 
-    {xmlw.set_root("TimeSlice",make_string(value));}
+    void output(XMLHandler &xmlw) const {
+      xmlw.set_root("TimeSlice", make_string(value));
+    }
 
-    explicit TimeKey(const unsigned int* buf) : value(*buf) {}
-    static int numints() {return 1;} 
-    size_t numbytes() const {return sizeof(unsigned int);}
-    void copyTo(unsigned int* buf) const { *buf=value;}
+    explicit TimeKey(const unsigned int *buf) : value(*buf) {}
+    static int numints() { return 1; }
+    size_t numbytes() const { return sizeof(unsigned int); }
+    void copyTo(unsigned int *buf) const { *buf = value; }
+  };
 
-   };
-
-   struct LevelKey
-   {
+  struct LevelKey {
     int value;
 
     LevelKey() : value(0) {}
     LevelKey(int in_val) : value(in_val) {}
-    LevelKey(XMLHandler& xmlr)
-    {xmlread(xmlr,"Level",value,"QuarkSmearingHandler::LevelKey");}
-    LevelKey(const LevelKey& in) : value(in.value) {}
+    LevelKey(XMLHandler &xmlr) {
+      xmlread(xmlr, "Level", value, "QuarkSmearingHandler::LevelKey");
+    }
+    LevelKey(const LevelKey &in) : value(in.value) {}
     ~LevelKey() {}
 
-    bool operator<(const LevelKey& rhs) const
-    {return (value<rhs.value);}
-
-    bool operator==(const LevelKey& rhs) const
-    {return (value==rhs.value);}
+    bool operator<(const LevelKey &rhs) const { return (value < rhs.value); }
+
+    bool operator==(const LevelKey &rhs) const { return (value == rhs.value); }
+
+    void output(XMLHandler &xmlw) const {
+      xmlw.set_root("Level", make_string(value));
+    }
 
-    void output(XMLHandler& xmlw) const 
-    {xmlw.set_root("Level",make_string(value));}
+    explicit LevelKey(const unsigned int *buf) : value(*buf) {}
+    static int numints() { return 1; }
+    size_t numbytes() const { return sizeof(unsigned int); }
+    void copyTo(unsigned int *buf) const { *buf = value; }
+  };
 
-    explicit LevelKey(const unsigned int* buf) : value(*buf) {}
-    static int numints() {return 1;} 
-    size_t numbytes() const {return sizeof(unsigned int);}
-    void copyTo(unsigned int* buf) const { *buf=value;}
+  // Key that combines the eigenvector level number with the
+  // details of a covariant displacement.  Must fit in a 32-bit
+  // unsigned integer.
+  /*
+     struct LevelDispKey
+     {
+      uint value;
 
-   };
+      LevelDispKey() : value(0) {}
+      LevelDispKey(uint in_val, const DirPath& displace);
+      LevelDispKey(XMLHandler& xmlr);
+      LevelDispKey(const LevelDispKey& in) : value(in.value) {}
+      ~LevelDispKey() {}
 
-      // Key that combines the eigenvector level number with the
-      // details of a covariant displacement.  Must fit in a 32-bit 
-      // unsigned integer.
-/*
-   struct LevelDispKey
-   {
-    uint value;
+      bool operator<(const LevelDispKey& rhs) const
+      {return (value<rhs.value);}
 
-    LevelDispKey() : value(0) {}
-    LevelDispKey(uint in_val, const DirPath& displace);
-    LevelDispKey(XMLHandler& xmlr);
-    LevelDispKey(const LevelDispKey& in) : value(in.value) {}
-    ~LevelDispKey() {}
+      bool operator==(const LevelDispKey& rhs) const
+      {return (value==rhs.value);}
 
-    bool operator<(const LevelDispKey& rhs) const
-    {return (value<rhs.value);}
+      void output(XMLHandler& xmlw) const;
+      void encode(uint in_val, const DirPath& displace);
 
-    bool operator==(const LevelDispKey& rhs) const
-    {return (value==rhs.value);}
+      uint getLevel() const;
+      DirPath getDisplacement() const;
 
-    void output(XMLHandler& xmlw) const;
-    void encode(uint in_val, const DirPath& displace);
-    
-    uint getLevel() const;
-    DirPath getDisplacement() const;
+      explicit LevelDispKey(const unsigned int* buf) : value(*buf) {}
+      static int numints() {return 1;}
+      size_t numbytes() const {return sizeof(unsigned int);}
+      void copyTo(unsigned int* buf) const { *buf=value;}
 
-    explicit LevelDispKey(const unsigned int* buf) : value(*buf) {}
-    static int numints() {return 1;} 
-    size_t numbytes() const {return sizeof(unsigned int);}
-    void copyTo(unsigned int* buf) const { *buf=value;}
+     };
+  */
+  // pointers to internal infos (managed by this handler
+  // with new and delete)
 
-   };
-*/
-       // pointers to internal infos (managed by this handler
-       // with new and delete)
+  const GaugeConfigurationInfo *uPtr;
+  const GluonSmearingInfo *gSmearPtr;
+  QuarkSmearingInfo *qSmearPtr;
+  std::string smearedQuarkFileStub;
+  bool m_read_mode;
 
-   const GaugeConfigurationInfo *uPtr;
-   const GluonSmearingInfo *gSmearPtr;
-   QuarkSmearingInfo *qSmearPtr;
-   std::string smearedQuarkFileStub; 
-   bool m_read_mode;
+  // storage and/or references to internal data, and other handlers
+  /*
+  #if (QDP_ND == 3)
+     multi1d<double> Eigenvalues;
+     DataGetHandlerMFO<QuarkSmearingHandler,TimeKey,LevelKey,
+                       LattField> *dh_ptr;
+     DataGetHandlerMFO<QuarkSmearingHandler,TimeKey,LevelDispKey,
+                       LattField> *dph_ptr;
+     std::string smearedDispQuarkFileStub;
+  #elif (QDP_ND == 4) */
 
-       // storage and/or references to internal data, and other handlers
-/*
-#if (QDP_ND == 3)
-   multi1d<double> Eigenvalues;
-   DataGetHandlerMFO<QuarkSmearingHandler,TimeKey,LevelKey,
-                     LattField> *dh_ptr;
-   DataGetHandlerMFO<QuarkSmearingHandler,TimeKey,LevelDispKey,
-                     LattField> *dph_ptr;
-   std::string smearedDispQuarkFileStub; 
-#elif (QDP_ND == 4) */
+  Array<double> Eigenvalues;
+  DataGetHandlerMFO<QuarkSmearingHandler, LevelKey, LevelKey, LattField>
+      *dh_ptr;
 
-   Array<double> Eigenvalues;
-   DataGetHandlerMFO<QuarkSmearingHandler,LevelKey,LevelKey,
-                     LattField> *dh_ptr;
+  // prevent copying ... handler might contain large
+  // amounts of data
 
+  QuarkSmearingHandler(const QuarkSmearingHandler &);
+  QuarkSmearingHandler &operator=(const QuarkSmearingHandler &);
 
-       // prevent copying ... handler might contain large
-       // amounts of data
+public:
+  QuarkSmearingHandler();
 
-   QuarkSmearingHandler(const QuarkSmearingHandler&);
-   QuarkSmearingHandler& operator=(const QuarkSmearingHandler&);
+  QuarkSmearingHandler(const GluonSmearingInfo &gluon_smearing,
+                       const GaugeConfigurationInfo &gauge,
+                       const QuarkSmearingInfo &quark_smearing,
+                       const std::string &smeared_quark_file_stub,
+                       bool read_mode = true);
 
+  void setInfo(const GluonSmearingInfo &gluon_smearing,
+               const GaugeConfigurationInfo &gauge,
+               const QuarkSmearingInfo &quark_smearing,
+               const std::string &smeared_quark_file_stub,
+               bool read_mode = true);
 
- public:
+  // update if number of eigenvectors needs to be increased
+  void updateSmearing(const QuarkSmearingInfo &quark_smearing);
 
+  ~QuarkSmearingHandler();
 
-   QuarkSmearingHandler();
+  void clear(); // clears everything in the handler
 
-   QuarkSmearingHandler(const GluonSmearingInfo& gluon_smearing,
-                        const GaugeConfigurationInfo& gauge,
-                        const QuarkSmearingInfo& quark_smearing,
-                        const std::string& smeared_quark_file_stub,
-                        bool read_mode=true); 
+  // access to the info
 
-   void setInfo(const GluonSmearingInfo& gluon_smearing,
-                const GaugeConfigurationInfo& gauge,
-                const QuarkSmearingInfo& quark_smearing,
-                const std::string& smeared_quark_file_stub,
-                bool read_mode=true);
+  bool isInfoSet() const;
 
-          // update if number of eigenvectors needs to be increased
-   void updateSmearing(const QuarkSmearingInfo& quark_smearing);
+  const GluonSmearingInfo &getGluonSmearingInfo() const;
 
-   ~QuarkSmearingHandler();
+  const QuarkSmearingInfo &getQuarkSmearingInfo() const;
 
-   void clear();      // clears everything in the handler
+  const GaugeConfigurationInfo &getGaugeConfigurationInfo() const;
 
+  const std::string &getSmearedQuarkFieldFileStub() const;
 
-           // access to the info
+  uint getNumberOfLaplacianEigenvectors() const {
+    return qSmearPtr->getNumberOfLaplacianEigenvectors();
+  }
 
-   bool isInfoSet() const;
+  //   void getFileMap(XMLHandler& xmlout) const;
 
-   const GluonSmearingInfo& getGluonSmearingInfo() const;
+  //   void outputKeys(XMLHandler& xmlout);
 
-   const QuarkSmearingInfo& getQuarkSmearingInfo() const;
+  /*
+  #if (QDP_ND == 3)
 
-   const GaugeConfigurationInfo& getGaugeConfigurationInfo() const;
+             // Compute largest eigenvalue of smeared covariant Laplacian.
+             // This value is useful for Chebyshev acceleration in
+             // computing all Laph eigenvectors.
 
-   const std::string& getSmearedQuarkFieldFileStub() const;
+     double estimateLargestLaplacianEigenvalue(const std::string&
+  smeared_gauge_file);
 
-   uint getNumberOfLaplacianEigenvectors() const
-    {return qSmearPtr->getNumberOfLaplacianEigenvectors();}
+             // Compute the Laph Eigenvectors and output to file or NamedObjMap
+  */
+  void computeLaphEigenvectors(const LaphEigenSolverInfo &solver_info,
+                               const std::string &smeared_gauge_file);
+  /*
+             // Compute covariantly displaced Laph Eigenvectors and output to
+     file or NamedObjMap
 
-//   void getFileMap(XMLHandler& xmlout) const;
+     void displaceLaphEigenvectors(const std::set<DirPath>& displacements, int
+     disp_length, uint timeval, const std::string& smeared_gauge_file, const
+     std::string& disp_lapheigvec_file_stub);
 
-//   void outputKeys(XMLHandler& xmlout);
+     void displaceLaphEigenvectors(const std::set<DirPath>& displacements, int
+     disp_length, uint timeval, GluonSmearingHandler& gHandler, const
+     std::string& disp_lapheigvec_file_stub);
 
+             // get and query data when in read mode
 
-/*
-#if (QDP_ND == 3)
+     const LattField& getLaphEigenvector(int time, int eigpair_num);
 
-           // Compute largest eigenvalue of smeared covariant Laplacian.
-           // This value is useful for Chebyshev acceleration in
-           // computing all Laph eigenvectors.
+     bool queryLaphEigenvector(int time, int eigpair_num);
 
-   double estimateLargestLaplacianEigenvalue(const std::string& smeared_gauge_file);
+     void removeLaphEigenvector(int time, int eigpair_num);
 
-           // Compute the Laph Eigenvectors and output to file or NamedObjMap
-*/
-   void computeLaphEigenvectors(const LaphEigenSolverInfo& solver_info,
-                                const std::string& smeared_gauge_file);
-/*
-           // Compute covariantly displaced Laph Eigenvectors and output to file or NamedObjMap
+     void clearLaphEigenvectors();
 
-   void displaceLaphEigenvectors(const std::set<DirPath>& displacements, int disp_length,
-                                 uint timeval, const std::string& smeared_gauge_file,
-                                 const std::string& disp_lapheigvec_file_stub);
+     const LattField& getDisplacedLaphEigenvector(int time, int eigpair_num,
+                                                           const DirPath&
+     dirpath);
 
-   void displaceLaphEigenvectors(const std::set<DirPath>& displacements, int disp_length,
-                                 uint timeval, GluonSmearingHandler& gHandler,
-                                 const std::string& disp_lapheigvec_file_stub);
+     bool queryDisplacedLaphEigenvector(int time, int eigpair_num, const
+     DirPath& dirpath);
 
-           // get and query data when in read mode
+     void removeDisplacedLaphEigenvector(int time, int eigpair_num, const
+     DirPath& dirpath);
 
-   const LattField& getLaphEigenvector(int time, int eigpair_num);
+     void clearDisplacedLaphEigenvectors();
+  */
+  /*
+  #elif (QDP_ND == 4)
 
-   bool queryLaphEigenvector(int time, int eigpair_num);
+             // The 3-d computation of the Laph eigenvectors produces
+             // one file for each time slice, and each file contains all
+             // eigen-levels up to the requested number of eigenvectors.
+             // This routine re-organizes these files, producing one file
+             // for each level, but each file contains all time slices.
 
-   void removeLaphEigenvector(int time, int eigpair_num);
+     void combineTimeSlices(int striping_factor=1, int striping_unit=0);
 
-   void clearLaphEigenvectors();
+             // Compute the Laph Eigenvectors and stored in TheNamedObjMap
 
-   const LattField& getDisplacedLaphEigenvector(int time, int eigpair_num, 
-                                                         const DirPath& dirpath);
+     void computeLaphEigenvectors(const LaphEigenSolverInfo& solver_info,
+                                  const std::string& smeared_gauge_file,
+                                  int striping_factor=1, int striping_unit=0,
+                                  int mintime=0, int maxtime=-1);   // -1 means
+  as large as possible
+  */
 
-   bool queryDisplacedLaphEigenvector(int time, int eigpair_num, const DirPath& dirpath);
+  // get and query data when in read mode
 
-   void removeDisplacedLaphEigenvector(int time, int eigpair_num, const DirPath& dirpath);
+  const LattField &getLaphEigenvector(int eigpair_num);
 
-   void clearDisplacedLaphEigenvectors();
-*/
-/*
-#elif (QDP_ND == 4)
+  bool queryLaphEigenvector(int eigpair_num);
 
-           // The 3-d computation of the Laph eigenvectors produces
-           // one file for each time slice, and each file contains all
-           // eigen-levels up to the requested number of eigenvectors.
-           // This routine re-organizes these files, producing one file
-           // for each level, but each file contains all time slices.
+  void removeLaphEigenvector(int eigpair_num);
 
-   void combineTimeSlices(int striping_factor=1, int striping_unit=0);
+  void clearLaphEigenvectors();
 
-           // Compute the Laph Eigenvectors and stored in TheNamedObjMap
+  void closeLaphLevelFiles();
 
-   void computeLaphEigenvectors(const LaphEigenSolverInfo& solver_info,
-                                const std::string& smeared_gauge_file,
-                                int striping_factor=1, int striping_unit=0,
-                                int mintime=0, int maxtime=-1);   // -1 means as large as possible
-*/
+  // checks to see if all _level files exist.
 
-           // get and query data when in read mode
+  bool checkAllLevelFilesExist();
 
-   const LattField& getLaphEigenvector(int eigpair_num);
+  /*
 
-   bool queryLaphEigenvector(int eigpair_num);
+  #endif
+  */
+private:
+  void set_info(const GluonSmearingInfo &gluon_smearing,
+                const GaugeConfigurationInfo &gauge,
+                const QuarkSmearingInfo &quark_smearing,
+                const std::string &smearedQuarkFileStub, bool read_mode);
 
-   void removeLaphEigenvector(int eigpair_num);
+  void check_info_set(const std::string &name, int check_mode = 0) const;
 
-   void clearLaphEigenvectors();
-   
-   void closeLaphLevelFiles();
+  void failure(const std::string &message);
 
-           // checks to see if all _level files exist.
+  bool checkHeader(XMLHandler &xmlr, int suffix);
 
-   bool checkAllLevelFilesExist();
+  void applyLaphPhaseConvention(std::vector<LattField> &laph_eigvecs);
 
-/*
+  void
+  checkLaphEigvecComputation(const std::vector<LattField> &laphEigvecs,
+                             const std::vector<LattField> &smeared_gauge_field);
+  /*
+     void writeHeader(XMLHandler& xmlw, const TimeKey& fkey, int suffix);
 
-#endif
-*/
- private:
+     void do_path_shift(const LattField& start,
+                        LattField& finish,
+                        const DirPath& dir_path, uint disp_length);
+     void get_path_displacer(const multi1d<LatticeColorMatrix>& usmear,
+                             LatticeColorMatrix& covdisplacer,
+                             const DirPath& dir_path, uint disp_length);
+     void get_displaph_setup(); */
 
-   void set_info(const GluonSmearingInfo& gluon_smearing,
-                 const GaugeConfigurationInfo& gauge,
-                 const QuarkSmearingInfo& quark_smearing,
-                 const std::string& smearedQuarkFileStub,
-                 bool read_mode);
+  void writeHeader(XMLHandler &xmlw, const LevelKey &fkey, int suffix);
 
-   void check_info_set(const std::string& name,
-                       int check_mode=0) const;
+  /*   void readTimeSlicesIntoNOM();
 
-   void failure(const std::string& message);
+     friend class DataGetHandlerMF<QuarkSmearingHandler,TimeKey,LevelKey,
+                                   LattField>;*/
+  friend class DataGetHandlerMF<QuarkSmearingHandler, LevelKey, LevelKey,
+                                LattField>;
+  /*   friend class DataGetHandlerMF<QuarkSmearingHandler,TimeKey,LevelDispKey,
+                                   LattField>;
+     friend class DataPutHandlerMF<QuarkSmearingHandler,TimeKey,LevelKey,
+                                   LattField>;*/
+  friend class DataPutHandlerMF<QuarkSmearingHandler, LevelKey, LevelKey,
+                                LattField>;
+  /*   friend class DataPutHandlerMF<QuarkSmearingHandler,TimeKey,LevelDispKey,
+                                   LattField>;
 
-   bool checkHeader(XMLHandler& xmlr, int suffix);
-   
-   void applyLaphPhaseConvention(std::vector<LattField>& laph_eigvecs);
-
-   void checkLaphEigvecComputation(const std::vector<LattField>& laphEigvecs,
-                          const std::vector<LattField>& smeared_gauge_field);
-/*
-   void writeHeader(XMLHandler& xmlw, const TimeKey& fkey, int suffix);
-
-   void do_path_shift(const LattField& start,
-                      LattField& finish,
-                      const DirPath& dir_path, uint disp_length);
-   void get_path_displacer(const multi1d<LatticeColorMatrix>& usmear,
-                           LatticeColorMatrix& covdisplacer,
-                           const DirPath& dir_path, uint disp_length);
-   void get_displaph_setup(); */
-
-   void writeHeader(XMLHandler& xmlw, const LevelKey& fkey, int suffix);
-
-/*   void readTimeSlicesIntoNOM();
-
-   friend class DataGetHandlerMF<QuarkSmearingHandler,TimeKey,LevelKey,
-                                 LattField>;*/
-   friend class DataGetHandlerMF<QuarkSmearingHandler,LevelKey,LevelKey,LattField>;
-/*   friend class DataGetHandlerMF<QuarkSmearingHandler,TimeKey,LevelDispKey,
-                                 LattField>;
-   friend class DataPutHandlerMF<QuarkSmearingHandler,TimeKey,LevelKey,
-                                 LattField>;*/
-   friend class DataPutHandlerMF<QuarkSmearingHandler,LevelKey,LevelKey,
-                                 LattField>;
-/*   friend class DataPutHandlerMF<QuarkSmearingHandler,TimeKey,LevelDispKey,
-                                 LattField>;
-
-   friend class DataGetHandlerMFNOM<QuarkSmearingHandler,TimeKey,LevelKey,
-                                    LattField>;*/
-   friend class DataGetHandlerMFNOM<QuarkSmearingHandler,LevelKey,LevelKey,LattField>;
-/*   friend class DataGetHandlerMFNOM<QuarkSmearingHandler,TimeKey,LevelDispKey,
-                                    LattField>;
-   friend class DataPutHandlerMFNOM<QuarkSmearingHandler,TimeKey,LevelKey,
-                                    LattField>;*/
-   friend class DataPutHandlerMFNOM<QuarkSmearingHandler,LevelKey,LevelKey,
-                                    LattField>;
-/*   friend class DataPutHandlerMFNOM<QuarkSmearingHandler,TimeKey,LevelDispKey,
-                                    LattField>;
-*/
+     friend class DataGetHandlerMFNOM<QuarkSmearingHandler,TimeKey,LevelKey,
+                                      LattField>;*/
+  friend class DataGetHandlerMFNOM<QuarkSmearingHandler, LevelKey, LevelKey,
+                                   LattField>;
+  /*   friend class
+     DataGetHandlerMFNOM<QuarkSmearingHandler,TimeKey,LevelDispKey, LattField>;
+     friend class DataPutHandlerMFNOM<QuarkSmearingHandler,TimeKey,LevelKey,
+                                      LattField>;*/
+  friend class DataPutHandlerMFNOM<QuarkSmearingHandler, LevelKey, LevelKey,
+                                   LattField>;
+  /*   friend class
+     DataPutHandlerMFNOM<QuarkSmearingHandler,TimeKey,LevelDispKey, LattField>;
+  */
 };
 
 // ***************************************************************
-}
-#endif  
+} // namespace LaphEnv
+#endif

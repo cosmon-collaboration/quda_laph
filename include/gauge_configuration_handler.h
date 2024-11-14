@@ -8,7 +8,6 @@
 
 namespace LaphEnv {
 
-
 // *******************************************************************
 // *                                                                 *
 // *  Class "GaugeConfigurationHandler" manages information about    *
@@ -36,78 +35,72 @@ namespace LaphEnv {
 // *                                                                 *
 // *******************************************************************
 
+class GaugeConfigurationHandler {
 
-class GaugeConfigurationHandler
-{
+  // pointer to the info about the gauge config (internally
+  // managed by this handler)
 
-      // pointer to the info about the gauge config (internally
-      // managed by this handler)
-      
-    const GaugeConfigurationInfo* m_gauge_info;
+  const GaugeConfigurationInfo *m_gauge_info;
 
-      // pointer to the gauge field (external: in NamedObjMap)
- 
-    const std::vector<LattField>* m_cfg;
+  // pointer to the gauge field (external: in NamedObjMap)
 
-      // prevent copying
-    GaugeConfigurationHandler(const GaugeConfigurationHandler& gch);
-    GaugeConfigurationHandler& operator=(const GaugeConfigurationHandler& gch);
+  const std::vector<LattField> *m_cfg;
 
+  // prevent copying
+  GaugeConfigurationHandler(const GaugeConfigurationHandler &gch);
+  GaugeConfigurationHandler &operator=(const GaugeConfigurationHandler &gch);
 
-  public:
+public:
+  GaugeConfigurationHandler();
 
-    GaugeConfigurationHandler();
-    
-    GaugeConfigurationHandler(const GaugeConfigurationInfo& gaugeinfo);
+  GaugeConfigurationHandler(const GaugeConfigurationInfo &gaugeinfo);
 
-    void setInfo(const GaugeConfigurationInfo& gaugeinfo);
+  void setInfo(const GaugeConfigurationInfo &gaugeinfo);
 
-    ~GaugeConfigurationHandler();
-    
-    void clear();   // clears this handler, but leaves config in NamedObjMap
+  ~GaugeConfigurationHandler();
 
-    void eraseDataOnHost();   // removes config from NamedObjMap on host
-  
-    void setData();
-    
-    
-      // access to the gauge configuration and its info
+  void clear(); // clears this handler, but leaves config in NamedObjMap
 
-    const std::vector<LattField>& getData();
+  void eraseDataOnHost(); // removes config from NamedObjMap on host
 
-    const GaugeConfigurationInfo& getGaugeConfigurationInfo() const;
+  void setData();
 
-    bool isInfoSet() const { return (m_gauge_info!=0);}
+  // access to the gauge configuration and its info
 
-    bool isDataSet() const { return (m_cfg!=0);}
+  const std::vector<LattField> &getData();
 
-    std::string getNOMId() const {return m_gauge_info->getNOMId();}
+  const GaugeConfigurationInfo &getGaugeConfigurationInfo() const;
 
-    void getXMLInfo(XMLHandler& gauge_xmlinfo) const;
+  bool isInfoSet() const { return (m_gauge_info != 0); }
 
-    void applyFermionTemporalAntiPeriodic();  // multiplies host temporal links on time Nt-1
-                                              // by -1 as expected by Quda to handle fermion 
-                                              // antiperiodic temporal boundary condition
+  bool isDataSet() const { return (m_cfg != 0); }
 
-       //  putting to and erasing from the GPU device
+  std::string getNOMId() const { return m_gauge_info->getNOMId(); }
 
-    void copyDataToDevice(bool removeFromHost=false);
-    
-    void eraseDataOnDevice();
-    
-    bool isDataOnDevice() const {return QudaInfo::gauge_config_on_device;}
+  void getXMLInfo(XMLHandler &gauge_xmlinfo) const;
 
+  void
+  applyFermionTemporalAntiPeriodic(); // multiplies host temporal links on time
+                                      // Nt-1 by -1 as expected by Quda to
+                                      // handle fermion antiperiodic temporal
+                                      // boundary condition
 
-  private:
+  //  putting to and erasing from the GPU device
 
-    void set_info(const GaugeConfigurationInfo& gaugeinfo);
-  
-    void check_info_set(const std::string& name) const;
+  void copyDataToDevice(bool removeFromHost = false);
 
-    void initialize_config();
- 
+  void eraseDataOnDevice();
+
+  bool isDataOnDevice() const { return QudaInfo::gauge_config_on_device; }
+
+private:
+  void set_info(const GaugeConfigurationInfo &gaugeinfo);
+
+  void check_info_set(const std::string &name) const;
+
+  void initialize_config();
 };
 
 // *************************************************************************
-}
+} // namespace LaphEnv
 #endif

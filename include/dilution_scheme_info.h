@@ -5,7 +5,6 @@
 
 namespace LaphEnv {
 
-
 // *******************************************************************
 // *                                                                 *
 // *  ZN noise "rho" is introduced depending on time, spin, and      *
@@ -86,66 +85,55 @@ namespace LaphEnv {
 // *                                                                 *
 // *******************************************************************
 
+class DilutionSchemeInfo {
 
+  int spinDilutionType;   //  0 = none, 1 = full
+  int eigvecDilutionType; //  x  (x>=2) = block with no. projectors x
+  int timeDilutionType;   // -y  (y>=2) = interlace with no. projectors y
 
-class DilutionSchemeInfo
-{
+public:
+  DilutionSchemeInfo(const XMLHandler &xml_in);
 
-   int spinDilutionType;     //  0 = none, 1 = full
-   int eigvecDilutionType;   //  x  (x>=2) = block with no. projectors x
-   int timeDilutionType;     // -y  (y>=2) = interlace with no. projectors y
-    
- public:  
+  DilutionSchemeInfo(); // constructor for no dilution
 
-   DilutionSchemeInfo(const XMLHandler& xml_in);
+  DilutionSchemeInfo(const DilutionSchemeInfo &in);
 
-   DilutionSchemeInfo();  // constructor for no dilution
+  DilutionSchemeInfo &operator=(const DilutionSchemeInfo &in);
 
-   DilutionSchemeInfo(const DilutionSchemeInfo& in);
+  ~DilutionSchemeInfo() {}
 
-   DilutionSchemeInfo& operator=(const DilutionSchemeInfo& in);
+  bool isFullTimeDilution() const { return (timeDilutionType == 1); }
 
-   ~DilutionSchemeInfo(){}
+  void checkEqual(const DilutionSchemeInfo &in) const;
 
-   bool isFullTimeDilution() const {return (timeDilutionType==1);}
+  bool operator==(const DilutionSchemeInfo &in) const;
 
-   void checkEqual(const DilutionSchemeInfo& in) const;
+  bool operator!=(const DilutionSchemeInfo &in) const;
 
-   bool operator==(const DilutionSchemeInfo& in) const;
+  bool operator<(const DilutionSchemeInfo &in) const;
 
-   bool operator!=(const DilutionSchemeInfo& in) const;
+  // output functions
 
-   bool operator<(const DilutionSchemeInfo& in) const;
+  std::string output(int indent = 0) const; // XML output
 
+  void output(XMLHandler &xmlout) const; // write header
 
-    // output functions
+  //  return true if current dilution scheme can be changed
+  //  (undiluted) to scheme "newscheme"
 
-   std::string output(int indent = 0) const;   // XML output
+  bool canUndilute(const DilutionSchemeInfo &newscheme) const;
 
-   void output(XMLHandler& xmlout) const;   // write header
+private:
+  void assign(int spin_dil_type, int eigvec_dil_type, int time_dil_type = 1);
+  void assign_from_reader(XMLHandler &xml_in);
+  void dil_in(XMLHandler &xml_in, const std::string &path, int &DilType);
+  std::string dil_out(int indent, int DilType, bool out_nproj = false) const;
+  void dil_out(XMLHandler &xmlout, int DilType, bool out_nproj = false) const;
+  bool can_undilute(int dilorig, int dilnew) const;
 
-
-
-    //  return true if current dilution scheme can be changed
-    //  (undiluted) to scheme "newscheme"
-   
-   bool canUndilute(const DilutionSchemeInfo& newscheme) const;
-
-  private:
-
-   void assign(int spin_dil_type, int eigvec_dil_type, int time_dil_type = 1);
-   void assign_from_reader(XMLHandler& xml_in);
-   void dil_in(XMLHandler& xml_in, const std::string& path, int& DilType);
-   std::string dil_out(int indent, int DilType, bool out_nproj = false) const;
-   void dil_out(XMLHandler& xmlout, int DilType, 
-                bool out_nproj = false) const;
-   bool can_undilute(int dilorig, int dilnew) const;
-
-   friend class DilutionHandler;
+  friend class DilutionHandler;
 };
 
-
-
 // **************************************************
-}
+} // namespace LaphEnv
 #endif

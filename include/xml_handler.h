@@ -1,15 +1,15 @@
 #ifndef XML_HANDLER_H
 #define XML_HANDLER_H
-#include <iostream>
-#include <set>
-#include <list>
-#include <string>
 #include <cmath>
-#include <sstream>
 #include <cstdlib>
-#include <vector>
+#include <iostream>
+#include <list>
+#include <set>
+#include <sstream>
 #include <stack>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 // *************************************************************************
 // *                                                                       *
@@ -114,8 +114,6 @@
 // *                                                                       *
 // *************************************************************************
 
-
-
 // *******************************************************************
 // *                                                                 *
 // *  This file defines the class XMLHandler which is used to        *
@@ -171,7 +169,7 @@
 // *  Copy constructor:   The XMLHandler copy constructor takes an   *
 // *  optional enum "copymode".  The allowed values of mode below    *
 // *  are "subtree_pointer" (default), "subtree_copy", "pointer",    *
-// *  or "copy".                                                     *  
+// *  or "copy".                                                     *
 // *                                                                 *
 // *     XMLHandler(const XMLHandler& xmlin, copymode mode);         *
 // *                                                                 *
@@ -232,748 +230,733 @@
 // *                                                                 *
 // *******************************************************************
 
+class XMLHandler; // forward declaration
 
+// XMLDoc is a tree of XMLNode objects.
+// Each node has a name string, a boolean indicating if it
+// is a text node or not, and pointers to its parent node,
+// first child node, and its next sibling node.  A text node
+// cannot have a child node, and the root node cannot have
+// any siblings.  A node without a child is either a text node
+// or an empty tag. Comments in the XML string are ignored.
+// Any declaration tag is kept.
 
+class XMLDoc {
 
-class XMLHandler;   // forward declaration
+public:
+  struct XMLNode {
+    std::string name;
+    bool text;
+    XMLNode *parent, *firstchild, *nextsibling;
+    XMLNode(const std::string &inname, XMLNode *inparent, bool is_text = false)
+        : name(inname), text(is_text), parent(inparent), firstchild(0),
+          nextsibling(0) {}
+    ~XMLNode() {}
 
+  private:
+    XMLNode(const XMLNode &); // disable copying
+    XMLNode &operator=(const XMLNode &);
+    XMLNode &operator=(XMLNode &);
+  };
 
+  // constructors and destructors
 
-   // XMLDoc is a tree of XMLNode objects.
-   // Each node has a name string, a boolean indicating if it
-   // is a text node or not, and pointers to its parent node,
-   // first child node, and its next sibling node.  A text node
-   // cannot have a child node, and the root node cannot have
-   // any siblings.  A node without a child is either a text node
-   // or an empty tag. Comments in the XML string are ignored.  
-   // Any declaration tag is kept.
+  explicit XMLDoc(const std::string &xmlstr); // parse string
 
+  explicit XMLDoc(const std::string &tagname,
+                  const std::string &text_content); // single simple tag
 
-class XMLDoc
-{
+  XMLDoc(XMLNode *top, const std::string &indecl);
 
- public:
-   
-   struct XMLNode
-   {
-      std::string name;
-      bool text;
-      XMLNode *parent, *firstchild, *nextsibling;
-      XMLNode(const std::string& inname, XMLNode *inparent, bool is_text=false)
-                  : name(inname), text(is_text), parent(inparent), 
-                    firstchild(0), nextsibling(0) {}
-      ~XMLNode(){}
-    private:
-      XMLNode(const XMLNode&);  // disable copying
-      XMLNode& operator=(const XMLNode&);
-      XMLNode& operator=(XMLNode&);
-   };
+  XMLDoc(const XMLDoc &xmldoc);            // undefined to prevent copying
+  XMLDoc &operator=(const XMLDoc &xmldoc); // undefined to prevent copying
 
+  ~XMLDoc();
 
-         // constructors and destructors
+  //   <?   =  startdecl     ?>  =  enddecl    <     =  starttag     >  = endtag
+  //   </   =  startclose    />  =  endempty   <!--  =  startcom   -->  = endcom
 
-   explicit XMLDoc(const std::string& xmlstr);  // parse string
+  enum XMLEvent {
+    startdecl,
+    enddecl,
+    starttag,
+    endtag,
+    startclose,
+    endempty,
+    startcom,
+    endcom,
+    none
+  };
 
-   explicit XMLDoc(const std::string& tagname, 
-                   const std::string& text_content);  // single simple tag
+  //  creation members
 
-   XMLDoc(XMLNode* top, const std::string& indecl);
+  XMLNode *create_by_parsing(const std::string &xmlstr, size_t start,
+                             size_t stop);
+  XMLNode *create_simple_tag(const std::string &tagname,
+                             const std::string &text, XMLNode *parent);
+  XMLNode *create_text_node(const std::string &text, XMLNode *parent);
+  XMLNode *create_copy(XMLNode *top);
 
-   XMLDoc(const XMLDoc& xmldoc);             // undefined to prevent copying
-   XMLDoc& operator=(const XMLDoc& xmldoc);  // undefined to prevent copying
+  //  destruction members
 
-   ~XMLDoc();
+  void destroy(XMLNode *&top); // top and descendents destroyed
+  void clear();                // deallocate all memory
 
-   //   <?   =  startdecl     ?>  =  enddecl    <     =  starttag     >  =  endtag
-   //   </   =  startclose    />  =  endempty   <!--  =  startcom   -->  =  endcom
+  //  connect/disconnect members
 
-   enum XMLEvent {  startdecl, enddecl, starttag, endtag,
-                    startclose, endempty, startcom, endcom, none };
+  void connect_as_lastchild(XMLNode *into, XMLNode *add);
+  void connect_as_nextsibling(XMLNode *into, XMLNode *add);
+  void disconnect(XMLNode *top);
 
-       //  creation members
+  //  utility routines
 
-   XMLNode* create_by_parsing(const std::string& xmlstr, size_t start, 
-                              size_t stop);
-   XMLNode* create_simple_tag(const std::string& tagname, const std::string& text,
-                              XMLNode* parent);
-   XMLNode* create_text_node(const std::string& text, XMLNode *parent);
-   XMLNode* create_copy(XMLNode* top);
+  std::string get_tag_name(const std::string &instr, size_t charstart,
+                           size_t charstop);
+  std::string trim(const std::string &str);
+  bool nonwhitespace(const std::string &instr, size_t charstart,
+                     size_t charstop);
+  void find_next_xml_event(const std::string &xmlstr, size_t start,
+                           size_t in_stop, XMLEvent &type, size_t &pos,
+                           bool incomment = false);
+  void find_next_xml_tag_event(const std::string &xmlstr, size_t start,
+                               size_t stop, XMLEvent &type, size_t &pos,
+                               std::string &textpassed);
+  void find_root_start_tag(const std::string &xmlstr, size_t start,
+                           size_t in_stop, size_t &pos);
+  XMLNode *parse_root_tag(const std::string &xmlstr, size_t &start, size_t stop,
+                          XMLEvent &type, size_t &pos,
+                          std::stack<XMLDoc::XMLNode *> &ancestors,
+                          std::stack<XMLDoc::XMLNode *> &lastchildren);
+  void parse_to_next_event(const std::string &xmlstr, size_t &curr, size_t stop,
+                           XMLEvent &lastevent,
+                           std::stack<XMLNode *> &ancestors,
+                           std::stack<XMLNode *> &lastchildren);
+  size_t get_declaration(const std::string &instr);
+  bool get_attribute(const std::string &instr, const std::string &attrkey,
+                     std::string &attrvalue, size_t &start, size_t &stop);
+  std::ostream &output(std::ostream &os, XMLNode *top, int indent = 0) const;
+  void delete_node(XMLNode *&node);
+  void add_reference(XMLHandler *ref);
+  bool remove_reference(XMLHandler *ref);
 
-       //  destruction members
+  friend class XMLHandler;
+  friend class XMLContentComparer;
 
-   void destroy(XMLNode*& top);  // top and descendents destroyed
-   void clear();                 // deallocate all memory
+  //  data members
 
-       //  connect/disconnect members
-
-   void connect_as_lastchild(XMLNode *into, XMLNode* add);
-   void connect_as_nextsibling(XMLNode *into, XMLNode* add);
-   void disconnect(XMLNode *top);
-
-
-       //  utility routines
-
-   std::string get_tag_name(const std::string& instr, size_t charstart, 
-                            size_t charstop);
-   std::string trim(const std::string& str);   
-   bool nonwhitespace(const std::string& instr, size_t charstart, size_t charstop);
-   void find_next_xml_event(const std::string& xmlstr, size_t start, 
-                            size_t in_stop, XMLEvent& type,  size_t& pos, 
-                            bool incomment=false);
-   void find_next_xml_tag_event(const std::string& xmlstr, size_t start, size_t stop,
-                                XMLEvent& type, size_t& pos, std::string& textpassed);
-   void find_root_start_tag(const std::string& xmlstr, size_t start, size_t in_stop,
-                            size_t& pos);
-   XMLNode* parse_root_tag(const std::string& xmlstr, size_t& start, size_t stop, 
-                           XMLEvent& type, size_t& pos, 
-                           std::stack<XMLDoc::XMLNode*>& ancestors,
-                           std::stack<XMLDoc::XMLNode*>& lastchildren);
-   void parse_to_next_event(const std::string& xmlstr, size_t& curr, size_t stop, 
-                            XMLEvent& lastevent, std::stack<XMLNode*>& ancestors,
-                            std::stack<XMLNode*>& lastchildren);
-   size_t get_declaration(const std::string& instr);
-   bool get_attribute(const std::string& instr, const std::string& attrkey,
-                      std::string& attrvalue, size_t& start, size_t& stop);
-   std::ostream& output(std::ostream& os, XMLNode* top, int indent=0) const;
-   void delete_node(XMLNode*& node);
-   void add_reference(XMLHandler *ref);
-   bool remove_reference(XMLHandler *ref);
-
-   friend class XMLHandler;
-   friend class XMLContentComparer;
-
-      //  data members
-
-   XMLNode *root;
-   std::string declaration;
-   std::set< XMLHandler* > refset; // the XMLHandler objects that point to this
-
+  XMLNode *root;
+  std::string declaration;
+  std::set<XMLHandler *> refset; // the XMLHandler objects that point to this
 };
-
-
 
 // *********************************************************
 
+class XMLHandler {
 
-class XMLHandler
-{
+  XMLDoc *content;          // pointer to XML data
+  XMLDoc::XMLNode *root;    // root element for this handler
+  XMLDoc::XMLNode *current; // current location in document
+  bool exceptions;
 
-   XMLDoc *content;              // pointer to XML data
-   XMLDoc::XMLNode *root;        // root element for this handler
-   XMLDoc::XMLNode *current;     // current location in document
-   bool exceptions;
+public:
+  enum copymode { subtree_pointer, subtree_copy, pointer, copy };
 
- public:
+  explicit XMLHandler(int excpts = 0)
+      : content(0), root(0), current(0), exceptions(bool(excpts)) {}
 
-   enum copymode { subtree_pointer, subtree_copy, pointer, copy };
-  
-   explicit XMLHandler(int excpts=0) 
-        : content(0), root(0), current(0), exceptions(bool(excpts)) {}
+  XMLHandler(const std::string &roottagname,
+             const std::string &content = std::string());
 
-   XMLHandler(const std::string& roottagname, 
-              const std::string& content=std::string());
+  XMLHandler(const char *roottagname, const char *rootcontent);
 
-   XMLHandler(const char* roottagname, const char* rootcontent);
+  explicit XMLHandler(const char *roottagname);
 
-   explicit XMLHandler(const char* roottagname);
+  // Copy constructor. If "mode" has value "subtree_pointer" or
+  // "subtree_copy", the current location of "xmlin" becomes the root
+  // element of this handler (cannot access ancestor nodes).  Otherwise,
+  // the root of this handler will be the same as "xmlin".  If "mode" has
+  // value "subtree_copy" or "copy", then a completely new deep copy is
+  // made and the root element is either the current location or the root
+  // of "xmlin"; otherwise, this is just a new pointer to the same data
+  // in memory and the current element is the same as in "xmlin".
 
-       // Copy constructor. If "mode" has value "subtree_pointer" or
-       // "subtree_copy", the current location of "xmlin" becomes the root 
-       // element of this handler (cannot access ancestor nodes).  Otherwise,
-       // the root of this handler will be the same as "xmlin".  If "mode" has
-       // value "subtree_copy" or "copy", then a completely new deep copy is 
-       // made and the root element is either the current location or the root
-       // of "xmlin"; otherwise, this is just a new pointer to the same data 
-       // in memory and the current element is the same as in "xmlin".
+  XMLHandler(const XMLHandler &xmlin, copymode mode = subtree_pointer);
 
-   XMLHandler(const XMLHandler& xmlin, copymode mode=subtree_pointer);
+  // Copy constructor.  First does a "seek_unique" looking for
+  // the tag with name specified in "newroottag".  Fails
+  // if not found or multiple instances found.  This creates a new
+  // pointer to a subtree of the same XML document.
 
-       // Copy constructor.  First does a "seek_unique" looking for
-       // the tag with name specified in "newroottag".  Fails
-       // if not found or multiple instances found.  This creates a new
-       // pointer to a subtree of the same XML document.
+  XMLHandler(const XMLHandler &xmlin, const std::string &newroottag);
 
-   XMLHandler(const XMLHandler& xmlin, const std::string& newroottag);
+  XMLHandler(const XMLHandler &xmlin, const char *newroottag);
 
-   XMLHandler(const XMLHandler& xmlin, const char* newroottag);
+  // no full copy, entire document retained
+  XMLHandler &operator=(const XMLHandler &xmlin);
 
+  XMLHandler &set(const std::string &roottagname,
+                  const std::string &rootcontent = std::string());
 
-          // no full copy, entire document retained
-   XMLHandler& operator=(const XMLHandler& xmlin); 
+  XMLHandler &set(const char *roottagname, const char *rootcontent);
 
-   XMLHandler& set(const std::string& roottagname, 
-                   const std::string& rootcontent=std::string());
+  XMLHandler &set(const char *roottagname);
 
-   XMLHandler& set(const char* roottagname, const char* rootcontent);
+  XMLHandler &set_root(const std::string &roottagname,
+                       const std::string &rootcontent = std::string());
 
-   XMLHandler& set(const char* roottagname);
+  XMLHandler &set_root(const char *roottagname, const char *rootcontent);
 
-   XMLHandler& set_root(const std::string& roottagname, 
-                        const std::string& rootcontent=std::string());
+  XMLHandler &set_root(const char *roottagname);
 
-   XMLHandler& set_root(const char* roottagname, const char* rootcontent);
+  XMLHandler &set_from_string(const std::string &xmlin);
 
-   XMLHandler& set_root(const char* roottagname);
+  XMLHandler &set_from_file(const std::string &filename);
 
-   XMLHandler& set_from_string(const std::string& xmlin);
+  XMLHandler &set(const XMLHandler &xmlin, copymode mode = subtree_pointer);
 
-   XMLHandler& set_from_file(const std::string& filename);
+  ~XMLHandler();
 
-   XMLHandler& set(const XMLHandler& xmlin, copymode mode=subtree_pointer);
+  XMLHandler &clear();
 
-   ~XMLHandler();
+  std::string
+  output(int indent = 0) const; // formatted with newlines, indentations
 
-   XMLHandler& clear();
+  std::string str() const; // just a simple string, no newlines nor indentations
 
+  std::string output_current(int indent = 0) const;
 
-   std::string output(int indent=0) const;  // formatted with newlines, indentations
+  bool good() const { return (current != 0); }
 
-   std::string str() const;   // just a simple string, no newlines nor indentations
+  bool fail() const { return (current == 0); }
 
-   std::string output_current(int indent=0) const;
+  void set_exceptions_on() { exceptions = true; }
 
+  void set_exceptions_off() { exceptions = false; }
 
-   bool good( ) const {return (current!=0);}
+  void set_exceptions(bool state) { exceptions = state; }
 
-   bool fail( ) const {return (current==0);}
+  bool get_exceptions() const { return exceptions; }
 
+  //  seek members (if seek fails, state of handler
+  //  is set to "bad", and if exceptions are turned
+  //  on, a string exception is thrown)
 
-   void set_exceptions_on() {exceptions=true;}
+  void seek_root();
 
-   void set_exceptions_off() {exceptions=false;}
+  void seek_next_sibling();
 
-   void set_exceptions(bool state) {exceptions=state;}
+  void seek_first_child();
 
-   bool get_exceptions() const {return exceptions;}
+  void seek_child(const std::string &tagname); // must be unique
 
+  void seek_parent();
 
-             //  seek members (if seek fails, state of handler
-             //  is set to "bad", and if exceptions are turned
-             //  on, a string exception is thrown)
+  void seek_next_node();
 
-   void seek_root();
+  void seek_next(const std::string &tagname);
 
-   void seek_next_sibling();
+  void seek_unique(const std::string &tagname); // starting from root
 
-   void seek_first_child();
+  std::list<XMLHandler>
+  find(const std::string &tagname) const; // starting from root
 
-   void seek_child(const std::string& tagname);  // must be unique
+  int count(const std::string &tagname) const; // starting from root
 
-   void seek_parent();
+  // various get members
 
-   void seek_next_node();
+  std::string get_node_name() const;
 
-   void seek_next(const std::string& tagname);
+  std::string get_node_value() const;
 
-   void seek_unique(const std::string& tagname);  // starting from root
+  bool is_text_valued() const;
 
-   std::list<XMLHandler> find(const std::string& tagname) const; // starting from root
+  std::string get_tag_name() const; // returns empty string if invalid
 
-   int count(const std::string& tagname) const;  // starting from root
+  std::string get_text_content() const; // returns empty string if invalid
 
+  bool is_simple_element() const;
 
-             // various get members
+  bool is_empty_tag() const;
 
-   std::string get_node_name() const;
+  // Insertion. "put_sibling" inserts as the
+  // next sibling of the current node, then the
+  // current node pointer is updated to the top
+  // node of the inserted node(s).  Fails if the
+  // current node is the root node. Exception thrown
+  // if failure occurs.  All XMLHanders pointing to
+  // the same content are changed.
 
-   std::string get_node_value() const;
+  void put_sibling(const XMLHandler &xmlin); // from root of xmlin
 
-   bool is_text_valued() const;
+  void put_sibling(const std::string &tagname);
 
-   std::string get_tag_name() const;     // returns empty string if invalid
+  void put_sibling(const std::string &tagname, const std::string &text_content);
 
-   std::string get_text_content() const; // returns empty string if invalid
+  void put_sibling_text_node(const std::string &text);
 
-   bool is_simple_element() const;
+  // Insertion. "put_child" inserts as the
+  // last child of the current node, but the
+  // current node pointer is NOT changed.  Fails
+  // if the current node is a text node.  Exception
+  // thrown if failure occurs. All XMLHanders pointing
+  // to the same content are changed.
 
-   bool is_empty_tag() const;
+  void put_child(const XMLHandler &xmlin); // from root of xmlin
 
+  void put_child(const std::string &tagname);
 
-             // Insertion. "put_sibling" inserts as the
-             // next sibling of the current node, then the
-             // current node pointer is updated to the top
-             // node of the inserted node(s).  Fails if the
-             // current node is the root node. Exception thrown
-             // if failure occurs.  All XMLHanders pointing to
-             // the same content are changed.
+  void put_child(const std::string &tagname, const std::string &text_content);
 
-   void put_sibling(const XMLHandler& xmlin);  // from root of xmlin
+  void put_child_text_node(const std::string &text);
 
-   void put_sibling(const std::string& tagname);
+  // Inserts or changes the textual content
+  // of the current node (if not a text node).
+  // Exception throw if failure occurs.  All XMLHanders
+  // pointing to the same content are changed.
 
-   void put_sibling(const std::string& tagname, 
-                    const std::string& text_content);
+  void set_text_content(const std::string &in_text_content);
 
-   void put_sibling_text_node(const std::string& text);
+  // Renames the current tag.
+  // Exception throw if failure occurs.  All XMLHanders
+  // pointing to the same content are changed.
 
+  void rename_tag(const std::string &new_tag_name);
 
-             // Insertion. "put_child" inserts as the
-             // last child of the current node, but the
-             // current node pointer is NOT changed.  Fails
-             // if the current node is a text node.  Exception 
-             // thrown if failure occurs. All XMLHanders pointing
-             // to the same content are changed.
+  // Erases current element (if not a text node).
+  // Exception thrown if failure occurs.  All XMLHanders
+  // pointing to the same content are changed.
 
-   void put_child(const XMLHandler& xmlin); // from root of xmlin
+  void erase_current_element();
 
-   void put_child(const std::string& tagname);
+  // Erases current node if a text node.
+  // Exception thrown if failure occurs. All XMLHanders
+  // pointing to the same content are changed.
 
-   void put_child(const std::string& tagname, 
-                  const std::string& text_content);
+  void erase_text_node();
 
-   void put_child_text_node(const std::string& text);
+  // Compares the XML content in current handler with that in
+  // "xmlh_cmp".  In doing the comparison, the
+  // order of sibling nodes is irrelevant, and textual content
+  // is compared token by token.  Integer tokens are compared as
+  // integers, and floating-point tokens are compared as
+  // floats.  If the difference between floats is less than
+  // "float_rel_tol", they are considered the same.
 
+  bool IsEqualContent(XMLHandler &xmlh_cmp, float float_rel_tol = 1e-4);
 
-             // Inserts or changes the textual content
-             // of the current node (if not a text node).
-             // Exception throw if failure occurs.  All XMLHanders
-             // pointing to the same content are changed.
+private:
+  void do_set(const std::string &roottagname, const std::string &rootcontent);
+  void do_set(const XMLHandler &xmlin, bool subtree = true,
+              bool makecopy = false);
+  void do_set_from_string(const std::string &xmlin);
+  bool seek_next_sib_or_parent();
+  std::string empty_string() const;
 
-   void set_text_content(const std::string& in_text_content);
-
-
-             // Renames the current tag.
-             // Exception throw if failure occurs.  All XMLHanders
-             // pointing to the same content are changed.
-
-   void rename_tag(const std::string& new_tag_name);
-
-             // Erases current element (if not a text node).
-             // Exception thrown if failure occurs.  All XMLHanders 
-             // pointing to the same content are changed.
-
-   void erase_current_element();
-
-
-             // Erases current node if a text node.
-             // Exception thrown if failure occurs. All XMLHanders 
-             // pointing to the same content are changed.
-
-   void erase_text_node();
-
-             // Compares the XML content in current handler with that in 
-             // "xmlh_cmp".  In doing the comparison, the
-             // order of sibling nodes is irrelevant, and textual content
-             // is compared token by token.  Integer tokens are compared as
-             // integers, and floating-point tokens are compared as 
-             // floats.  If the difference between floats is less than
-             // "float_rel_tol", they are considered the same.
-
-   bool IsEqualContent(XMLHandler& xmlh_cmp, float float_rel_tol=1e-4);
-
-
- private:
-  
-   void do_set(const std::string& roottagname, 
-               const std::string& rootcontent);
-   void do_set(const XMLHandler& xmlin, bool subtree=true, 
-               bool makecopy=false);
-   void do_set_from_string(const std::string& xmlin);
-   bool seek_next_sib_or_parent();
-   std::string empty_string() const;
-
-   friend class XMLDoc;
-   friend class XMLContentComparer;
-
+  friend class XMLDoc;
+  friend class XMLContentComparer;
 };
 
+//  class used by XMLHandler for content comparison
 
-        //  class used by XMLHandler for content comparison
+class XMLContentComparer {
 
+  float m_float_rel_tol;
+  XMLContentComparer(float tol = 1e-4) : m_float_rel_tol(std::abs(tol)) {}
 
-class XMLContentComparer
-{
+public:
+  XMLContentComparer(const XMLContentComparer &in)
+      : m_float_rel_tol(in.m_float_rel_tol) {}
+  XMLContentComparer &operator=(const XMLContentComparer &in) {
+    m_float_rel_tol = in.m_float_rel_tol;
+    return *this;
+  }
+  ~XMLContentComparer() {}
 
-   float m_float_rel_tol;
-   XMLContentComparer(float tol=1e-4) : m_float_rel_tol(std::abs(tol)) {}
+private:
+  typedef XMLDoc::XMLNode *xmlNodePtr;
+  bool IsEqual(XMLHandler &xmlh1, XMLHandler &xmlh2);
+  void get_next_token(const char *&start, int &nchar);
+  int token_strcmp(const char *a, int na, const char *b, int nb);
+  bool is_integer_token(const char *const a, int nchar, int &ivalue);
+  bool is_float_token(const char *const a, int nchar, float &fvalue);
+  int token_content_cmp(const char *a, int na, const char *b, int nb);
+  int content_cmp(const char *a, const char *b);
+  int sibling_node_cmp(xmlNodePtr a_node, xmlNodePtr b_node);
+  int node_cmp(xmlNodePtr a_node, xmlNodePtr b_node);
 
- public:
-   XMLContentComparer(const XMLContentComparer& in) : m_float_rel_tol(in.m_float_rel_tol) {}
-   XMLContentComparer& operator=(const XMLContentComparer& in) 
-      {m_float_rel_tol=in.m_float_rel_tol; return *this;}
-   ~XMLContentComparer() {}
+  friend class XMLDoc;
+  friend class XMLHandler;
 
- private:
-   typedef XMLDoc::XMLNode*  xmlNodePtr;
-   bool IsEqual(XMLHandler& xmlh1, XMLHandler& xmlh2);
-   void get_next_token(const char*& start, int& nchar);
-   int token_strcmp(const char *a, int na, const char *b, int nb);
-   bool is_integer_token(const char *const a, int nchar, int& ivalue);
-   bool is_float_token(const char *const a, int nchar, float& fvalue);
-   int token_content_cmp(const char *a, int na, const char *b, int nb);
-   int content_cmp(const char *a, const char *b);
-   int sibling_node_cmp(xmlNodePtr a_node, xmlNodePtr b_node);
-   int node_cmp(xmlNodePtr a_node, xmlNodePtr b_node);
-
-   friend class XMLDoc;
-   friend class XMLHandler;
-
- public:
-   bool operator()(xmlNodePtr a_node, xmlNodePtr b_node); // less than op
-
+public:
+  bool operator()(xmlNodePtr a_node, xmlNodePtr b_node); // less than op
 };
 
+// ******************************************************************
 
- // ******************************************************************
+//  Helper routines
 
-         //  Helper routines
-
-inline std::ostream& operator<<(std::ostream& os, const XMLHandler& xmlh)
-{
- os << xmlh.output();
- return os;
+inline std::ostream &operator<<(std::ostream &os, const XMLHandler &xmlh) {
+  os << xmlh.output();
+  return os;
 }
 
-
 // *********************************************************
 
-      //  Extract a value from a string, throwing an exception on failure.
+//  Extract a value from a string, throwing an exception on failure.
 
 template <typename T>
-void primitive_extract_from_string(const std::string& pstring, T& result, 
-                                   const char* ptype) 
-{
- try{
+void primitive_extract_from_string(const std::string &pstring, T &result,
+                                   const char *ptype) {
+  try {
     std::istringstream is(pstring);
-    std::ios::iostate state=is.exceptions();
+    std::ios::iostate state = is.exceptions();
     is.exceptions(std::ios::failbit);
     is.setf(std::ios_base::boolalpha);
-       // try to read the type from the istringstream. 
-       //   bool's should be "true" or "false" strings 
-    is  >> result;
-       // turn off exceptions on failure
+    // try to read the type from the istringstream.
+    //   bool's should be "true" or "false" strings
+    is >> result;
+    // turn off exceptions on failure
     is.exceptions(state);
-       // look for non white spaces in remainder of stream
+    // look for non white spaces in remainder of stream
     char c;
-    while (is.get(c),!is.eof()){
-       if (!isspace(c)) throw(std::invalid_argument("Error"));}}
- catch(const std::exception& xp){
-    throw(std::runtime_error(std::string("Error: Failed to convert string: ")
-             +pstring+std::string(" to ")+std::string(ptype)));}
+    while (is.get(c), !is.eof()) {
+      if (!isspace(c))
+        throw(std::invalid_argument("Error"));
+    }
+  } catch (const std::exception &xp) {
+    throw(std::runtime_error(std::string("Error: Failed to convert string: ") +
+                             pstring + std::string(" to ") +
+                             std::string(ptype)));
+  }
 }
 
-inline void extract_from_string(const std::string& pstring, std::string& result) 
-{ result=pstring;}
+inline void extract_from_string(const std::string &pstring,
+                                std::string &result) {
+  result = pstring;
+}
 
-inline void extract_from_string(const std::string& pstring, int& result) 
-{ primitive_extract_from_string<int>(pstring, result, "int");}
+inline void extract_from_string(const std::string &pstring, int &result) {
+  primitive_extract_from_string<int>(pstring, result, "int");
+}
 
-inline void extract_from_string(const std::string& pstring, unsigned int& result) 
-{ primitive_extract_from_string<unsigned int>(pstring, result, "unsigned int");}
-    
-inline void extract_from_string(const std::string& pstring, short int& result) 
-{ primitive_extract_from_string<short int>(pstring, result,"short int");}
+inline void extract_from_string(const std::string &pstring,
+                                unsigned int &result) {
+  primitive_extract_from_string<unsigned int>(pstring, result, "unsigned int");
+}
 
-inline void extract_from_string(const std::string& pstring, unsigned short int& result) 
-{ primitive_extract_from_string<unsigned short int>(pstring, result, "unsigned short int");}
+inline void extract_from_string(const std::string &pstring, short int &result) {
+  primitive_extract_from_string<short int>(pstring, result, "short int");
+}
 
-inline void extract_from_string(const std::string& pstring, long int& result) 
-{ primitive_extract_from_string<long int>(pstring, result, "long int");}
-    
-inline void extract_from_string(const std::string& pstring, unsigned long int& result) 
-{ primitive_extract_from_string<unsigned long int>(pstring, result, "unsigned long int");}
-    
-inline void extract_from_string(const std::string& pstring, float& result) 
-{ primitive_extract_from_string<float>(pstring, result, "float");}
+inline void extract_from_string(const std::string &pstring,
+                                unsigned short int &result) {
+  primitive_extract_from_string<unsigned short int>(pstring, result,
+                                                    "unsigned short int");
+}
 
-inline void extract_from_string(const std::string& pstring, double& result) 
-{ primitive_extract_from_string<double>(pstring, result, "double");}
+inline void extract_from_string(const std::string &pstring, long int &result) {
+  primitive_extract_from_string<long int>(pstring, result, "long int");
+}
 
-inline void extract_from_string(const std::string& pstring, bool& result) 
-{ primitive_extract_from_string<bool>(pstring, result, "bool");}
+inline void extract_from_string(const std::string &pstring,
+                                unsigned long int &result) {
+  primitive_extract_from_string<unsigned long int>(pstring, result,
+                                                   "unsigned long int");
+}
 
+inline void extract_from_string(const std::string &pstring, float &result) {
+  primitive_extract_from_string<float>(pstring, result, "float");
+}
 
+inline void extract_from_string(const std::string &pstring, double &result) {
+  primitive_extract_from_string<double>(pstring, result, "double");
+}
 
+inline void extract_from_string(const std::string &pstring, bool &result) {
+  primitive_extract_from_string<bool>(pstring, result, "bool");
+}
 
 template <typename T>
-void primitive_vector_extract(const std::string& pstring, std::vector<T>& result, 
-                              const char* ptype) 
-{
- try{
+void primitive_vector_extract(const std::string &pstring,
+                              std::vector<T> &result, const char *ptype) {
+  try {
     result.clear();
     std::istringstream is(pstring);
     is.exceptions(std::ios::badbit);
     is.setf(std::ios_base::boolalpha);
     T tokenvalue;
-    while (is >> tokenvalue) result.push_back(tokenvalue);
-    if ((!is.eof()) && is.fail()){
-       throw(std::invalid_argument("Error in reading vector "));}}
- catch(const std::exception& xp){
-    throw(std::runtime_error(std::string("Error: Failed to read vector: ")
-             +pstring));}
+    while (is >> tokenvalue)
+      result.push_back(tokenvalue);
+    if ((!is.eof()) && is.fail()) {
+      throw(std::invalid_argument("Error in reading vector "));
+    }
+  } catch (const std::exception &xp) {
+    throw(std::runtime_error(std::string("Error: Failed to read vector: ") +
+                             pstring));
+  }
 }
 
+inline void extract_from_string(const std::string &pstring,
+                                std::vector<int> &result) {
+  primitive_vector_extract(pstring, result, "int");
+}
 
-inline void extract_from_string(const std::string& pstring, std::vector<int>& result)
-{ primitive_vector_extract(pstring, result, "int"); }
+inline void extract_from_string(const std::string &pstring,
+                                std::vector<unsigned int> &result) {
+  primitive_vector_extract(pstring, result, "unsigned int");
+}
 
-inline void extract_from_string(const std::string& pstring, std::vector<unsigned int>& result)
-{ primitive_vector_extract(pstring, result, "unsigned int"); }
+inline void extract_from_string(const std::string &pstring,
+                                std::vector<short int> &result) {
+  primitive_vector_extract(pstring, result, "short int");
+}
 
-inline void extract_from_string(const std::string& pstring, std::vector<short int>& result)
-{ primitive_vector_extract(pstring, result, "short int"); }
+inline void extract_from_string(const std::string &pstring,
+                                std::vector<unsigned short int> &result) {
+  primitive_vector_extract(pstring, result, "unsigned short int");
+}
 
-inline void extract_from_string(const std::string& pstring, std::vector<unsigned short int>& result)
-{ primitive_vector_extract(pstring, result, "unsigned short int"); }
+inline void extract_from_string(const std::string &pstring,
+                                std::vector<long int> &result) {
+  primitive_vector_extract(pstring, result, "long int");
+}
 
-inline void extract_from_string(const std::string& pstring, std::vector<long int>& result)
-{ primitive_vector_extract(pstring, result, "long int"); }
+inline void extract_from_string(const std::string &pstring,
+                                std::vector<unsigned long int> &result) {
+  primitive_vector_extract(pstring, result, "unsigned long int");
+}
 
-inline void extract_from_string(const std::string& pstring, std::vector<unsigned long int>& result)
-{ primitive_vector_extract(pstring, result, "unsigned long int"); }
+inline void extract_from_string(const std::string &pstring,
+                                std::vector<float> &result) {
+  primitive_vector_extract(pstring, result, "float");
+}
 
-inline void extract_from_string(const std::string& pstring, std::vector<float>& result)
-{ primitive_vector_extract(pstring, result, "float"); }
+inline void extract_from_string(const std::string &pstring,
+                                std::vector<double> &result) {
+  primitive_vector_extract(pstring, result, "double");
+}
 
-inline void extract_from_string(const std::string& pstring, std::vector<double>& result)
-{ primitive_vector_extract(pstring, result, "double"); }
-
-inline void extract_from_string(const std::string& pstring, std::vector<bool>& result)
-{ primitive_vector_extract(pstring, result, "bool"); }
-
-
+inline void extract_from_string(const std::string &pstring,
+                                std::vector<bool> &result) {
+  primitive_vector_extract(pstring, result, "bool");
+}
 
 // **********************************************************************
 
+//  Conversion of numerical data to string.
 
-      //  Conversion of numerical data to string.
-
-template <typename T>
-std::string numerical_to_string(const T& data) 
-{
- try{
+template <typename T> std::string numerical_to_string(const T &data) {
+  try {
     std::ostringstream oss;
     oss.setf(std::ios_base::boolalpha);
     oss.precision(12);
     oss << data;
-    return oss.str();}
- catch(const std::exception& xp){ 
-    throw(std::runtime_error("Error: Failed to convert numerical to string: data"));}
+    return oss.str();
+  } catch (const std::exception &xp) {
+    throw(std::runtime_error(
+        "Error: Failed to convert numerical to string: data"));
+  }
 }
 
-
-inline std::string make_string(const int& data) 
-{
- return numerical_to_string<int>(data);
+inline std::string make_string(const int &data) {
+  return numerical_to_string<int>(data);
 }
 
-inline std::string make_string(const unsigned int& data) 
-{
- return numerical_to_string<unsigned int>(data);
-}
-    
-inline std::string make_string(const short int& data) 
-{
- return numerical_to_string<short int>(data);
+inline std::string make_string(const unsigned int &data) {
+  return numerical_to_string<unsigned int>(data);
 }
 
-inline std::string make_string(const unsigned short int& data) 
-{
- return numerical_to_string<unsigned short int>(data);
+inline std::string make_string(const short int &data) {
+  return numerical_to_string<short int>(data);
 }
 
-inline std::string make_string(const long int& data) 
-{
- return numerical_to_string<long int>(data);
-}
-    
-inline std::string make_string(const unsigned long int& data) 
-{
- return numerical_to_string<unsigned long int>(data);
-}
-    
-inline std::string make_string(const float& data) 
-{
- return numerical_to_string<float>(data);
+inline std::string make_string(const unsigned short int &data) {
+  return numerical_to_string<unsigned short int>(data);
 }
 
-inline std::string make_string(const double& data) 
-{
- return numerical_to_string<double>(data);
+inline std::string make_string(const long int &data) {
+  return numerical_to_string<long int>(data);
 }
 
-inline std::string make_string(const bool& data) 
-{
- return numerical_to_string<bool>(data);
+inline std::string make_string(const unsigned long int &data) {
+  return numerical_to_string<unsigned long int>(data);
 }
 
-
-template <typename T>
-std::string make_string(const std::vector<T>& datavec)
-{
- std::string tmp;
- if (datavec.size()==0) return tmp;
- tmp=make_string(datavec[0]);
- for (typename std::vector<T>::size_type k=1;k<datavec.size();++k)
-    tmp+=" "+make_string(datavec[k]);
- return tmp;
+inline std::string make_string(const float &data) {
+  return numerical_to_string<float>(data);
 }
 
-
-inline std::string scientific_to_string(const float& data) 
-{
- std::ostringstream oss;
- oss.precision(10);
- oss.setf(std::ios::scientific);
- oss << data;
- return oss.str();
+inline std::string make_string(const double &data) {
+  return numerical_to_string<double>(data);
 }
 
-inline std::string scientific_to_string(const double& data) 
-{
- std::ostringstream oss;
- oss.precision(18);
- oss.setf(std::ios::scientific);
- oss << data;
- return oss.str();
+inline std::string make_string(const bool &data) {
+  return numerical_to_string<bool>(data);
+}
+
+template <typename T> std::string make_string(const std::vector<T> &datavec) {
+  std::string tmp;
+  if (datavec.size() == 0)
+    return tmp;
+  tmp = make_string(datavec[0]);
+  for (typename std::vector<T>::size_type k = 1; k < datavec.size(); ++k)
+    tmp += " " + make_string(datavec[k]);
+  return tmp;
+}
+
+inline std::string scientific_to_string(const float &data) {
+  std::ostringstream oss;
+  oss.precision(10);
+  oss.setf(std::ios::scientific);
+  oss << data;
+  return oss.str();
+}
+
+inline std::string scientific_to_string(const double &data) {
+  std::ostringstream oss;
+  oss.precision(18);
+  oss.setf(std::ios::scientific);
+  oss << data;
+  return oss.str();
 }
 
 // ******************************************************************
 
-  // Removes tabs and newline characters, then trims
-  // leading and trailing blanks.
+// Removes tabs and newline characters, then trims
+// leading and trailing blanks.
 
-std::string tidyString(const std::string& str);    
+std::string tidyString(const std::string &str);
 
+// first tidies the string in "str", then removes any
+// leading path/subdirectory information in the file name
 
-  // first tidies the string in "str", then removes any
-  // leading path/subdirectory information in the file name
+std::string tidyFileName(const std::string &str);
 
-std::string tidyFileName(const std::string& str);
-
-
-
-  // converts an integer to a string
+// converts an integer to a string
 
 std::string int_to_string(int ival);
 
-
 // *********************************************************
 
-    // This routine calls an xml read inside a try block
-    // and outputs an informative message if the read fails.
-    // The added parameter is a string which should be the
-    // name of the class which called this function.
-    // Note that a **tag name** should be used.
+// This routine calls an xml read inside a try block
+// and outputs an informative message if the read fails.
+// The added parameter is a string which should be the
+// name of the class which called this function.
+// Note that a **tag name** should be used.
 
 template <typename T>
-void xmlread(XMLHandler& xmlin, const std::string& tagname, T& val,
-             const std::string& callingClass)
-{
- XMLHandler xmlh(xmlin);
- try{
-    bool state=xmlh.get_exceptions();
+void xmlread(XMLHandler &xmlin, const std::string &tagname, T &val,
+             const std::string &callingClass) {
+  XMLHandler xmlh(xmlin);
+  try {
+    bool state = xmlh.get_exceptions();
     xmlh.set_exceptions_on();
     xmlh.seek_unique(tagname);
-    std::string content=xmlh.get_text_content();
-    extract_from_string(content,val);
-    xmlh.set_exceptions(state);}
- catch(const std::exception& err_msg){
-    throw;}
+    std::string content = xmlh.get_text_content();
+    extract_from_string(content, val);
+    xmlh.set_exceptions(state);
+  } catch (const std::exception &err_msg) {
+    throw;
+  }
 }
 
 template <typename T>
-void xmlreadchild(XMLHandler& xmlin, const std::string& tagname, T& val,
-                  const std::string& callingClass)
-{
- XMLHandler xmlh(xmlin);
- try{
-    bool state=xmlh.get_exceptions();
+void xmlreadchild(XMLHandler &xmlin, const std::string &tagname, T &val,
+                  const std::string &callingClass) {
+  XMLHandler xmlh(xmlin);
+  try {
+    bool state = xmlh.get_exceptions();
     xmlh.set_exceptions_on();
     xmlh.seek_child(tagname);
-    std::string content=xmlh.get_text_content();
-    extract_from_string(content,val);
-    xmlh.set_exceptions(state);}
- catch(const std::exception& err_msg){
-    throw;}
+    std::string content = xmlh.get_text_content();
+    extract_from_string(content, val);
+    xmlh.set_exceptions(state);
+  } catch (const std::exception &err_msg) {
+    throw;
+  }
 }
 
 // *********************************************************
 
-    // This returns the number of times that the tag "tagname"
-    // is found in the descendents of the current context.
-    // A **tag name** should be input.
+// This returns the number of times that the tag "tagname"
+// is found in the descendents of the current context.
+// A **tag name** should be input.
 
-int xml_tag_count(XMLHandler& xmlh, const std::string& tagname);
+int xml_tag_count(XMLHandler &xmlh, const std::string &tagname);
 
-void xml_tag_assert(XMLHandler& xmlh, const std::string& tagname);
+void xml_tag_assert(XMLHandler &xmlh, const std::string &tagname);
 
-void xml_tag_assert(XMLHandler& xmlh, const std::string& tagname,
-                    const std::string& infoname);
+void xml_tag_assert(XMLHandler &xmlh, const std::string &tagname,
+                    const std::string &infoname);
 
-void xml_child_assert(XMLHandler& xmlh, const std::string& tagname,
-                      const std::string& infoname);
+void xml_child_assert(XMLHandler &xmlh, const std::string &tagname,
+                      const std::string &infoname);
 
 // *********************************************************
 
 template <typename T>
-bool xmlreadif(XMLHandler& xmlh, const std::string& tagname, T& val,
-               const std::string& callingClass)
-{
- if (xml_tag_count(xmlh,tagname)==1){
-    xmlread(xmlh,tagname,val,callingClass);
-    return true;}
- return false;
+bool xmlreadif(XMLHandler &xmlh, const std::string &tagname, T &val,
+               const std::string &callingClass) {
+  if (xml_tag_count(xmlh, tagname) == 1) {
+    xmlread(xmlh, tagname, val, callingClass);
+    return true;
+  }
+  return false;
 }
 
 // *********************************************************
 
 template <typename T>
-void assertEqual(const T& obj1, const T& obj2, const std::string& callingClass)
-{
- try{
-    obj1.checkEqual(obj2);}
- catch(const std::exception& err_msg){
-    std::cerr << err_msg.what() <<" in "<<callingClass<<std::endl;
-    exit(1);}
+void assertEqual(const T &obj1, const T &obj2,
+                 const std::string &callingClass) {
+  try {
+    obj1.checkEqual(obj2);
+  } catch (const std::exception &err_msg) {
+    std::cerr << err_msg.what() << " in " << callingClass << std::endl;
+    exit(1);
+  }
 }
- 
-// *********************************************************
-
-   // outputs the current context for a failed xml read
-   // (typically in an Info constructor)
-
-void xmlreadfail(XMLHandler& xmlh, const std::string& infoname, 
-                 const std::string& message="");
-
 
 // *********************************************************
 
+// outputs the current context for a failed xml read
+// (typically in an Info constructor)
 
+void xmlreadfail(XMLHandler &xmlh, const std::string &infoname,
+                 const std::string &message = "");
 
-  // Compares the XML content in "doc1" and "doc2" and returns
-  // "true" if they are the same.  In doing the comparison, the
-  // order of sibling nodes is irrelevant, and textual content
-  // is compared token by token.  Integer tokens are compared as
-  // integers, and floating-point tokens are compared as 
-  // floats.  If the difference between floats is less than
-  // "float_rel_tol", they are considered the same.
+// *********************************************************
 
+// Compares the XML content in "doc1" and "doc2" and returns
+// "true" if they are the same.  In doing the comparison, the
+// order of sibling nodes is irrelevant, and textual content
+// is compared token by token.  Integer tokens are compared as
+// integers, and floating-point tokens are compared as
+// floats.  If the difference between floats is less than
+// "float_rel_tol", they are considered the same.
 
-bool xmlContentIsEqual(const std::string& doc1, const std::string& doc2, 
+bool xmlContentIsEqual(const std::string &doc1, const std::string &doc2,
                        float float_rel_tol = 1e-6);
 
+// Same as above, but applied to XMLHandlers "xmlh1" and "xmlh2".
 
-  // Same as above, but applied to XMLHandlers "xmlh1" and "xmlh2".
-
-bool xmlContentIsEqual(XMLHandler& xmlh1, XMLHandler& xmlh2, 
+bool xmlContentIsEqual(XMLHandler &xmlh1, XMLHandler &xmlh2,
                        float float_rel_tol = 1e-6);
 
-  // Same as above, but first tries a straight string comparison.
-  // If strings are the same, returns true; otherwise, an
-  // XML content comparison is made.
+// Same as above, but first tries a straight string comparison.
+// If strings are the same, returns true; otherwise, an
+// XML content comparison is made.
 
-bool headerMatch(const std::string& doc1, const std::string& doc2, 
+bool headerMatch(const std::string &doc1, const std::string &doc2,
                  float float_rel_tol = 1e-6);
 
-
 // *********************************************************
 
-std::vector<std::string> string_split(const std::string& astr, char delimiter);
+std::vector<std::string> string_split(const std::string &astr, char delimiter);
 
-std::string string_extract(const std::string& astr, char left, char right);
+std::string string_extract(const std::string &astr, char left, char right);
 
-int char_count(const std::string& astr, char delimiter);
+int char_count(const std::string &astr, char delimiter);
 
 // *********************************************************
 #endif
