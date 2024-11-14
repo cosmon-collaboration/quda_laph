@@ -9,20 +9,20 @@ set(CMAKE_CXX_STANDARD 17)
 include(GNUInstallDirs)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
-option(PARALLEL_BUILD "Compile in openmp?" ON )
+option(PARALLEL_BUILD "Compile with mpicc/mpic++" ON )
 
 set(VALID_BLAS_LIBS
   OPENBLAS
   GSLCBLAS)
-set(HOSTCBLAS "OPENBLAS" CACHE STRING "Choose the host BLAS library${VALID_BLAS_LIBS}")
+set(HOSTCBLAS "OPENBLAS" CACHE STRING "Choose the host BLAS library ${VALID_BLAS_LIBS}")
 set_property(CACHE HOSTCBLAS PROPERTY STRINGS ${VALID_BLAS_LIBS})
 
-set(BLAS_INC "/usr/include/openblas/" CACHE STRING "Includ directory for BLAS library")
+set(BLAS_INC "/usr/include/openblas/" CACHE STRING "Include directory for BLAS library")
 set(BLAS_LIB "/usr/lib/openblas/" CACHE STRING "Lib directory for blas library")
-set(GPUTOOLKIT_DIR "/usr/local/cuda-11.4/" CACHE STRING "Specify where GPYU toolkit is")
+set(GPUTOOLKIT_DIR "/usr/local/cuda-11.4/" CACHE STRING "Specify where GPU toolkit is")
 set(QUDA_DIR "" CACHE STRING "Tell us where the Quda install is")
 
-option(OPENMP "Compile in openmp?" ON )
+option(OPENMP "Compile/link openmp" ON )
 
 set(VALID_BUILD_TYPES
   DEVEL
