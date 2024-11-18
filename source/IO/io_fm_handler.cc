@@ -449,8 +449,6 @@ void IOFMHandler::compute_lattice_checksum(char *data, size_t bytes_per_site,
 
 #endif
 
-// *************************************************************************
-
 IOFMHandler::IOFMHandler(bool global)
     : read_only(true), openflag(false), read_mode(true), global_mode(global),
       endian_format('U'), endian_convert(false), checksum_on(false),
@@ -899,8 +897,6 @@ string IOFMHandler::tidyString(const string &str) {
   return tmp.substr(start, len);
 }
 
-// *******************************************************************
-
 //   Main input/output routines that do the byte-swapping (if needed),
 //   update the check sum, and do the read/write.
 
@@ -1093,8 +1089,6 @@ size_t IOFMHandler::numbytes(const std::vector<LattField> &data) {
   return sizeof(int);
 }
 
-// *******************************************************************
-
 void IOFMHandler::write(const std::string &output) {
   int n = output.length();
   write_common((const char *)&n, sizeof(int), 1);
@@ -1131,11 +1125,7 @@ size_t numbytes(IOFMHandler &ioh, const std::string &output) {
   return sizeof(int) + output.length();
 }
 
-// *************************************************
-
 #ifdef ARCH_PARALLEL
-
-// **************************************************************************
 
 //  Objects of this class contain info about multi-dimensional arrays
 //  distributed across the MPI ranks.  Blocking assumed, column major site
@@ -1297,7 +1287,7 @@ void DistArrayViewInfo::resetBytes(IOH_int bytes_per_element) {
 }
 
 #else
-// ***************************************************************
+
 // serial code
 
 DistArrayViewInfo::DistArrayViewInfo(const DistArrayViewInfo &in)
@@ -1379,6 +1369,5 @@ void DistArrayViewInfo::resetBytes(IOH_int bytes_per_element) {
 }
 
 #endif
-
-// ***************************************************************
+  
 } // namespace LaphEnv

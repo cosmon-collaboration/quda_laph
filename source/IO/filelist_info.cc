@@ -7,8 +7,6 @@ using namespace std;
 
 namespace LaphEnv {
 
-// *************************************************************
-
 FileListInfo::FileListInfo(const XMLHandler &xml_in) {
   XMLHandler xmlr(xml_in, "FileListInfo");
   set_info(xmlr);
@@ -136,6 +134,4 @@ string FileListInfo::str() const {
   output(xmlout);
   return xmlout.str();
 }
-
-// ***************************************************************
 } // namespace LaphEnv

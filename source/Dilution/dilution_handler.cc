@@ -6,12 +6,9 @@ using namespace std;
 
 namespace LaphEnv {
 
-// *************************************************************
-
 DilutionHandler::DilutionHandler()
-    : dilPtr(0), Textent(0), // minTime(-1),
-      /*maxTime(-1),*/ nEigvecs(0), nSpinProjectors(0), nEigvecProjectors(0),
-      nTimeProjectors(0), Nspin(4) {}
+  : dilPtr(0), Textent(0), nEigvecs(0), nSpinProjectors(0), nEigvecProjectors(0),
+    nTimeProjectors(0), Nspin(4) {}
 
 DilutionHandler::DilutionHandler(const DilutionSchemeInfo &dilScheme,
                                  const QuarkSmearingInfo &qSmear,
@@ -36,8 +33,6 @@ void DilutionHandler::clear() {
   }
   dilPtr = 0;
   Textent = 0;
-  // minTime=-1;
-  // maxTime=-1;
   nEigvecs = 0;
   nSpinProjectors = 0;
   nEigvecProjectors = 0;
@@ -61,8 +56,6 @@ void DilutionHandler::set_info(const DilutionSchemeInfo &dilScheme,
     errorLaph("could not allocate memory for DilutionSchemeInfo");
   }
   Textent = LayoutInfo::getLattExtents()[3];
-  // minTime=gaugeinfo.getMinTime();
-  // maxTime=gaugeinfo.getMaxTime();
   nEigvecs = qSmear.getNumberOfLaplacianEigenvectors();
   Nspin = UpperSpinComponentsOnly ? 2 : 4;
 
@@ -72,18 +65,6 @@ void DilutionHandler::set_info(const DilutionSchemeInfo &dilScheme,
                     which_eigvec_proj, nEigvecProjectors);
   setProjectorMasks(timeProjs, dilPtr->timeDilutionType, Textent,
                     which_time_proj, nTimeProjectors);
-
-  // Throw out times outside [minTime, maxTime]
-  // leaves us with empty dilution projectors; get-routines throw if one
-  // of these is actually requested
-  /* for (vector<list<int>>::iterator tprojIt = timeProjs.begin();
-          tprojIt != timeProjs.end(); ++tprojIt) {
-     for (list<int>::iterator tIt = tprojIt->begin(); tIt != tprojIt->end();) {
-       if (*tIt < minTime || *tIt > maxTime) tIt = tprojIt->erase(tIt);
-       else tIt++;
-     }
-   }*/
-
   spin_proj_indices.resize(nSpinProjectors * nEigvecProjectors);
   eigvec_proj_indices.resize(nSpinProjectors * nEigvecProjectors);
   int count = 0;
@@ -97,7 +78,7 @@ void DilutionHandler::set_info(const DilutionSchemeInfo &dilScheme,
 
 bool DilutionHandler::isInfoSet() const {
   return ((dilPtr != 0) && (Textent > 0) &&
-          (nEigvecs > 0) /*&&(minTime>-1)&&(maxTime>-1)*/);
+          (nEigvecs > 0) );
 }
 
 const DilutionSchemeInfo &DilutionHandler::getDilutionSchemeInfo() const {
@@ -140,7 +121,6 @@ int DilutionHandler::getEigvecProjectorIndex(int spineigvec_index) const {
 int DilutionHandler::getTimeProjectorIndex(int time_val) const {
   check_info_set("getTimeProjectorIndex");
   if ((time_val < 0) || (time_val >= Textent)) {
-    // if ((time_val<minTime)||(time_val>maxTime)){
     throw(std::invalid_argument("bad time value"));
   }
   return which_time_proj[time_val];
@@ -196,7 +176,6 @@ bool DilutionHandler::isOnTime(int time_proj_index, int time_val) const {
   check_info_set("isOnTime");
   check_valid_timeproj(time_proj_index);
   if ((time_val < 0) || (time_val >= Textent)) {
-    // if ((time_val<minTime)||(time_val>maxTime)){
     throw(std::invalid_argument("invalid time index"));
   }
   return (which_time_proj[time_val] == time_proj_index);
@@ -293,6 +272,4 @@ bool DilutionHandler::isValidSpinEigvecProjectorIndex(
 bool DilutionHandler::isFullTimeDilution() const {
   return (dilPtr->timeDilutionType == 1);
 }
-
-// *************************************************************
 } // namespace LaphEnv

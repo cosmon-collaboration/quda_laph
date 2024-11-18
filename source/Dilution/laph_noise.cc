@@ -6,8 +6,6 @@ using namespace std;
 
 namespace LaphEnv {
 
-// *************************************************************
-
 UniformDeviate32::UniformDeviate32() {
   Reseed(0); // choose seed based on clock time
 }
@@ -40,8 +38,6 @@ void UniformDeviate32::Reseed(uint32 seed) {
   }
   left = 0;
 }
-
-// *************************************************************
 
 LaphZnNoise::LaphZnNoise(int zn, const uint32 &seed) : rng(seed), values(zn) {
   if (zn == 4) {
@@ -159,13 +155,7 @@ Array<cmplx> LaphZnNoise::generateLapHQuarkSource(int timeValue, int Textent,
     for (int s = 0; s < Nspin; s++)
       for (int v = 0; v < nEigs; v++)
         laph_noise(t, s, v) = generate(); // same on all compute nodes
-  /* if (tbc==QuarkActionInfo::ZeroDirichlet){
-      if ((timeValue==0)||(timeValue==(Textent-1))){
-         QDPIO::cerr << "Cannot request source for time 0 or Nt-1 "
-                     << "with zero Dirichlet quark time boundary
-     conditions"<<std::endl;} QDP_abort(1);}*/
   return laph_noise;
 }
 
-// *************************************************************
 } // namespace LaphEnv

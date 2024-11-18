@@ -10,8 +10,6 @@
 using namespace std;
 using namespace LaphEnv;
 
-// *****************************************************
-
 //  Constructor from a string.  First extract the XML
 //  declaration, if there is one.  Then parse the XML,
 //  then check that there is just one top or root node.
@@ -1399,8 +1397,6 @@ bool XMLHandler::IsEqualContent(XMLHandler &xmlh_cmp, float float_rel_tol) {
   return temp.IsEqual(*this, xmlh_cmp);
 }
 
-// ***************************************************************
-
 // Beginning with character at "start", moves the "character"
 // pointer to the first non-ignorable character (or NULL if
 // no such characters found).  "nchar" will contain the
@@ -1652,8 +1648,6 @@ bool XMLContentComparer::IsEqual(XMLHandler &xmlh1, XMLHandler &xmlh2) {
   return (result == 0);
 }
 
-// *************************************************************
-
 // removes tabs, newline, linefeed characters, then trims
 // leading and trailing blanks.
 
@@ -1690,8 +1684,6 @@ string int_to_string(int intval) {
   oss << intval;
   return oss.str();
 }
-
-// *********************************************************
 
 // This returns the number of times that the tag "tagname"
 // is found in the XML document "xmlh".
@@ -1746,8 +1738,6 @@ void xmlreadfail(XMLHandler &xmlh, const std::string &infoname,
   throw(std::invalid_argument(errormsg));
 }
 
-// *************************************************************
-
 bool xmlContentIsEqual(const string &doc1, const string &doc2,
                        float float_rel_tol) {
   XMLHandler xmlh1, xmlh2;
@@ -1766,8 +1756,6 @@ bool headerMatch(const string &doc1, const string &doc2, float float_rel_tol) {
     return true;
   return xmlContentIsEqual(doc1, doc2, float_rel_tol);
 }
-
-// ************************************************************
 
 std::vector<std::string> string_split(const std::string &astr, char delimiter) {
   std::vector<std::string> tokens;
@@ -1808,4 +1796,3 @@ int char_count(const std::string &astr, char delimiter) {
   return cnt;
 }
 
-// **********************************************************

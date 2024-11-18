@@ -11,8 +11,6 @@ using namespace quda;
 
 namespace LaphEnv {
 
-// **********************************************************
-
 GaugeConfigurationHandler::GaugeConfigurationHandler()
     : m_gauge_info(0), m_cfg(0) {}
 
@@ -176,5 +174,4 @@ void GaugeConfigurationHandler::eraseDataOnDevice() {
   QudaInfo::gauge_config_on_device = false;
 }
 
-// **********************************************************************
 } // namespace LaphEnv

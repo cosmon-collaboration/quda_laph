@@ -6,10 +6,6 @@ using namespace std;
 
 namespace LaphEnv {
 
-// *************************************************************
-
-// XMLHandler constructor
-
 DilutionSchemeInfo::DilutionSchemeInfo(const XMLHandler &xmlin) {
   XMLHandler xml_in(xmlin);
   xml_tag_assert(xml_in, "LaphDilutionScheme", "DilutionSchemeInfo");
@@ -34,15 +30,11 @@ void DilutionSchemeInfo::assign_from_reader(XMLHandler &xmlr) {
   }
 }
 
-// *************************************************************
-
 DilutionSchemeInfo::DilutionSchemeInfo() {
   spinDilutionType = 0;
   eigvecDilutionType = 0;
   timeDilutionType = 0;
 }
-
-// ************************************************************
 
 // copy constructor
 
@@ -59,10 +51,9 @@ DilutionSchemeInfo::operator=(const DilutionSchemeInfo &in) {
   return *this;
 }
 
-// ***************************************************************
-
-void DilutionSchemeInfo::assign(int spin_dil_type, int eigvec_dil_type,
-                                int time_dil_type) {
+void DilutionSchemeInfo::assign(const int spin_dil_type,
+				const int eigvec_dil_type,
+                                const int time_dil_type) {
   try {
     if ((time_dil_type == -1) || (spin_dil_type == -1) ||
         (eigvec_dil_type == -1))
@@ -218,8 +209,8 @@ bool DilutionSchemeInfo::can_undilute(int dilorig, int dilnew) const {
     return false;
   if ((dilorig <= -2) && (dilnew > 0))
     return false;
-  int dorig = (dilorig >= 2) ? dilorig : -dilorig;
-  int dnew = (dilnew >= 2) ? dilnew : -dilnew;
+  const int dorig = (dilorig >= 2) ? dilorig : -dilorig;
+  const int dnew = (dilnew >= 2) ? dilnew : -dilnew;
   if (dorig >= 2) {
     if (dnew == 0)
       return true;
@@ -231,6 +222,4 @@ bool DilutionSchemeInfo::can_undilute(int dilorig, int dilnew) const {
   }
   return false;
 }
-
-// *************************************************************
 } // namespace LaphEnv

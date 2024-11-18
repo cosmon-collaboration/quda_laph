@@ -58,8 +58,6 @@ void LaphNoiseInfo::encode(int znGroup, int seed) {
   store |= (unsigned int)znGroup;
 }
 
-// *************************************************************
-
 // copy constructor
 
 LaphNoiseInfo::LaphNoiseInfo(const LaphNoiseInfo &in) : store(in.store) {}
@@ -85,8 +83,6 @@ bool LaphNoiseInfo::operator!=(const LaphNoiseInfo &in) const {
 bool LaphNoiseInfo::operator<(const LaphNoiseInfo &in) const {
   return (store < in.store);
 }
-
-// **********************************************************
 
 unsigned long LaphNoiseInfo::getSeed(const GaugeConfigurationInfo &G) const {
   int traj_num = G.getConfigNumber();
@@ -122,6 +118,4 @@ void LaphNoiseInfo::output(XMLHandler &xmlout) const {
   xmlout.put_child("ZNGroup", make_string(getZNGroup()));
   xmlout.put_child("Seed", make_string(getSeed()));
 }
-
-// *************************************************************
 } // namespace LaphEnv

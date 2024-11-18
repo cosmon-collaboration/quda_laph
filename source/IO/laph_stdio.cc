@@ -4,8 +4,6 @@
 
 namespace LaphEnv {
 
-// *************************************************************
-
 std::string make_str(const std::string &mesg) { return mesg; }
 
 std::string charstar_to_string(const char *buffer, int checklength) {
@@ -15,8 +13,6 @@ std::string charstar_to_string(const char *buffer, int checklength) {
   }
   return result;
 }
-
-// *************************************************************
 
 void printLaph(const std::string &mesg) {
   if (isPrimaryRank()) {
@@ -39,6 +35,4 @@ void errorLaph(const std::string &mesg, bool abort) {
     laph_abort();
   }
 }
-
-// *************************************************************
 } // namespace LaphEnv

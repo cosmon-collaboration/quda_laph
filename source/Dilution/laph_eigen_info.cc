@@ -7,8 +7,6 @@ using namespace std;
 
 namespace LaphEnv {
 
-// *************************************************************
-
 // XmlReader constructor
 
 LaphEigenSolverInfo::LaphEigenSolverInfo(const XMLHandler &xmlin) {
@@ -97,8 +95,6 @@ void LaphEigenSolverInfo::extract_info_from_reader(XMLHandler &xmlr) {
   }
 }
 
-// *************************************************************
-
 // copy constructor
 
 LaphEigenSolverInfo::LaphEigenSolverInfo(const LaphEigenSolverInfo &in)
@@ -179,9 +175,6 @@ void LaphEigenSolverInfo::setQudaParam(QudaInvertParam &eig_inv_param,
     eig_inv_param.verbosity = QUDA_VERBOSE;
   }
 
-  // eig_inv_param.extlib_type = solver_ext_lib;
-  // eig_inv_param.native_blas_lapack = (native_blas_lapack ? QUDA_BOOLEAN_TRUE
-  // : QUDA_BOOLEAN_FALSE);
   eig_inv_param.struct_size = sizeof(eig_inv_param);
 
   // build eig_param next
@@ -207,15 +200,8 @@ void LaphEigenSolverInfo::setQudaParam(QudaInvertParam &eig_inv_param,
   strcpy(eig_param.vec_infile, "");
   strcpy(eig_param.vec_outfile, "");
 
-  // eig_param.ortho_block_size = eig_ortho_block_size;
-  eig_param.block_size =
-      1; // needed for uniform initial guess to get through to GPU
-  //   = (eig_param.eig_type == QUDA_EIG_TR_LANCZOS || eig_param.eig_type ==
-  //   QUDA_EIG_IR_ARNOLDI) ? 1 : eig_block_size;
-  // eig_param.qr_tol = eig_qr_tol;
-  // eig_param.batched_rotate = eig_batched_rotate;
+  eig_param.block_size = 1 ;
   eig_param.require_convergence = QUDA_BOOLEAN_TRUE;
-  // eig_param.check_interval = eig_check_interval;
 
   eig_param.use_norm_op = QUDA_BOOLEAN_FALSE;
   eig_param.use_dagger = QUDA_BOOLEAN_FALSE;
@@ -234,6 +220,4 @@ void LaphEigenSolverInfo::setQudaParam(QudaInvertParam &eig_inv_param,
 
   eig_param.struct_size = sizeof(eig_param);
 }
-
-// *************************************************************
 } // namespace LaphEnv
