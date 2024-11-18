@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 3.18)
 
 project(QudaLaph
-    VERSION 1.0
-    DESCRIPTION "Lattice QCD applications using QUDA and the stochastic Laph method"
-    LANGUAGES CXX C)
+  VERSION 1.0
+  DESCRIPTION "Lattice QCD applications using QUDA and the stochastic Laph method"
+  LANGUAGES CXX C)
+
+set(LiveLaphLibs "")
 
 set(CMAKE_CXX_STANDARD 17)
 include(GNUInstallDirs)
@@ -47,9 +49,7 @@ if(PARALLEL_BUILD)
   message(STATUS "parallel build")
   set(CMAKE_C_COMPILER mpicc)
   set(CMAKE_CXX_COMPILER mpic++)
-  add_compile_definitions(ARCH_PARALLEL)
-  add_compile_definitions(MPI_COMMS)
-  add_compile_definitions(MULTI_GPU)
+  add_compile_definitions(MPI_COMMS ARCH_PARALLEL MULTI_GPU)
 else()
   message(STATUS "serial build")
   set(CMAKE_C_COMPILER gcc)
@@ -71,18 +71,14 @@ include_directories(${GPUTOOLKIT_INCDIR})
 link_directories(${QUDA_LIBDIR})
 link_directories(${GPUTOOLKIT_LIBDIR})
 
-add_executable(quda_laph)
-
 include_directories(include)
 add_subdirectory(source)
 
-target_link_libraries(quda_laph PUBLIC cblas)
-target_link_libraries(quda_laph PUBLIC gputoolkitlib)
-target_link_libraries(quda_laph PUBLIC quda)
+add_executable(quda_laph quda_laph.cc)
 
 ## link openmp gomp library
 if(OPENMP)
-  target_link_libraries(quda_laph PUBLIC -lgomp)
+  string(APPEND LiveLaphLibs "-lgomp")
 endif()
 
 ## BLAS studd can go down here
@@ -91,11 +87,16 @@ link_directories(${BLAS_LIB})
 if(HOSTCBLAS STREQUAL "GSLCBLAS")
    message(STATUS "using GSL cblas on hosts")
    add_compile_definitions(USE_GSL_CBLAS)
-   target_link_libraries(quda_laph PUBLIC -lgsl -lgslcblas)
+   string(APPEND LiveLaphLibs " -lcblas -lgsl -lgslcblas")
 elseif(HOSTCBLAS STREQUAL "OPENBLAS")
    message(STATUS "using OPENblas on hosts")
    add_compile_definitions(USE_OPENBLAS)
-   target_link_libraries(quda_laph PUBLIC -lopenblas)
+   string(APPEND LiveLaphLibs " -lcblas -lopenblas")
 else()
    message( FATAL_ERROR "Must define HOSTCBLAS to be ${VALID_BLAS_LIBS}")
 endif()
+
+## compile and link
+target_link_libraries(quda_laph PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
+
+add_subdirectory(tests)

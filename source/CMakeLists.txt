@@ -1,8 +1,7 @@
 
 include_directories(${QudaLaph}/include/)
 
-target_sources(quda_laph PRIVATE
-  quda_laph.cc
+add_library(QudaLaph STATIC
   byte_handler.cc
   dilution_handler.cc
   dilution_scheme_info.cc
@@ -12,6 +11,7 @@ target_sources(quda_laph PRIVATE
   gauge_configuration_handler.cc
   gauge_configuration_info.cc
   gluon_smearing_handler.cc
+  init_quda_laph.cc
   inverter_info.cc
   io_fm_handler.cc
   laph_eigen_info.cc
@@ -34,3 +34,28 @@ target_sources(quda_laph PRIVATE
   utils.cc
   xml_handler.cc
 )
+
+## need to set these
+if(PARALLEL_BUILD)
+  message(STATUS "parallel build")
+  set(CMAKE_C_COMPILER mpicc)
+  set(CMAKE_CXX_COMPILER mpic++)
+  add_compile_definitions(ARCH_PARALLEL)
+  add_compile_definitions(MPI_COMMS)
+  add_compile_definitions(MULTI_GPU)
+else()
+  message(STATUS "serial build")
+  set(CMAKE_C_COMPILER gcc)
+  set(CMAKE_CXX_COMPILER g++)
+  add_compile_definitions(ARCH_SERIAL)
+endif()
+
+## Need to set these here
+include_directories(${BLAS_INC})
+if(HOSTCBLAS STREQUAL "GSLCBLAS")
+  add_compile_definitions(USE_GSL_CBLAS)
+elseif(HOSTCBLAS STREQUAL "OPENBLAS")
+  add_compile_definitions(USE_OPENBLAS)
+else()
+  message( FATAL_ERROR "Must define HOSTCBLAS to be ${VALID_BLAS_LIBS}")
+endif()

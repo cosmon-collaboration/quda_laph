@@ -303,12 +303,10 @@ void QuarkSmearingHandler::computeLaphEigenvectors(
 template <class T> static void communicate_phase(vector<T> &rephase) {
 #ifdef ARCH_PARALLEL
   vector<int> comm_coords = {
-      0, 0, 0, LayoutInfo::getMyCommCoords()[LayoutInfo::Ndim - 1]};
+      0, 0, 0, LayoutInfo::getMyCommCoords()[LayoutInfo::Ndim - 1] } ;
   const int orig_sender_rank = LayoutInfo::getRankFromCommCoords(comm_coords);
-
-  int sender_rank = 0;
-  vector<int> broadcast_ranks;
-  int count = 0;
+  int sender_rank = 0 , count ;
+  vector<int> broadcast_ranks ;
   for (comm_coords[0] = 0;
        comm_coords[0] < LayoutInfo::getCommNumPartitions()[0];
        ++comm_coords[0]) {
@@ -356,9 +354,76 @@ template <class T> static void communicate_phase(vector<T> &rephase) {
 #endif
 }
 
+template<class T>
+static void
+getPhase( vector<T> &rephase ,
+	  vector<LattField> &laph_evecs) {
+  const int nev          = laph_evecs.size();
+  const int nloctime     = LayoutInfo::getRankLattExtents()[3];
+  const int loc_nsites   = LayoutInfo::getRankLatticeNumSites();
+  const int loc_npsites  = loc_nsites / 2;
+  const int start_parity = LayoutInfo::getMyStartParity();
+  const int tstride = LayoutInfo::getRankLattExtents()[0] *
+                      LayoutInfo::getRankLattExtents()[1] *
+                      LayoutInfo::getRankLattExtents()[2];
+  const int bps2 = laph_evecs[0].bytesPerSite()/sizeof(T) ; // isn't this just Nc*Nd?
+
+  std::cout<<"In here check bps2 ---> "<<bps2<<std::endl ;
+
+  if ((LayoutInfo::getMyCommCoords()[0] == 0) &&
+      (LayoutInfo::getMyCommCoords()[1] == 0) &&
+      (LayoutInfo::getMyCommCoords()[2] == 0)) {
+    // could be done in parallel and flattened
+    for (int v = 0; v < nev; ++v) {
+      const T *fp = reinterpret_cast<const T*>(laph_evecs[v].getDataPtr());
+      for (int tloc = 0; tloc < nloctime; ++tloc) {
+	const int parshift = loc_npsites * ((start_parity + tloc) % 2);
+        const int start1   = ((tstride * tloc) / 2) + parshift;
+	const T x1 = fp[ bps2*start1 ] ; 
+	rephase[ tloc+v*nloctime ] = conj(x1)/abs(x1) ;
+      }
+    }
+  }
+}
+
+template<class T>
+static void
+applyPhase( vector<LattField> &laph_evecs,
+	    const vector<T> rephase ,
+	    void (*blasfunc)( const int N , const void* alpha , void* x, const int incX ) )
+{
+  const int nev          = laph_evecs.size();
+  const int nloctime     = LayoutInfo::getRankLattExtents()[3];
+  const int loc_nsites   = LayoutInfo::getRankLatticeNumSites();
+  const int loc_npsites  = loc_nsites / 2;
+  const int start_parity = LayoutInfo::getMyStartParity();
+  const int tstride      = LayoutInfo::getRankLattExtents()[0] *
+                           LayoutInfo::getRankLattExtents()[1] *
+                           LayoutInfo::getRankLattExtents()[2];
+  const int bps          = laph_evecs[0].bytesPerSite();
+  // now apply the rephase factors
+  int v ;
+#pragma omp parallel for private(v)
+  for (v = 0; v < nev; ++v) {
+    T *fp = reinterpret_cast<T*>(laph_evecs[v].getDataPtr());
+    for (int tloc = 0; tloc < nloctime; ++tloc) {
+      for( int cb = 0 ; cb < 2 ; cb++ ) {	
+	const int parshift = loc_npsites * ((start_parity + cb + tloc) % 2);
+	const int start    = (( (cb^1) + tstride * tloc) / 2) + parshift;
+	const int stop     = (( (cb^0) + tstride * (tloc + 1)) / 2) + parshift;
+	T *x = fp + bps*start/sizeof(T) ;
+	for (int c = 0; c < FieldNcolor; ++c) {
+	  blasfunc( stop-start, &rephase[tloc+v*nloctime] , x, FieldNcolor ) ;
+	  x ++ ;
+	}
+      }
+    }
+  }
+}
+
 //  This is temporary; should be done on the device
 void QuarkSmearingHandler::applyLaphPhaseConvention(
-    vector<LattField> &laph_evecs) {
+      vector<LattField> &laph_evecs) {
   const int nev = laph_evecs.size();
   if (nev == 0) {
     return;
@@ -369,100 +434,30 @@ void QuarkSmearingHandler::applyLaphPhaseConvention(
           "Applying phase convention can only be done to ColorVector fields");
     }
   }
-
+  
   const bool dp =
       (laph_evecs[0].bytesPerWord() == sizeof(std::complex<double>));
-  const int loc_nsites = LayoutInfo::getRankLatticeNumSites();
-  const int loc_npsites = loc_nsites / 2;
-  const int start_parity = LayoutInfo::getMyStartParity();
   const int nloctime = LayoutInfo::getRankLattExtents()[3];
 
-  const int tstride = LayoutInfo::getRankLattExtents()[0] *
-                      LayoutInfo::getRankLattExtents()[1] *
-                      LayoutInfo::getRankLattExtents()[2];
-  const int incx = FieldNcolor;
-  const int cbytes =
-      (dp) ? sizeof(std::complex<double>) : sizeof(std::complex<float>);
-  const int bps = laph_evecs[0].bytesPerSite();
+#define TEST_NEW_CODE
+  if( dp ) {
+    vector<complex<double>>rephasedp( nev*nloctime ) ;
+    getPhase<complex<double>>( rephasedp , laph_evecs ) ;
 
-  complex<double> rephasedp;
-  complex<float> rephasesp;
+    communicate_phase<complex<double>>(rephasedp);
 
-  //  get the rephase factors for each eigvec and local time slice
-  vector<char> rephase(nev * nloctime * cbytes);
+    applyPhase<complex<double>>( laph_evecs, rephasedp , cblas_zscal ) ;
 
-  if ((LayoutInfo::getMyCommCoords()[0] == 0) &&
-      (LayoutInfo::getMyCommCoords()[1] == 0) &&
-      (LayoutInfo::getMyCommCoords()[2] == 0)) {
-    char *rp = rephase.data();
-    for (int v = 0; v < nev; ++v) {
-      const char *fp =
-          reinterpret_cast<const char *>(laph_evecs[v].getDataPtr());
-      for (int tloc = 0; tloc < nloctime; ++tloc, rp += cbytes) {
-        const int parshift = loc_npsites * ((start_parity + tloc) % 2);
-        const int start1 = ((tstride * tloc) / 2) + parshift;
-        const char *x1 = fp + bps * start1; // location of (0,0,0,t)
-        if (dp) {
-          const complex<double> *zptr =
-              reinterpret_cast<const complex<double> *>(x1);
-          const complex<double> z(std::conj(*zptr));
-          const double r = std::abs(z);
-          if (r < 1e-12) {
-            errorLaph(make_str("problem applying phase convention: 0-th color "
-                               "component at site",
-                               " (0,0,0) has very small magnitude ", r));
-          } // pray this does not happen!
-          rephasedp = z / r;
-          std::memcpy(rp, &rephasedp, cbytes);
-        } else {
-          const complex<float> *zptr =
-              reinterpret_cast<const complex<float> *>(x1);
-          const complex<float> z(std::conj(*zptr));
-          const float r = std::abs(z);
-          if (r < 1e-8) {
-            errorLaph(make_str("problem applying phase convention: 0-th color "
-                               "component at site",
-                               " (0,0,0) has very small magnitude ", r));
-          } // pray this does not happen!
-          rephasesp = z / r;
-          std::memcpy(rp, &rephasesp, cbytes);
-        }
-      }
-    }
+  } else {
+    vector<complex<float>>rephasesp( nev*nloctime ) ;
+    getPhase<complex<float>>( rephasesp , laph_evecs ) ;
+
+    // (possibly) send it to the other nodes
+    communicate_phase<complex<float>>(rephasesp);
+
+    applyPhase<complex<float>>( laph_evecs, rephasesp , cblas_cscal ) ;
   }
 
-  // (possibly) send it to the other nodes
-  communicate_phase<char>(rephase);
-
-  // now apply the rephase factors
-  const char *rf = rephase.data();
-  for (int v = 0; v < nev; ++v) {
-    char *fp = reinterpret_cast<char *>(laph_evecs[v].getDataPtr());
-    for (int tloc = 0; tloc < nloctime; ++tloc, rf += cbytes) {
-      int parshift = loc_npsites * ((start_parity + tloc) % 2);
-      const int start1 = ((tstride * tloc) / 2) + parshift;
-      const int stop1 = ((1 + tstride * (tloc + 1)) / 2) + parshift;
-      const int n1 = stop1 - start1;
-      parshift = loc_npsites * ((start_parity + 1 + tloc) % 2);
-      const int start2 = ((1 + tstride * tloc) / 2) + parshift;
-      const int stop2 = ((tstride * (tloc + 1)) / 2) + parshift;
-      const int n2 = stop2 - start2;
-
-      char *x1 = fp + bps * start1; // location of (0,0,0,t)
-      char *x2 = fp + bps * start2; // location of (1,0,0,t)
-      for (int c = 0; c < FieldNcolor; ++c) {
-        if (dp) {
-          cblas_zscal(n1, rf, x1, incx);
-          cblas_zscal(n2, rf, x2, incx);
-        } else {
-          cblas_cscal(n1, rf, x1, incx);
-          cblas_cscal(n2, rf, x2, incx);
-        }
-        x1 += cbytes;
-        x2 += cbytes;
-      }
-    }
-  }
 #ifdef ARCH_PARALLEL
   comm_barrier();
 #endif
