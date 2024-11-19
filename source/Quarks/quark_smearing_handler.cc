@@ -406,10 +406,9 @@ applyPhase( vector<LattField> &laph_evecs,
       T *fp = reinterpret_cast<T*>(laph_evecs[v].getDataPtr());
       for( int cb = 0 ; cb < 2 ; cb++ ) {
 	const int parshift = loc_npsites * ((start_parity + cb + tloc) % 2);
+	// stop-start is just spatial volume/2
 	const int start    = (( (cb^1) + tstride * tloc) / 2) + parshift;
 	const int stop     = (( (cb^0) + tstride * (tloc + 1)) / 2) + parshift;
-	cout<<"Here "<<stop-start<<endl;
-	cout<<"Rephase "<<rephase[tloc+v*nloctime]<<endl;
 	T *x = fp + FieldNcolor*start ;
 	blasfunc( FieldNcolor*(stop-start), &rephase[tloc+v*nloctime] , x, 1 ) ;
       }

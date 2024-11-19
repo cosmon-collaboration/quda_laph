@@ -7,7 +7,7 @@
 #include <mpi.h>
 #endif
 
-#define PRINT_EVECS
+//#define PRINT_EVECS
 //#define ALL_CONSTANT
 
 using namespace std ;
@@ -173,7 +173,8 @@ set_constant( vector<LattField> &laphEigvecs )
     const size_t V = (size_t)LayoutInfo::getRankLatticeNumSites() ;
     for( size_t i = 0 ; i < V ; i++ ) {
       for( size_t c = 0 ; c < (size_t)FieldNcolor ; c++ ) {
-	complex<double> z( (n+i+V*myrank+1) , (n+i+V*myrank+1) ) ;
+	const complex<double> z( n+laphEigvecs.size()*(c+FieldNcolor*(i+V*myrank))+1 ,
+				 n+laphEigvecs.size()*(c+FieldNcolor*(i+V*myrank))+1 ) ;
 	*ptr = z ;
 	ptr++ ;
       }
