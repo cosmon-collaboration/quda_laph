@@ -201,17 +201,17 @@ void LattField::applyFermionTemporalAntiPeriodic() {
       (LayoutInfo::getCommNumPartitions()[Tdir] - 1)) {
     return;
   }
-  int start_parity = LayoutInfo::getMyStartParity();
-  int npsites = LayoutInfo::getRankLatticeNumSites() / 2;
+  const int start_parity = LayoutInfo::getMyStartParity();
+  const int npsites = LayoutInfo::getRankLatticeNumSites() / 2;
   const vector<int> &N = LayoutInfo::getRankLattExtents();
-  bool dp = (bytesPerWord() == sizeof(complex<double>));
-  int nreal = 2 * elemsPerSite();
-  int t = N[Tdir] - 1;
+  const bool dp = (bytesPerWord() == sizeof(complex<double>));
+  const int nreal = 2 * elemsPerSite();
+  const int t = N[Tdir] - 1;
   for (int z = 0; z < N[2]; ++z)
     for (int y = 0; y < N[1]; ++y)
       for (int x = 0; x < N[0]; ++x) {
-        int sindex = nreal * ((x + N[0] * (y + N[1] * (z + N[2] * t))) / 2 +
-                              npsites * ((start_parity + x + y + z + t) % 2));
+        const int sindex = nreal * ((x + N[0] * (y + N[1] * (z + N[2] * t))) / 2 +
+				    npsites * ((start_parity + x + y + z + t) % 2));
         if (dp) {
           double *ptr = reinterpret_cast<double *>(m_data.data()) + sindex;
           for (int s = 0; s < nreal; ++s, ++ptr)
@@ -224,5 +224,4 @@ void LattField::applyFermionTemporalAntiPeriodic() {
       }
 }
 
-// *************************************************************
 } // namespace LaphEnv

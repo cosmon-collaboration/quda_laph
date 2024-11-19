@@ -1,0 +1,12 @@
+<QudaLaph>
+  <EchoXML/>
+  <LatticeLayoutInfo>
+     <XYZTExtents>4 4 4 8</XYZTExtents>
+  </LatticeLayoutInfo>
+  <QudaInfo>
+     <CPUPrecision>double</CPUPrecision>
+     <CUDAPrecision>double</CUDAPrecision>
+     <CUDASloppyPrecision>single</CUDASloppyPrecision>
+  </QudaInfo>
+  <Verbosity>none</Verbosity>
+</QudaLaph>

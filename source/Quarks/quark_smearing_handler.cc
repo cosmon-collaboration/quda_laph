@@ -168,8 +168,8 @@ void QuarkSmearingHandler::computeLaphEigenvectors(
   rolex.start();
   double iotime = 0.0;
 
-  int nTime = uPtr->getTimeExtent();
-  int nEigvecs = qSmearPtr->getNumberOfLaplacianEigenvectors();
+  const int nTime = uPtr->getTimeExtent();
+  const int nEigvecs = qSmearPtr->getNumberOfLaplacianEigenvectors();
 
   // check to see if output files exist already
   for (int v = 0; v < nEigvecs; ++v) {
@@ -302,8 +302,7 @@ void QuarkSmearingHandler::computeLaphEigenvectors(
 // broadcast these rephase factors to the ranks that need them
 template <class T> static void communicate_phase(vector<T> &rephase) {
 #ifdef ARCH_PARALLEL
-  vector<int> comm_coords = {
-      0, 0, 0, LayoutInfo::getMyCommCoords()[LayoutInfo::Ndim - 1] } ;
+  vector<int> comm_coords = { 0, 0, 0, LayoutInfo::getMyCommCoords()[LayoutInfo::Ndim - 1] } ;
   const int orig_sender_rank = LayoutInfo::getRankFromCommCoords(comm_coords);
   int sender_rank = 0 , count ;
   vector<int> broadcast_ranks ;
@@ -366,20 +365,19 @@ getPhase( vector<T> &rephase ,
   const int tstride = LayoutInfo::getRankLattExtents()[0] *
                       LayoutInfo::getRankLattExtents()[1] *
                       LayoutInfo::getRankLattExtents()[2];
-  const int bps2 = laph_evecs[0].bytesPerSite()/sizeof(T) ; // isn't this just Nc*Nd?
 
-  std::cout<<"In here check bps2 ---> "<<bps2<<std::endl ;
-
+  // rephase appears to be normalised V^{i}_{c=0}(0,t)
   if ((LayoutInfo::getMyCommCoords()[0] == 0) &&
       (LayoutInfo::getMyCommCoords()[1] == 0) &&
       (LayoutInfo::getMyCommCoords()[2] == 0)) {
-    // could be done in parallel and flattened
-    for (int v = 0; v < nev; ++v) {
-      const T *fp = reinterpret_cast<const T*>(laph_evecs[v].getDataPtr());
+    int v ;
+    #pragma omp parallel for private(v) collapse(2)
+    for (v = 0; v < nev; ++v) {
       for (int tloc = 0; tloc < nloctime; ++tloc) {
+	const T *fp = reinterpret_cast<const T*>(laph_evecs[v].getDataPtr());
 	const int parshift = loc_npsites * ((start_parity + tloc) % 2);
-        const int start1   = ((tstride * tloc) / 2) + parshift;
-	const T x1 = fp[ bps2*start1 ] ; 
+        const int start1   = (tstride * tloc)/2 + parshift;
+	const T x1 = fp[ FieldNcolor*start1 ] ; 
 	rephase[ tloc+v*nloctime ] = conj(x1)/abs(x1) ;
       }
     }
@@ -400,22 +398,20 @@ applyPhase( vector<LattField> &laph_evecs,
   const int tstride      = LayoutInfo::getRankLattExtents()[0] *
                            LayoutInfo::getRankLattExtents()[1] *
                            LayoutInfo::getRankLattExtents()[2];
-  const int bps          = laph_evecs[0].bytesPerSite();
   // now apply the rephase factors
   int v ;
-#pragma omp parallel for private(v)
+  #pragma omp parallel for private(v) collapse(2)
   for (v = 0; v < nev; ++v) {
-    T *fp = reinterpret_cast<T*>(laph_evecs[v].getDataPtr());
     for (int tloc = 0; tloc < nloctime; ++tloc) {
-      for( int cb = 0 ; cb < 2 ; cb++ ) {	
+      T *fp = reinterpret_cast<T*>(laph_evecs[v].getDataPtr());
+      for( int cb = 0 ; cb < 2 ; cb++ ) {
 	const int parshift = loc_npsites * ((start_parity + cb + tloc) % 2);
 	const int start    = (( (cb^1) + tstride * tloc) / 2) + parshift;
 	const int stop     = (( (cb^0) + tstride * (tloc + 1)) / 2) + parshift;
-	T *x = fp + bps*start/sizeof(T) ;
-	for (int c = 0; c < FieldNcolor; ++c) {
-	  blasfunc( stop-start, &rephase[tloc+v*nloctime] , x, FieldNcolor ) ;
-	  x ++ ;
-	}
+	cout<<"Here "<<stop-start<<endl;
+	cout<<"Rephase "<<rephase[tloc+v*nloctime]<<endl;
+	T *x = fp + FieldNcolor*start ;
+	blasfunc( FieldNcolor*(stop-start), &rephase[tloc+v*nloctime] , x, 1 ) ;
       }
     }
   }
@@ -439,7 +435,6 @@ void QuarkSmearingHandler::applyLaphPhaseConvention(
       (laph_evecs[0].bytesPerWord() == sizeof(std::complex<double>));
   const int nloctime = LayoutInfo::getRankLattExtents()[3];
 
-#define TEST_NEW_CODE
   if( dp ) {
     vector<complex<double>>rephasedp( nev*nloctime ) ;
     getPhase<complex<double>>( rephasedp , laph_evecs ) ;
