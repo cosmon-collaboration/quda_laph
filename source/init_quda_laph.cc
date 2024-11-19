@@ -19,15 +19,15 @@ using namespace LaphEnv;
 
 map<string, NamedObjBase *> NamedObjMap::the_map;
 
-static StopWatch rolex ;
+static StopWatch rolex;
 
-static bool echo = false ;
-static bool layoutinfo = false ;
-static bool qudainfo = false ;
-static QudaVerbosity_s verbosity = QUDA_SILENT ;
+static bool echo = false;
+static bool layoutinfo = false;
+static bool qudainfo = false;
+static QudaVerbosity_s verbosity = QUDA_SILENT;
 
 static void parse_args(int *argc, char ***argv, std::vector<int> &npartitions,
-		       std::string &inputxmlfile) {
+                       std::string &inputxmlfile) {
   npartitions.clear();
   inputxmlfile.clear();
   int nargs = *argc;
@@ -137,9 +137,7 @@ static void readVerbosity(XMLHandler &xmlin, QudaVerbosity_s &verbosity) {
 }
 
 // inits MPI and Quda, returns an XMLHandler object
-int
-init_quda_laph( int argc , char *argv[] , XMLHandler &xml_in )
-{
+int init_quda_laph(int argc, char *argv[], XMLHandler &xml_in) {
   // parse the command line options -i and -npartitions
   vector<int> npartitions;
   string inputxmlfile;
@@ -200,7 +198,7 @@ init_quda_laph( int argc , char *argv[] , XMLHandler &xml_in )
     printLaph(make_strf("QUDA_RESOURCE_PATH is set to %s\n", qrpath));
   }
 
-  XMLHandler xml_layoutinfo , xml_qudainfo;
+  XMLHandler xml_layoutinfo, xml_qudainfo;
   int ntasks = 0;
   try {
     xml_in.seek_first_child();
@@ -245,17 +243,17 @@ init_quda_laph( int argc , char *argv[] , XMLHandler &xml_in )
 
   printLaph(make_strf("\n\n  Number of tasks is %d", ntasks));
 #ifdef OPENMP
-  printLaph( make_strf("  Maximum number of threads is %d", omp_get_max_threads));
+  printLaph(
+      make_strf("  Maximum number of threads is %d", omp_get_max_threads));
 #endif
 #ifdef ARCH_PARALLEL
   printLaph(make_strf("  Number of MPI ranks = %d", comm_size()));
 #endif
 
-  return ntasks ;
+  return ntasks;
 }
 
-void run_tasks( XMLHandler &xml_in , const int ntasks )
-{
+void run_tasks(XMLHandler &xml_in, const int ntasks) {
   xml_in.seek_root();
   xml_in.seek_first_child();
   Tasker T;
@@ -283,12 +281,10 @@ void run_tasks( XMLHandler &xml_in , const int ntasks )
                         swatch.getTimeInSeconds()));
     xml_in.seek_next_sibling();
   }
-  return ;
+  return;
 }
 
-void
-finalize( void )
-{
+void finalize(void) {
 #ifdef ARCH_PARALLEL
   comm_barrier();
 #endif
@@ -304,5 +300,5 @@ finalize( void )
   quda::comm_finalize();
   MPI_Finalize();
 #endif
-  return ;
+  return;
 }
