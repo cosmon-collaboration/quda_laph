@@ -1,13 +1,9 @@
+#include "QudaLaphIncludes.h"
+
 #include "field_ops.h"
 #include "laph_stdio.h"
 #include "utils.h"
 #include <cstring>
-
-#ifdef ARCH_PARALLEL
-#include <mpi.h>
-#endif
-
-#include "QudaLaphBlas.h"
 
 using namespace std;
 

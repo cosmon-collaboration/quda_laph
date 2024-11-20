@@ -1,12 +1,7 @@
+#include "QudaLaphIncludes.h"
 #include "init_quda_laph.h"
 #include "quark_smearing_handler.h"
 #include "field_ops.h"
-#include "QudaLaphBlas.h"
-#include "stop_watch.h"
-
-#ifdef PARALLEL_ARCH
-#include <mpi.h>
-#endif
 
 //#define PRINT_EVECS
 //#define ALL_CONSTANT

@@ -1,17 +1,14 @@
+#include "QudaLaphIncludes.h"
+
 #include "read_gauge_field.h"
 #include "byte_handler.h"
 #include "gauge_configuration_info.h"
 #include "laph_stdio.h"
 #include "layout_info.h"
-#include "stop_watch.h"
 #include "util_quda.h"
-#include <fstream>
+
 using namespace std;
 using namespace quda;
-
-#ifdef ARCH_PARALLEL
-#include <mpi.h>
-#endif
 
 namespace LaphEnv {
 

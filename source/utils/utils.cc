@@ -1,15 +1,11 @@
+#include "QudaLaphIncludes.h"
+
 #include "utils.h"
 #include "laph_stdio.h"
 #include "named_obj_map.h"
-#include "quda.h"
-#include "quda_info.h"
 #include "util_quda.h"
 #include "xml_handler.h"
 #include <unistd.h>
-
-#ifdef ARCH_PARALLEL
-#include <mpi.h>
-#endif
 
 using namespace quda;
 using namespace std;

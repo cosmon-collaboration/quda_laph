@@ -1,8 +1,8 @@
+#include "QudaLaphIncludes.h"
+
 #include "quark_smearing_handler.h"
-#include "QudaLaphBlas.h"
 #include "field_ops.h"
 #include "gluon_smearing_handler.h"
-#include "stop_watch.h"
 
 // STILL TO DO:  single asynchronous thread for output so can continue next
 // computations while output occurs

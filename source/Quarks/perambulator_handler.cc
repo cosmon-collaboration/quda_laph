@@ -1,8 +1,8 @@
+#include "QudaLaphIncludes.h"
+
 #include "perambulator_handler.h"
-#include "QudaLaphBlas.h"
 #include "field_ops.h"
 #include "multi_compare.h"
-#include "stop_watch.h"
 
 using namespace std;
 

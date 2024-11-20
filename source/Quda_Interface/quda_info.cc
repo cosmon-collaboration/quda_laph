@@ -1,4 +1,5 @@
-#include "quda_info.h"
+#include "QudaLaphIncludes.h"
+
 #include "laph_stdio.h"
 #include "latt_field.h"
 

@@ -1,12 +1,8 @@
+#include "QudaLaphIncludes.h"
+
 #include "layout_info.h"
 #include "laph_stdio.h"
 #include "utils.h"
-#include <algorithm>
-#include <cstring>
-
-#ifdef ARCH_PARALLEL
-#include <mpi.h>
-#endif
 
 using namespace std;
 

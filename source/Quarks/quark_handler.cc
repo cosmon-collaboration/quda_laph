@@ -1,10 +1,9 @@
+#include "QudaLaphIncludes.h"
+
 #include "quark_handler.h"
 #include "array.h"
 #include "field_ops.h"
 #include "multi_compare.h"
-#include "stop_watch.h"
-
-#include "QudaLaphBlas.h"
 
 // STILL TO DO:  single asynchronous thread for output so can continue next
 // computations
@@ -17,16 +16,12 @@ typedef std::complex<float> fcmplx;
 
 namespace LaphEnv {
 
-// *************************************************************************
-
 void QuarkHandler::RecordKey::output(XMLHandler &xmlw) const {
   xmlw.set_root("RecordKey");
   xmlw.put_child("Spin", make_string(getSpin()));
   xmlw.put_child("Time", make_string(getTime()));
   xmlw.put_child("SpinLaphEigvecIndex", make_string(getSpinLaphEigvecIndex()));
 }
-
-// *************************************************************************
 
 QuarkHandler::FileKey::FileKey(const LaphNoiseInfo &in_noise, int tprojind)
     : noise(in_noise), time_proj_index(tprojind) {}

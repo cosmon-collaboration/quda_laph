@@ -1,23 +1,11 @@
+#include "QudaLaphIncludes.h"
+
 #include "laph_stdio.h"
 #include "layout_info.h"
 #include "named_obj_map.h"
-#include "quda.h"
-#include "quda_info.h"
-#include "stop_watch.h"
 #include "tasks.h"
 #include "utils.h"
 #include "xml_handler.h"
-#include <cstdio>
-#include <ctime>
-#include <map>
-
-#ifdef ARCH_PARALLEL
-#include <mpi.h>
-#endif
-
-#ifdef OPENMP
-#include <omp.h>
-#endif
 
 using namespace std;
 using namespace LaphEnv;
