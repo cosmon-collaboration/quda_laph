@@ -166,6 +166,4 @@ void doLaphQuarkPerambulators(XMLHandler &xmltask) {
                       outer.getTimeInSeconds()));
   printLaph("LAPH_PERAMBULATORS: ran successfully\n");
 }
-
-// *****************************************************************************
 } // namespace LaphEnv

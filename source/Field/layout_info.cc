@@ -1,12 +1,8 @@
+#include "QudaLaphIncludes.h"
+
 #include "layout_info.h"
 #include "laph_stdio.h"
 #include "utils.h"
-#include <algorithm>
-#include <cstring>
-
-#ifdef ARCH_PARALLEL
-#include <mpi.h>
-#endif
 
 using namespace std;
 
@@ -34,10 +30,10 @@ std::map<int, int> LayoutInfo::comm_map;
 
 int LayoutInfo::my_start_parity;
 
-// *  Expects the following XML:
-// *         <XYZTExtents>24 24 24 96</XYZTExtents>
-// *         <Precision>...</Precision>  double or single (default: double)
-// *  This should be called AFTER QUDA has set up communications.
+// Expects the following XML:
+//         <XYZTExtents>24 24 24 96</XYZTExtents>
+//         <Precision>...</Precision>  double or single (default: double)
+//   This should be called AFTER QUDA has set up communications.
 
 void LayoutInfo::init(const XMLHandler &xmlin,
                       const std::vector<int> npartitions, bool echo) {
@@ -145,18 +141,6 @@ int LayoutInfo::getRankFromLatticeCoords(const std::vector<int> &latt_coords) {
   vector<int> comm_coords = getCommCoordsFromLatticeCoords(latt_coords);
   return get_rank_from_comm_coords(comm_coords);
 }
-
-/*      // this routine is for lexicographic site ordering
-void LayoutInfo::getCommInfoFromLatticeCoords(const std::vector<int>&
-latt_coords, int& rank, int& rank_site_linear_index)
-{
- vector<int> comm_coords, rank_site_coords;
- get_comm_ranksite_coords(latt_coords,comm_coords,rank_site_coords);
- rank=get_rank_from_comm_coords(comm_coords);
- rank_site_linear_index=rank_site_coords[0]+rank_latt_extents[0]*(rank_site_coords[1]
-                       +rank_latt_extents[1]*(rank_site_coords[2]+rank_latt_extents[2]*rank_site_coords[3]));
-}
-*/
 
 // given a lattice site in "latt_coords", this determines which MPI rank
 // handles this site, and what the linear index of that site is on that
@@ -333,6 +317,4 @@ int LayoutInfo::linearSiteIndex_evenodd(const vector<int> &loc_coords,
                loc_coords[3]) %
               2);
 }
-
-// **********************************************************************
 } // namespace LaphEnv

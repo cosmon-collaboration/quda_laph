@@ -112,7 +112,5 @@ private:
   friend class DataPutHandlerSFNOM<GluonSmearingHandler, UIntKey,
                                    std::vector<LattField>>;
 };
-
-// *******************************************************************
 } // namespace LaphEnv
 #endif

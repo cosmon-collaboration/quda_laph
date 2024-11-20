@@ -81,6 +81,4 @@ void doSmearGaugeField(XMLHandler &xmltask) {
                       outer.getTimeInSeconds()));
   printLaph("SMEAR_GAUGE_FIELD task: ran successfully\n");
 }
-
-// ******************************************************************
 } // namespace LaphEnv

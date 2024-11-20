@@ -254,7 +254,7 @@ void XMLDoc::disconnect(XMLNode *top) {
 // but removed.
 
 string XMLDoc::get_tag_name(const string &instr, size_t charstart,
-                            size_t charstop) {
+                            const size_t charstop) {
   if (charstart >= charstop)
     throw(std::invalid_argument("Invalid XML tag name"));
   string tagName(instr, charstart, charstop - charstart);
@@ -315,7 +315,7 @@ string XMLDoc::trim(const string &str) {
 // tabs, new line, etc.)
 
 bool XMLDoc::nonwhitespace(const string &instr, size_t charstart,
-                           size_t charstop) {
+                           const size_t charstop) {
   bool nonwhite = false;
   size_t stop = (charstop < instr.length()) ? charstop : instr.length();
   for (size_t k = charstart; k < stop; ++k) {
@@ -338,10 +338,10 @@ bool XMLDoc::nonwhitespace(const string &instr, size_t charstart,
 // set to "in_stop".  Note that if invalid XML is encountered, a string
 // exception will be thrown.
 
-void XMLDoc::find_next_xml_event(const string &xmlstr, size_t start,
-                                 size_t in_stop, XMLDoc::XMLEvent &type,
-                                 size_t &pos, bool incomment) {
-  size_t stop = min(in_stop, xmlstr.length());
+void XMLDoc::find_next_xml_event(const string &xmlstr, const size_t start,
+                                 const size_t in_stop, XMLDoc::XMLEvent &type,
+                                 size_t &pos, const bool incomment) {
+  const size_t stop = min(in_stop, xmlstr.length());
   type = none;
   pos = stop;
   if (start >= stop)
@@ -407,9 +407,10 @@ void XMLDoc::find_next_xml_event(const string &xmlstr, size_t start,
 // will be set to "in_stop".  Throws an exception if a start declaration
 // or end declaration is encountered, or if invalid comment events are found.
 
-void XMLDoc::find_next_xml_tag_event(const string &xmlstr, size_t start,
-                                     size_t in_stop, XMLDoc::XMLEvent &type,
-                                     size_t &pos, string &textpassed) {
+void XMLDoc::find_next_xml_tag_event(const string &xmlstr, const size_t start,
+                                     const size_t in_stop,
+                                     XMLDoc::XMLEvent &type, size_t &pos,
+                                     string &textpassed) {
   textpassed.clear();
   size_t curr = start;
   bool incomment = false;
@@ -444,8 +445,8 @@ void XMLDoc::find_next_xml_tag_event(const string &xmlstr, size_t start,
 // is encountered, if invalid comment events are found, or any event other
 // than comments or a start tag are found.
 
-void XMLDoc::find_root_start_tag(const string &xmlstr, size_t start,
-                                 size_t in_stop, size_t &pos) {
+void XMLDoc::find_root_start_tag(const string &xmlstr, const size_t start,
+                                 const size_t in_stop, size_t &pos) {
   size_t curr = start;
   bool incomment = false;
   bool notdone = true;
@@ -476,7 +477,7 @@ void XMLDoc::find_root_start_tag(const string &xmlstr, size_t start,
 //  "ancestors" stack if the root tag is not an empty tag.
 
 XMLDoc::XMLNode *
-XMLDoc::parse_root_tag(const string &xmlstr, size_t &start, size_t stop,
+XMLDoc::parse_root_tag(const string &xmlstr, size_t &start, const size_t stop,
                        XMLDoc::XMLEvent &type, size_t &pos,
                        std::stack<XMLDoc::XMLNode *> &ancestors,
                        std::stack<XMLDoc::XMLNode *> &lastchildren) {
@@ -511,7 +512,7 @@ XMLDoc::parse_root_tag(const string &xmlstr, size_t &start, size_t stop,
 //  up the XMLDoc nodes.
 
 void XMLDoc::parse_to_next_event(const string &xmlstr, size_t &curr,
-                                 size_t stop, XMLEvent &lastevent,
+                                 const size_t stop, XMLEvent &lastevent,
                                  stack<XMLNode *> &ancestors,
                                  stack<XMLNode *> &lastchildren) {
   XMLEvent nextevent;
@@ -651,14 +652,12 @@ size_t XMLDoc::get_declaration(const string &instr) {
     if (!((enc == "UTF-8") || (enc == "UTF-16") || (enc == "ISO-8859-1")) ||
         (encA < verB))
       throw(std::invalid_argument("Invalid XML declaration"));
-    verA = encA;
     verB = encB;
   }
   flag = get_attribute(declaration, "standalone", std, stdA, stdB);
   if (flag) {
     if (!((std == "yes") || (std == "no")) || (stdA < verB))
       throw(std::invalid_argument("Invalid XML declaration"));
-    verA = stdA;
     verB = stdB;
   }
   verA = declaration.length();
@@ -1795,4 +1794,3 @@ int char_count(const std::string &astr, char delimiter) {
   }
   return cnt;
 }
-

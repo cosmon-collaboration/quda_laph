@@ -6,14 +6,6 @@ using namespace quda;
 
 namespace LaphEnv {
 
-// **************************************************************
-// *                                                            *
-// *                                                            *
-// *           GluonSmearingHandler implementation              *
-// *                                                            *
-// *                                                            *
-// **************************************************************
-
 // constructors
 
 GluonSmearingHandler::GluonSmearingHandler()
@@ -97,8 +89,6 @@ void GluonSmearingHandler::clear() {
   uPtr = 0;
 }
 
-// **********************************************************
-
 bool GluonSmearingHandler::isInfoSet() const {
   return ((smearPtr != 0) && (uPtr != 0));
 }
@@ -126,8 +116,6 @@ void GluonSmearingHandler::filefail(const string &message) {
   clear();
   errorLaph(message);
 }
-
-// **********************************************************
 
 // Compute the smeared gauge field and put into the file
 // whose name is stored in "h_filename".  Use file name
@@ -274,5 +262,4 @@ void GluonSmearingHandler::eraseDataOnDevice() {
   }
 }
 
-// ******************************************************************
 } // namespace LaphEnv

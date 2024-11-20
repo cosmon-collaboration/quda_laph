@@ -1,22 +1,16 @@
+#include "QudaLaphIncludes.h"
+
 #include "utils.h"
 #include "laph_stdio.h"
 #include "named_obj_map.h"
-#include "quda.h"
-#include "quda_info.h"
 #include "util_quda.h"
 #include "xml_handler.h"
 #include <unistd.h>
-
-#ifdef ARCH_PARALLEL
-#include <mpi.h>
-#endif
 
 using namespace quda;
 using namespace std;
 
 namespace LaphEnv {
-
-// *********************************************************
 
 //  Tests if file having name "file_name" exists on disk: works
 //  in global or local mode.
@@ -65,8 +59,6 @@ bool isFileOnDisk(const std::string &file_name) {
   return (tidyString(file_name).find("NOM_") != 0);
 }
 
-// *********************************************************
-
 // Returns true if this rank is the primary one (rank 0), false otherwise;
 // always returns true if serial (non-parallel)
 
@@ -78,11 +70,9 @@ bool isPrimaryRank() {
 #endif
 }
 
-// *********************************************************
-
 // Sends a string from rank "send_rank" to all other ranks
 
-void broadcastString(std::string &stringData, int send_rank) {
+void broadcastString(std::string &stringData, const int send_rank) {
 #ifdef ARCH_PARALLEL
   char *cbuf;
   int nchar;
@@ -118,8 +108,6 @@ void broadcastString(std::string &stringData, int send_rank) {
 #endif
 }
 
-// **************************************************************************
-
 //  This does a logical "and" of all of the boolean variables "flag"
 //  on each rank, and broadcasts the results to all ranks.
 
@@ -136,8 +124,6 @@ bool globalAnd(const bool &flag) {
   return result;
 #endif
 }
-
-// **************************************************************************
 
 //  This returns the maximum value of "ival" on all ranks,
 //  and returns the result to the primary rank.
@@ -184,8 +170,6 @@ double globalMax(const double &rval) {
 #endif
 }
 
-// **************************************************************************
-
 //  This returns the minimum value of "ival" on all ranks,
 //  and returns the result to the primary rank.
 
@@ -202,8 +186,6 @@ uint globalMin(const uint &uival) {
   return result;
 #endif
 }
-
-// *************************************************************************
 
 // Returns true if integer "ival" has the same value on all ranks; false
 // otherwise.
@@ -223,8 +205,6 @@ bool isIntegerSameAllRanks(const int &ival) {
   return (p[0] == -p[1]);
 #endif
 }
-
-// **************************************************************************
 
 // Returns true if boolean "bval" has the same value on all ranks; false
 // otherwise.
@@ -252,25 +232,22 @@ bool isBooleanSameAllRanks(bool bval) {
 #endif
 }
 
-// **************************************************************************
-
 // convert a vector of int to a vector of unsigned int
 
 std::vector<uint> unsign(const std::vector<int> &ivector) {
   return vector<uint>(ivector.begin(), ivector.end());
 }
 
-// *********************************************************
-
 #ifdef ARCH_PARALLEL
 
 // Send from one mpi rank to another (blocking)
 
-void commSendRecv(void *buffer, size_t nbytes, int send_rank, int recv_rank) {
+void commSendRecv(void *buffer, const size_t nbytes, const int send_rank,
+                  const int recv_rank) {
   if (send_rank == recv_rank)
     return;
-  int nranks = comm_size();
-  int myrank = comm_rank();
+  const int nranks = comm_size();
+  const int myrank = comm_rank();
   if ((send_rank >= nranks) || (recv_rank >= nranks)) {
     throw(std::runtime_error("Invalid MPI ranks given in commSendRecv"));
   }
@@ -292,7 +269,7 @@ size_t comm_size() // number of MPI ranks
   return quda::comm_size();
 }
 
-void comm_broadcast(void *data, size_t nbytes, int root) {
+void comm_broadcast(void *data, const size_t nbytes, const int root) {
   quda::comm_broadcast(data, nbytes, root);
 }
 
@@ -300,7 +277,7 @@ void comm_barrier() { quda::comm_barrier(); }
 
 int comm_rank() { return quda::comm_rank(); }
 
-int commCoords(int rank) { return quda::commCoords(rank); }
+int commCoords(const int rank) { return quda::commCoords(rank); }
 
 #endif
 
@@ -308,8 +285,6 @@ void laph_abort() {
   QudaInfo::clearDevice();
   errorQuda("aborting");
 }
-
-// ************************************************************************
 
 //  Extracts the integer value from the child tag named "tagname"
 //  in the XMLhandler "xmlin", and saves it in "ivalues[index]",
@@ -319,8 +294,8 @@ void laph_abort() {
 //  an exception is thrown.
 
 void xmlsetQLInt(XMLHandler &xmlin, const std::string &tagname,
-                 vector<int> &ivalues, int &index, bool optional,
-                 int default_value) {
+                 vector<int> &ivalues, int &index, const bool optional,
+                 const int default_value) {
   if (index >= int(ivalues.size())) {
     throw(std::runtime_error("ivalues vector not large enough for QL int set"));
   }
@@ -347,8 +322,8 @@ void xmlsetQLInt(XMLHandler &xmlin, const std::string &tagname,
 //  Will be stored as int though.
 
 void xmlsetQLBool(XMLHandler &xmlin, const std::string &tagname,
-                  vector<int> &ivalues, int &index, bool optional,
-                  bool default_value) {
+                  vector<int> &ivalues, int &index, const bool optional,
+                  const bool default_value) {
   if (index >= int(ivalues.size())) {
     throw(
         std::runtime_error("ivalues vector not large enough for QL bool set"));
@@ -381,8 +356,8 @@ void xmlsetQLBool(XMLHandler &xmlin, const std::string &tagname,
 //  Same as the above routine, except the value is of type double.
 
 void xmlsetQLReal(XMLHandler &xmlin, const std::string &tagname,
-                  vector<double> &rvalues, int &index, bool optional,
-                  double default_value) {
+                  vector<double> &rvalues, int &index, const bool optional,
+                  const double default_value) {
   if (index >= int(rvalues.size())) {
     throw(
         std::runtime_error("rvalues vector not large enough for QL real set"));
@@ -407,8 +382,8 @@ void xmlsetQLReal(XMLHandler &xmlin, const std::string &tagname,
 }
 
 void xmlsetQLIntVector(XMLHandler &xmlin, const std::string &tagname,
-                       vector<int> &ivalues, int &index, int nvalues,
-                       bool optional, const vector<int> &default_value) {
+                       vector<int> &ivalues, int &index, const int nvalues,
+                       const bool optional, const vector<int> &default_value) {
   if (index >= (int(ivalues.size()) - nvalues + 1)) {
     throw(std::runtime_error(
         "ivalues vector not large enough for QL int vector set"));
@@ -455,7 +430,7 @@ void xmlsetQLIntVector(XMLHandler &xmlin, const std::string &tagname,
 
 void xmlsetQLEnum(XMLHandler &xmlin, const std::string &tagname,
                   const vector<string> &xmlchoices, vector<int> &ivalues,
-                  int &index, bool optional, int default_index) {
+                  int &index, const bool optional, const int default_index) {
   if (index >= int(ivalues.size())) {
     throw(
         std::runtime_error("ivalues vector not large enough for QL enum set"));
@@ -529,7 +504,7 @@ XMLHandler xmloutputQLReal(const std::string &tagname,
 
 XMLHandler xmloutputQLIntVector(const std::string &tagname,
                                 const vector<int> &ivalues, int &index,
-                                int nvalues) {
+                                const int nvalues) {
   if (index >= (int(ivalues.size()) - nvalues + 1)) {
     throw(std::runtime_error("ivalues vector not large enough for QL output"));
   }
@@ -595,7 +570,7 @@ double xmlputQLReal(const std::string &tagname, const vector<double> &rvalues,
 
 vector<int> xmlputQLIntVector(const std::string &tagname,
                               const vector<int> &ivalues, int &index,
-                              int nvalues) {
+                              const int nvalues) {
   if (index >= (int(ivalues.size()) - nvalues + 1)) {
     throw(std::runtime_error("ivalues vector not large enough for QL put"));
   }
@@ -619,8 +594,6 @@ int xmlputQLEnum(const std::string &tagname, const std::vector<int> &quda_enums,
   return result;
 }
 
-// *********************************************************
-
 //  This routine looks for the tag "tagname" in the current children elements
 //  and returns the XML content under it, returning an XMLHandler with "tagname"
 //  as the root; if "tagname" is not found, then an XMLHandler is returned
@@ -637,6 +610,4 @@ XMLHandler getXML_nofail(XMLHandler xmlin, const std::string &tagname) {
   }
   return xmlh;
 }
-
-// *********************************************************
 } // namespace LaphEnv

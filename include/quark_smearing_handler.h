@@ -188,7 +188,7 @@ public:
 
   // public so I can test it
   void applyLaphPhaseConvention(std::vector<LattField> &laph_eigvecs);
-  
+
 private:
   void set_info(const GluonSmearingInfo &gluon_smearing,
                 const GaugeConfigurationInfo &gauge,

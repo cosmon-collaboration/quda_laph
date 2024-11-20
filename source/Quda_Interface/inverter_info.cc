@@ -99,29 +99,47 @@ void InverterInfo::setQudaInvertParam(
   }
 }
 
-// **********************************************************************
-// *                                                                    *
-// *    Conjugate-Gradient on Normal Equations:                         *
-// *      (all tags except <Name> optional; default values shown)       *
-// *                                                                    *
-// *   <InvertInfo>                                                     *
-// *     <Name>CGNR</Name>                                              *
-// *     <Tolerance>1.0e-10</Tolerance>                                 *
-// *     <MaxIterations>10000</MaxIterations>                           *
-// *   </InvertInfo>                                                    *
-// *                                                                    *
-// *         rvalues[0]=tolerance in residual                           *
-// *         ivalues[0]=maximum iterations                              *
-// *                                                                    *
-// **********************************************************************
+// these are always the same
+void InverterInfo::commonQudaInvertParam(QudaInvertParam &invParam) const {
+  invParam.cpu_prec = QudaInfo::get_cpu_prec();
+  invParam.cuda_prec = QudaInfo::get_cuda_prec();
+  invParam.solution_type = QUDA_MAT_SOLUTION;
+  invParam.solve_type = QUDA_DIRECT_PC_SOLVE;
+  invParam.matpc_type = QUDA_MATPC_EVEN_EVEN;
+  int ivalindex = 0, rvalindex = 0;
+  invParam.tol = xmlputQLReal("Tolerance", rvalues, rvalindex);
+  invParam.reliable_delta = 0.01;
+  invParam.maxiter = xmlputQLInt("MaxIterations", ivalues, ivalindex);
+  invParam.pipeline = 0;
+  invParam.dagger = QUDA_DAG_NO;
+  invParam.verbosity = getVerbosity();
+  invParam.compute_true_res = true;
+  invParam.preserve_source = QUDA_PRESERVE_SOURCE_NO;
+  invParam.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
+  invParam.cuda_prec_refinement_sloppy = QudaInfo::get_cuda_prec_sloppy();
+  invParam.cuda_prec_precondition = QudaInfo::get_cuda_prec_sloppy();
+  invParam.cuda_prec_eigensolver = QudaInfo::get_cuda_prec();
+}
+
+//
+//     Conjugate-Gradient on Normal Equations:
+//       (all tags except <Name> optional; default values shown)
+//
+//    <InvertInfo>
+//      <Name>CGNR</Name>
+//      <Tolerance>1.0e-10</Tolerance>
+//      <MaxIterations>10000</MaxIterations>
+//    </InvertInfo>
+//
+//          rvalues[0]=tolerance in residual
+//          ivalues[0]=maximum iterations
 
 void InverterInfo::set_info_cgnr(XMLHandler &xmlr) {
   svalues.resize(1);
   rvalues.resize(1);
   ivalues.resize(1);
   svalues[0] = "CGNR";
-  int rvalindex = 0;
-  int ivalindex = 0;
+  int rvalindex = 0, ivalindex = 0;
   xmlsetQLReal(xmlr, "Tolerance", rvalues, rvalindex, true, 1e-10);
   xmlsetQLInt(xmlr, "MaxIterations", ivalues, ivalindex, true, 10000);
 }
@@ -129,62 +147,38 @@ void InverterInfo::set_info_cgnr(XMLHandler &xmlr) {
 void InverterInfo::output_cgnr(XMLHandler &xmlout) const {
   xmlout.set_root("InverterInfo");
   xmlout.put_child("Name", "CGNR");
-  int ivalindex = 0;
-  int rvalindex = 0;
+  int ivalindex = 0, rvalindex = 0;
   xmlout.put_child(xmloutputQLReal("Tolerance", rvalues, rvalindex));
   xmlout.put_child(xmloutputQLInt("MaxIterations", ivalues, ivalindex));
 }
 
 void InverterInfo::setQudaInvertParam_cgnr(QudaInvertParam &invParam) const {
-  invParam.cpu_prec = QudaInfo::get_cpu_prec();
-  invParam.cuda_prec = QudaInfo::get_cuda_prec();
-  invParam.solution_type = QUDA_MAT_SOLUTION;
-  invParam.solve_type = QUDA_DIRECT_PC_SOLVE;
-  invParam.matpc_type = QUDA_MATPC_EVEN_EVEN;
-  // invParam.tune = QUDA_TUNE_YES;     deprecated
+  commonQudaInvertParam(invParam);
   invParam.inv_type = QUDA_CGNR_INVERTER;
-  int ivalindex = 0;
-  int rvalindex = 0;
-  invParam.tol = xmlputQLReal("Tolerance", rvalues, rvalindex);
-  invParam.reliable_delta = 0.01; //  mixed precision parameter (how often
-  invParam.maxiter = xmlputQLInt("MaxIterations", ivalues,
-                                 ivalindex); // compute high precision residual
-  invParam.pipeline = 0;
-  invParam.dagger = QUDA_DAG_NO;
-  invParam.verbosity = getVerbosity();
-  invParam.compute_true_res = true;
-  invParam.preserve_source = QUDA_PRESERVE_SOURCE_NO;
-  invParam.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
-  invParam.cuda_prec_refinement_sloppy = QudaInfo::get_cuda_prec_sloppy();
-  invParam.cuda_prec_precondition = QudaInfo::get_cuda_prec_sloppy();
-  invParam.cuda_prec_eigensolver = QudaInfo::get_cuda_prec();
   invParam.struct_size = sizeof(invParam);
 }
 
-// *************************************************************************
-// *                                                                       *
-// *    Biconjugate Gradient Stabilized:                                   *
-// *                                                                       *
-// *      (all tags except <Name> optional; default values shown)          *
-// *                                                                       *
-// *   <InvertInfo>                                                        *
-// *     <Name>BICGSTAB</Name>                                             *
-// *     <Tolerance>1.0e-10</Tolerance>                                    *
-// *     <MaxIterations>6000</MaxIterations>                               *
-// *   </InvertInfo>                                                       *
-// *                                                                       *
-// *         rvalues[0]=tolerance in residual                              *
-// *         ivalues[0]=maximum iterations                                 *
-// *                                                                       *
-// *************************************************************************
+//
+//     Biconjugate Gradient Stabilized:
+//
+//       (all tags except <Name> optional; default values shown)
+//
+//    <InvertInfo>
+//      <Name>BICGSTAB</Name>
+//      <Tolerance>1.0e-10</Tolerance>
+//      <MaxIterations>6000</MaxIterations>
+//    </InvertInfo>
+//
+//          rvalues[0]=tolerance in residual
+//          ivalues[0]=maximum iterations
+//
 
 void InverterInfo::set_info_bicgstab(XMLHandler &xmlr) {
   svalues.resize(1);
   rvalues.resize(1);
   ivalues.resize(1);
   svalues[0] = "BICGSTAB";
-  int rvalindex = 0;
-  int ivalindex = 0;
+  int rvalindex = 0, ivalindex = 0;
   xmlsetQLReal(xmlr, "Tolerance", rvalues, rvalindex, true, 1e-10);
   xmlsetQLInt(xmlr, "MaxIterations", ivalues, ivalindex, true, 6000);
 }
@@ -192,71 +186,44 @@ void InverterInfo::set_info_bicgstab(XMLHandler &xmlr) {
 void InverterInfo::output_bicgstab(XMLHandler &xmlout) const {
   xmlout.set_root("InverterInfo");
   xmlout.put_child("Name", "BICGSTAB");
-  int ivalindex = 0;
-  int rvalindex = 0;
+  int ivalindex = 0, rvalindex = 0;
   xmlout.put_child(xmloutputQLReal("Tolerance", rvalues, rvalindex));
   xmlout.put_child(xmloutputQLInt("MaxIterations", ivalues, ivalindex));
 }
 
 void InverterInfo::setQudaInvertParam_bicgstab(
     QudaInvertParam &invParam) const {
-  invParam.cpu_prec = QudaInfo::get_cpu_prec();
-  invParam.cuda_prec = QudaInfo::get_cuda_prec();
-  invParam.solution_type = QUDA_MAT_SOLUTION;
-  invParam.solve_type = QUDA_DIRECT_PC_SOLVE;
-  invParam.matpc_type = QUDA_MATPC_EVEN_EVEN;
-  // invParam.tune = QUDA_TUNE_YES;
+  commonQudaInvertParam(invParam);
   invParam.inv_type = QUDA_BICGSTAB_INVERTER;
-  int ivalindex = 0;
-  int rvalindex = 0;
-  invParam.tol = xmlputQLReal("Tolerance", rvalues, rvalindex);
-  invParam.reliable_delta = 0.01; //  mixed precision parameter (how often
-  invParam.maxiter = xmlputQLInt("MaxIterations", ivalues,
-                                 ivalindex); // compute high precision residual
-  invParam.pipeline = 0;
-  invParam.dagger = QUDA_DAG_NO;
-  invParam.verbosity = getVerbosity();
-  invParam.compute_true_res = true;
-  invParam.preserve_source = QUDA_PRESERVE_SOURCE_NO;
-  invParam.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
-  invParam.cuda_prec_refinement_sloppy = QudaInfo::get_cuda_prec_sloppy();
-  invParam.cuda_prec_precondition = QudaInfo::get_cuda_prec_sloppy();
-  // invParam.cuda_prec_precondition =
-  // QUDA_HALF_PRECISION;QudaInfo::get_cuda_prec_sloppy();
-  invParam.cuda_prec_eigensolver = QudaInfo::get_cuda_prec();
   invParam.struct_size = sizeof(invParam);
 }
 
-// **********************************************************************
-// *                                                                    *
-// *    Generalized Conjugate Residual (Restarted OrthoDir)             *
-// *                                                                    *
-// *    With restarting, the Krylov subspace can be limited and does    *
-// *    not need to keep growing.  This version can be used with        *
-// *    variable preconditioning (such as Multigrid).                   *
-// *                                                                    *
-// *      (all tags except <Name> optional; default values shown)       *
-// *                                                                    *
-// *   <InvertInfo>                                                     *
-// *     <Name>GCR</Name>                                               *
-// *     <Tolerance>1.0e-10</Tolerance>                                 *
-// *     <MaxIterations>5000</MaxIterations>                            *
-// *     <NKrylov>16</NKrylov>                                          *
-// *   </InvertInfo>                                                    *
-// *                                                                    *
-// *         rvalues[0]=tolerance in residual                           *
-// *         ivalues[0]=maximum iterations                              *
-// *         ivalues[1]=NKrylov                                         *
-// *                                                                    *
-// **********************************************************************
+//
+//     Generalized Conjugate Residual (Restarted OrthoDir)
+//
+//     With restarting, the Krylov subspace can be limited and does
+//     not need to keep growing.  This version can be used with
+//     variable preconditioning (such as Multigrid).
+//
+//       (all tags except <Name> optional; default values shown)
+//
+//    <InvertInfo>
+//      <Name>GCR</Name>
+//      <Tolerance>1.0e-10</Tolerance>
+//      <MaxIterations>5000</MaxIterations>
+//      <NKrylov>16</NKrylov>
+//    </InvertInfo>
+//
+//          rvalues[0]=tolerance in residual
+//          ivalues[0]=maximum iterations
+//          ivalues[1]=NKrylov
 
 void InverterInfo::set_info_gcr(XMLHandler &xmlr) {
   svalues.resize(1);
   rvalues.resize(1);
   ivalues.resize(2);
   svalues[0] = "GCR";
-  int rvalindex = 0;
-  int ivalindex = 0;
+  int rvalindex = 0, ivalindex = 0;
   xmlsetQLReal(xmlr, "Tolerance", rvalues, rvalindex, true, 1e-10);
   xmlsetQLInt(xmlr, "MaxIterations", ivalues, ivalindex, true, 5000);
   xmlsetQLInt(xmlr, "NKrylov", ivalues, ivalindex, true, 16);
@@ -265,94 +232,69 @@ void InverterInfo::set_info_gcr(XMLHandler &xmlr) {
 void InverterInfo::output_gcr(XMLHandler &xmlout) const {
   xmlout.set_root("InverterInfo");
   xmlout.put_child("Name", "GCR");
-  int ivalindex = 0;
-  int rvalindex = 0;
+  int ivalindex = 0, rvalindex = 0;
   xmlout.put_child(xmloutputQLReal("Tolerance", rvalues, rvalindex));
   xmlout.put_child(xmloutputQLInt("MaxIterations", ivalues, ivalindex));
   xmlout.put_child(xmloutputQLInt("NKrylov", ivalues, ivalindex));
 }
 
 void InverterInfo::setQudaInvertParam_gcr(QudaInvertParam &invParam) const {
-  invParam.cpu_prec = QudaInfo::get_cpu_prec();
-  invParam.cuda_prec = QudaInfo::get_cuda_prec();
-  invParam.solution_type = QUDA_MAT_SOLUTION;
-  invParam.solve_type = QUDA_DIRECT_PC_SOLVE;
-  invParam.matpc_type = QUDA_MATPC_EVEN_EVEN;
-  // invParam.tune = QUDA_TUNE_YES;
+  commonQudaInvertParam(invParam);
   invParam.inv_type = QUDA_GCR_INVERTER;
-  int ivalindex = 0;
-  int rvalindex = 0;
-  invParam.tol = xmlputQLReal("Tolerance", rvalues, rvalindex);
-  invParam.reliable_delta = 0.01; //  mixed precision parameter (how often
-  invParam.maxiter = xmlputQLInt("MaxIterations", ivalues,
-                                 ivalindex); // compute high precision residual
-  invParam.gcrNkrylov = xmlputQLInt("NKrylov", ivalues, ivalindex);
-  invParam.pipeline = 0;
-  invParam.dagger = QUDA_DAG_NO;
-  invParam.verbosity = getVerbosity();
-  invParam.compute_true_res = true;
-  invParam.preserve_source = QUDA_PRESERVE_SOURCE_NO;
-  invParam.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
-  invParam.cuda_prec_refinement_sloppy = QudaInfo::get_cuda_prec_sloppy();
-  invParam.cuda_prec_precondition = QudaInfo::get_cuda_prec_sloppy();
-  invParam.cuda_prec_eigensolver = QudaInfo::get_cuda_prec();
   invParam.struct_size = sizeof(invParam);
 }
 
-// *******************************************************************************
-// * *
-// *    GCR Inverter with Adaptive Multigrid Preconditioning *
-// * *
-// *   XML input should have the following form: *
-// *      (all tags except initial <Name> optional; default values shown, *
-// *       except as discussed below) *
-// * *
-// *   <InvertInfo> *
-// *     <Name>GCR_MULTIGRID</Name> *
-// *     <Tolerance>1.0e-11</Tolerance> *
-// *     <MaxIterations>200</MaxIterations> *
-// *     <NKrylov>24</NKrylov> *
-// *     <MGPreconditioner> *
-// *        <NumLevels>2</NumLevels>    2,3,4 (2 or 3 usually best) *
-// *        <Level0> *
-// *           <XYZTBlockExtents>4 4 4 4</XYZTBlockExtents> *
-// *           <NullSpaceDim>S</NullSpaceDim>  (S=small 24, L=large 32) *
-// *           <NullSpaceSolveSteps>500</NullSpaceSolveSteps> *
-// *           <CoarseSolverTolerance>0.25</CoarseSolverTolerance> *
-// *           <CoarseSolverMaxIterations>50</CoarseSolverMaxIterations> *
-// *           <NumPreSmooth>0</NumPreSmooth> *
-// *           <NumPostSmooth>4</NumPostSmooth> *
-// *        </Level0> *
-// *        <Level1> ...similar to level 0 </Level1> *
-// *        <Level2>  (the coarsest level) *
-// *           <CoarseSolverTolerance>0.25</CoarseSolverTolerance> *
-// *           <CoarseSolverMaxIterations>50</CoarseSolverMaxIterations> *
-// *           <TRLMDeflation>...</TRLMDeflation>  (default: absent) *
-// *        </Level2> *
-// *        <LoadNullVectors>false</LoadNullVectors>     compute or reload *
-// *        <GenerateAllLevels>true</GenerateAllLevels>  all or level 0 only *
-// *        <PreOrthoNullVectors>true</PreOrthoNullVectors> *
-// *        <PostOrthoNullVectors>true</PostOrthoNullVectors> *
-// *        <SetupMinimizeMemory>false<SetupMinimizeMemory> *
-// *        <RunVerify>false</RunVerify>   (use true for initial runs) *
-// *     </MGPreconditioner> *
-// *   </InvertInfo> *
-// * *
-// *  Input XML for the deflation on coarsest level (if present) *
-// * *
-// *   <TRLMDeflation> *
-// *      <NumVectors> 128 </NumVectors> *
-// *      <Tolerance> 1e-6 </Tolerance> *
-// *      <MaxIterations> 100 </MaxIterations> *
-// *      <ChebyshevOrder> 8 </ChebyshevOrder> *
-// *      <CutoffEigenvalue> 0.1 </CutoffEigenvalue> *
-// *   </TRLMDeflation> *
-// * *
-// *  On an L^3 x T lattice: *
-// *     - default value for <NumLevels> is 2 *
-// *     - default <XYZTBlockExtents> values determined based on L,T *
-// * *
-// *******************************************************************************
+//  GCR Inverter with Adaptive Multigrid Preconditioning
+//
+//    XML input should have the following form:
+//       (all tags except initial <Name> optional; default values shown,
+//        except as discussed below)
+//
+//    <InvertInfo>
+//      <Name>GCR_MULTIGRID</Name>
+//      <Tolerance>1.0e-11</Tolerance>
+//      <MaxIterations>200</MaxIterations>
+//      <NKrylov>24</NKrylov>
+//      <MGPreconditioner>
+//         <NumLevels>2</NumLevels>    2,3,4 (2 or 3 usually best)
+//         <Level0>
+//            <XYZTBlockExtents>4 4 4 4</XYZTBlockExtents>
+//            <NullSpaceDim>S</NullSpaceDim>  (S=small 24, L=large 32)
+//            <NullSpaceSolveSteps>500</NullSpaceSolveSteps>
+//            <CoarseSolverTolerance>0.25</CoarseSolverTolerance>
+//            <CoarseSolverMaxIterations>50</CoarseSolverMaxIterations>
+//            <NumPreSmooth>0</NumPreSmooth>
+//            <NumPostSmooth>4</NumPostSmooth>
+//         </Level0>
+//         <Level1> ...similar to level 0 </Level1>
+//         <Level2>  (the coarsest level)
+//            <CoarseSolverTolerance>0.25</CoarseSolverTolerance>
+//            <CoarseSolverMaxIterations>50</CoarseSolverMaxIterations>
+//            <TRLMDeflation>...</TRLMDeflation>  (default: absent)
+//         </Level2>
+//         <LoadNullVectors>false</LoadNullVectors>     compute or reload
+//         <GenerateAllLevels>true</GenerateAllLevels>  all or level 0 only
+//         <PreOrthoNullVectors>true</PreOrthoNullVectors>
+//         <PostOrthoNullVectors>true</PostOrthoNullVectors>
+//         <SetupMinimizeMemory>false<SetupMinimizeMemory>
+//         <RunVerify>false</RunVerify>   (use true for initial runs)
+//      </MGPreconditioner>
+//    </InvertInfo>
+//
+//   Input XML for the deflation on coarsest level (if present)
+//
+//    <TRLMDeflation>
+//       <NumVectors> 128 </NumVectors>
+//       <Tolerance> 1e-6 </Tolerance>
+//       <MaxIterations> 100 </MaxIterations>
+//       <ChebyshevOrder> 8 </ChebyshevOrder>
+//       <CutoffEigenvalue> 0.1 </CutoffEigenvalue>
+//    </TRLMDeflation>
+//
+//   On an L^3 x T lattice:
+//      - default value for <NumLevels> is 2
+//      - default <XYZTBlockExtents> values determined based on L,T
+//
 
 void InverterInfo::set_info_gcr_multigrid(XMLHandler &xmlr) {
   svalues.resize(1);
@@ -361,8 +303,7 @@ void InverterInfo::set_info_gcr_multigrid(XMLHandler &xmlr) {
   rvalues.resize(2 + (mg_max_levels - 1) + 2 * deflate);
   ivalues.resize(11 + 9 * (mg_max_levels - 1) + 3 * deflate);
   svalues[0] = "GCR_MULTIGRID";
-  int rvalindex = 0;
-  int ivalindex = 0;
+  int rvalindex = 0, ivalindex = 0;
   xmlsetQLReal(xmlr, "Tolerance", rvalues, rvalindex, true, 1e-11);
   xmlsetQLInt(xmlr, "MaxIterations", ivalues, ivalindex, true, 200);
   xmlsetQLInt(xmlr, "NKrylov", ivalues, ivalindex, true, 24);
@@ -382,7 +323,7 @@ void InverterInfo::set_info_gcr_multigrid(XMLHandler &xmlr) {
 
   // loop over levels, except for coarsest last level
   for (int level = 0; level < (nlevels - 1); ++level) {
-    string tag = "Level" + make_string(level);
+    const string tag = "Level" + make_string(level);
     XMLHandler xmllevel(getXML_nofail(xmlmg, tag));
     vector<int> block_extents(LayoutInfo::Ndim);
     do_blocking(localextents, block_extents); // set default blocking extents
@@ -418,7 +359,7 @@ void InverterInfo::set_info_gcr_multigrid(XMLHandler &xmlr) {
   }
 
   // now probe coarsest last level
-  int level = nlevels - 1;
+  const int level = nlevels - 1;
   string tag = "Level" + make_string(level);
   XMLHandler xmllevel(getXML_nofail(xmlmg, tag));
   xmlsetQLReal(xmllevel, "CoarseSolverTolerance", rvalues, rvalindex, true,
@@ -448,14 +389,10 @@ void InverterInfo::set_info_gcr_multigrid(XMLHandler &xmlr) {
   xmlsetQLBool(xmlmg, "PostOrthoNullVectors", ivalues, ivalindex, true, true);
   xmlsetQLBool(xmlmg, "SetupMinimizeMemory", ivalues, ivalindex, true, false);
   xmlsetQLBool(xmlmg, "RunVerify", ivalues, ivalindex, true, true);
-  // printLaph(make_str("rvalindex = ",rvalindex," size of rvalues =
-  // ",rvalues.size())); printLaph(make_str("ivalindex = ",ivalindex," size of
-  // ivalues = ",ivalues.size()));
 }
 
 void InverterInfo::output_gcr_multigrid(XMLHandler &xmlout) const {
-  int ivalindex = 0;
-  int rvalindex = 0;
+  int ivalindex = 0, rvalindex = 0;
   xmlout.set_root("InverterInfo");
   xmlout.put_child("Name", "GCR_MULTIGRID");
   xmlout.put_child(xmloutputQLReal("Tolerance", rvalues, rvalindex));
@@ -482,7 +419,7 @@ void InverterInfo::output_gcr_multigrid(XMLHandler &xmlout) const {
     xmllevel.put_child(xmloutputQLInt("NumPostSmooth", ivalues, ivalindex));
     xmlmg.put_child(xmllevel);
   }
-  int level = nlevels - 1;
+  const int level = nlevels - 1;
   string tag = "Level";
   tag += make_string(level);
   XMLHandler xmllevel(tag);
@@ -510,22 +447,18 @@ void InverterInfo::output_gcr_multigrid(XMLHandler &xmlout) const {
   xmlmg.put_child(xmloutputQLBool("SetupMinimizeMemory", ivalues, ivalindex));
   xmlmg.put_child(xmloutputQLBool("RunVerify", ivalues, ivalindex));
   xmlout.put_child(xmlmg);
-  // printLaph(make_str("rvalindex = ",rvalindex," size of rvalues =
-  // ",rvalues.size())); printLaph(make_str("ivalindex = ",ivalindex," size of
-  // ivalues = ",ivalues.size()));
 }
 
 void InverterInfo::setQudaInvertParam_gcr_multigrid(
     QudaInvertParam &invParam, const QuarkActionInfo &qactioninfo) const {
-  int ivalindex = 0;
-  int rvalindex = 0;
-  double outer_tolerance = rvalues[rvalindex];
+  int ivalindex = 0, rvalindex = 0;
+  const double outer_tolerance = rvalues[rvalindex];
   ++rvalindex;
-  int outer_maxiter = ivalues[ivalindex];
+  const int outer_maxiter = ivalues[ivalindex];
   ++ivalindex;
-  int outer_Nkrylov = ivalues[ivalindex];
+  const int outer_Nkrylov = ivalues[ivalindex];
   ++ivalindex;
-  int nlevels = ivalues[ivalindex];
+  const int nlevels = ivalues[ivalindex];
   ++ivalindex;
 
   vector<vector<int>> blockextents(nlevels, vector<int>(LayoutInfo::Ndim));
@@ -554,18 +487,15 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
     ++ivalindex;
   }
 
-  int level = nlevels - 1;
+  const int level = nlevels - 1;
   coarse_solver_tol[level] = rvalues[rvalindex];
   ++rvalindex;
   coarse_solver_maxiter[level] = ivalues[ivalindex];
   ++ivalindex;
-  int coarsest_deflate = ivalues[ivalindex];
+  const int coarsest_deflate = ivalues[ivalindex];
   ivalindex++;
-  double deflate_tol = 0.0;
-  int deflate_maxits = 0;
-  int deflate_nvectors = 0;
-  int deflate_chebyshev = 0;
-  double deflate_cutoff = 0.0;
+  double deflate_tol = 0.0, deflate_cutoff = 0.0;
+  int deflate_maxits = 0, deflate_nvectors = 0, deflate_chebyshev = 0;
   if (coarsest_deflate) {
     deflate_tol = rvalues[rvalindex];
     ++rvalindex;
@@ -579,17 +509,17 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
     ++rvalindex;
   }
 
-  bool load_null_vectors = (ivalues[ivalindex]) ? true : false;
+  const bool load_null_vectors = (ivalues[ivalindex]) ? true : false;
   ++ivalindex;
-  bool generate_all = (ivalues[ivalindex]) ? true : false;
+  const bool generate_all = (ivalues[ivalindex]) ? true : false;
   ++ivalindex;
-  bool pre_ortho_setup = (ivalues[ivalindex]) ? true : false;
+  const bool pre_ortho_setup = (ivalues[ivalindex]) ? true : false;
   ++ivalindex;
-  bool post_orth_setup = (ivalues[ivalindex]) ? true : false;
+  const bool post_orth_setup = (ivalues[ivalindex]) ? true : false;
   ++ivalindex;
-  bool minimize_mem = (ivalues[ivalindex]) ? true : false;
+  const bool minimize_mem = (ivalues[ivalindex]) ? true : false;
   ++ivalindex;
-  bool setup_verify = (ivalues[ivalindex]) ? true : false;
+  const bool setup_verify = (ivalues[ivalindex]) ? true : false;
   ++ivalindex;
 
   double setup_tolerance = 1e-10; // so setup will continue to max iteration
@@ -706,8 +636,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
     mg_param.smoother_tol[level] = smoother_tol;
     mg_param.smoother_solver_ca_basis[level] = QUDA_POWER_BASIS;
     mg_param.smoother_solver_ca_lambda_min[level] = 0.0;
-    mg_param.smoother_solver_ca_lambda_max[level] =
-        -1.0; // use power iterations
+    mg_param.smoother_solver_ca_lambda_max[level] = -1.0;
     mg_param.nu_pre[level] = presmooth_num[level];
     mg_param.nu_post[level] = postsmooth_num[level];
     mg_param.omega[level] = 1.0;
@@ -715,8 +644,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
     mg_param.location[level] = QUDA_CUDA_FIELD_LOCATION;
     mg_param.precision_null[level] = QUDA_HALF_PRECISION;
     mg_param.verbosity[level] = QUDA_SUMMARIZE;
-    mg_param.global_reduction[level] =
-        QUDA_BOOLEAN_YES; // yes, unless using schwarz smoother
+    mg_param.global_reduction[level] = QUDA_BOOLEAN_YES;
     mg_param.use_eig_solver[level] = QUDA_BOOLEAN_FALSE;
     mg_param.setup_use_mma[level] = QUDA_BOOLEAN_FALSE;
     mg_param.dslash_use_mma[level] = QUDA_BOOLEAN_FALSE;
@@ -733,8 +661,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
       mg_param.use_eig_solver[level] = QUDA_BOOLEAN_TRUE;
       mg_param.vec_load[level] = QUDA_BOOLEAN_FALSE;
       mg_param.vec_store[level] = QUDA_BOOLEAN_FALSE;
-      QudaEigParam &coarse_deflate_param(
-          QudaMGInfoPtr->coarse_deflate_param); // to shorten notation
+      QudaEigParam &coarse_deflate_param(QudaMGInfoPtr->coarse_deflate_param);
       coarse_deflate_param.use_poly_acc =
           (deflate_chebyshev > 1) ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE;
       coarse_deflate_param.poly_deg = deflate_chebyshev;
@@ -750,7 +677,6 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
     }
   }
   mg_param.struct_size = sizeof(mg_param);
-  // printQudaMultigridParam(&mg_param);
 }
 
 // Initializes the QudaEigParam and its needed QudaInvertParam for the
@@ -775,15 +701,13 @@ void InverterInfo::initDeflationParam_gcr_multigrid() const {
 // returned in increasing order in "factors".  "ivalue"
 // cannot exceed 1024.
 
-void InverterInfo::factorize(uint ivalue, list<uint> &factors) const {
+void InverterInfo::factorize(const uint ivalue, list<uint> &factors) const {
   if (ivalue > 1024) {
     throw(std::invalid_argument("Cannot factorize for value > 1024"));
   }
-  vector<uint> primes({2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37});
+  const vector<uint> primes({2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37});
   factors.clear();
-  uint n = ivalue;
-  uint k = 0;
-  uint f = primes[k];
+  uint n = ivalue, k = 0, f = primes[k];
   while (f * f <= n) {
     if (n % f == 0) {
       factors.push_back(f);
@@ -805,7 +729,7 @@ void InverterInfo::factorize(uint ivalue, list<uint> &factors) const {
 
 void InverterInfo::do_blocking(const vector<int> &extents,
                                vector<int> &block_extents) const {
-  uint Nd = LayoutInfo::Ndim;
+  const uint Nd = LayoutInfo::Ndim;
   const uint max_block_val = 864;
   block_extents.resize(Nd);
   for (uint d = 0; d < Nd; ++d)
@@ -814,9 +738,7 @@ void InverterInfo::do_blocking(const vector<int> &extents,
   for (uint d = 0; d < Nd; ++d) {
     factorize(extents[d], factors[d]);
   }
-  uint d = 0;
-  uint block_vol = 1;
-  uint empty = 0;
+  uint d = 0, block_vol = 1, empty = 0;
   for (uint d = 0; d < Nd; ++d) {
     if (factors[d].empty())
       ++empty;
@@ -866,6 +788,4 @@ bool InverterInfo::check_blocking(std::vector<int> &block_extents,
   }
   return true;
 }
-
-// *******************************************************************
 } // namespace LaphEnv

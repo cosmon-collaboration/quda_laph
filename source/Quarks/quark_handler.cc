@@ -1,10 +1,9 @@
+#include "QudaLaphIncludes.h"
+
 #include "quark_handler.h"
 #include "array.h"
 #include "field_ops.h"
 #include "multi_compare.h"
-#include "stop_watch.h"
-
-#include "QudaLaphBlas.h"
 
 // STILL TO DO:  single asynchronous thread for output so can continue next
 // computations
@@ -17,16 +16,12 @@ typedef std::complex<float> fcmplx;
 
 namespace LaphEnv {
 
-// *************************************************************************
-
 void QuarkHandler::RecordKey::output(XMLHandler &xmlw) const {
   xmlw.set_root("RecordKey");
   xmlw.put_child("Spin", make_string(getSpin()));
   xmlw.put_child("Time", make_string(getTime()));
   xmlw.put_child("SpinLaphEigvecIndex", make_string(getSpinLaphEigvecIndex()));
 }
-
-// *************************************************************************
 
 QuarkHandler::FileKey::FileKey(const LaphNoiseInfo &in_noise, int tprojind)
     : noise(in_noise), time_proj_index(tprojind) {}
@@ -70,8 +65,6 @@ bool QuarkHandler::FileKey::operator==(const FileKey &rhs) const {
 bool QuarkHandler::FileKey::operator!=(const FileKey &rhs) const {
   return multiNotEqual(time_proj_index, rhs.time_proj_index, noise, rhs.noise);
 }
-
-// *************************************************************************
 
 QuarkHandler::StorageKey::StorageKey(const FileKey &in_fkey,
                                      const RecordKey &in_stkey,
@@ -130,7 +123,7 @@ QuarkHandler::QuarkHandler(
     const GluonSmearingInfo &gluonsmear, const QuarkSmearingInfo &quarksmear,
     const DilutionSchemeInfo &dil, const QuarkActionInfo &quark,
     const FileListInfo &flist, const string &smeared_quark_filestub,
-    const string &smeared_gauge_filename, bool setComputeMode)
+    const string &smeared_gauge_filename, const bool setComputeMode)
     : invertPtr(0), compute_mode(setComputeMode), preconditioner(0),
       dilHandler(0), DHputPtr(0), DHgetPtr(0), normal_mode(true) {
   set_info(gaugeinfo, gluonsmear, quarksmear, dil, quark, flist,
@@ -142,7 +135,7 @@ void QuarkHandler::setInfo(
     const GluonSmearingInfo &gluonsmear, const QuarkSmearingInfo &quarksmear,
     const DilutionSchemeInfo &dil, const QuarkActionInfo &quark,
     const FileListInfo &flist, const string &smeared_quark_filestub,
-    const string &smeared_gauge_filename, bool setComputeMode) {
+    const string &smeared_gauge_filename, const bool setComputeMode) {
   clear();
   compute_mode = setComputeMode;
   set_info(gaugeinfo, gluonsmear, quarksmear, dil, quark, flist,
@@ -363,12 +356,6 @@ void QuarkHandler::clear() {
   delete DHputPtr;
   DHputPtr = 0;
 }
-
-// ********************************
-// *
-// *    sub-handler connections  (private)
-// *
-// ********************************
 
 void QuarkHandler::connectGaugeConfigurationHandler() {
   if ((gaugeCounter == 0) && (gaugeHandler.get() == 0)) {
@@ -596,12 +583,12 @@ int QuarkHandler::getNumberOfTimeDilutionProjectors() const {
   return dilHandler->getNumberOfTimeProjectors();
 }
 
-int QuarkHandler::getTimeDilutionProjectorIndex(int time_val) const {
+int QuarkHandler::getTimeDilutionProjectorIndex(const int time_val) const {
   check_info_set("getTimeDilutionProjectorIndex");
   return dilHandler->getTimeProjectorIndex(time_val);
 }
 
-const list<int> &QuarkHandler::getOnTimes(int time_proj_index) const {
+const list<int> &QuarkHandler::getOnTimes(const int time_proj_index) const {
   check_info_set("getOnTimes");
   return dilHandler->getOnTimes(time_proj_index);
 }
@@ -616,7 +603,7 @@ int QuarkHandler::getTimeExtent() const {
   return uPtr->getTimeExtent();
 }
 
-bool QuarkHandler::checkHeader(XMLHandler &xmlin, int suffix) {
+bool QuarkHandler::checkHeader(XMLHandler &xmlin, const int suffix) {
   XMLHandler xml_in(xmlin);
   if (xml_tag_count(xml_in, "QuarkHandlerDataFile") != 1)
     return false;
@@ -639,7 +626,8 @@ bool QuarkHandler::checkHeader(XMLHandler &xmlin, int suffix) {
 }
 
 void QuarkHandler::writeHeader(XMLHandler &xmlout,
-                               const QuarkHandler::FileKey &fkey, int suffix) {
+                               const QuarkHandler::FileKey &fkey,
+                               const int suffix) {
   xmlout.set_root("QuarkHandlerDataFile");
   XMLHandler xmltmp;
   uPtr->output(xmltmp);
@@ -672,7 +660,8 @@ void QuarkHandler::setUpPreconditioning(QudaInvertParam &invParam) {
   }
 }
 
-void QuarkHandler::computeSinks(bool verbose, bool extra_soln_check) {
+void QuarkHandler::computeSinks(const bool verbose,
+                                const bool extra_soln_check) {
   check_compute_ready("computeSink");
   StopWatch totaltime;
   totaltime.start();
@@ -688,8 +677,8 @@ void QuarkHandler::computeSinks(bool verbose, bool extra_soln_check) {
 
   // check temporal boundary conditions in InverterInfo and
   // GaugeConfigurationInfo are the same
-  bool tbc1 = qactionPtr->isFermionTimeBCAntiPeriodic();
-  bool tbc2 = uPtr->isFermionTimeBCAntiPeriodic();
+  const bool tbc1 = qactionPtr->isFermionTimeBCAntiPeriodic();
+  const bool tbc2 = uPtr->isFermionTimeBCAntiPeriodic();
   if (tbc1 != tbc2) {
     errorLaph("Inconsistent fermion time boundary conditions in "
               "QuarkActionInfo and GaugeConfigurationInfo",
@@ -701,7 +690,7 @@ void QuarkHandler::computeSinks(bool verbose, bool extra_soln_check) {
   rolex.start();
   gaugeHandler->setData();
   // quda hack to handle antifermionic temporal boundary conditions
-  bool fermbchack = qactionPtr->isFermionTimeBCAntiPeriodic();
+  const bool fermbchack = qactionPtr->isFermionTimeBCAntiPeriodic();
   if (fermbchack) {
     gaugeHandler->eraseDataOnDevice(); // erase on device to apply b.c. below to
                                        // host, then copy to device
@@ -744,7 +733,7 @@ void QuarkHandler::computeSinks(bool verbose, bool extra_soln_check) {
   // load the LapH eigenvectors onto host, store pointers
   rolex.reset();
   rolex.start();
-  int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
+  const int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
   vector<void *> evList(nEigs);
   for (int n = 0; n < nEigs; n++) {
     evList[n] =
@@ -756,12 +745,9 @@ void QuarkHandler::computeSinks(bool verbose, bool extra_soln_check) {
   double evreadtime = rolex.getTimeInSeconds();
   printLaph(make_str("All Laph eigvecs read in ", evreadtime, " seconds\n"));
 
-  double srctime = 0.0;
-  double invtime = 0.0;
-  double evprojtime = 0.0;
-  double writetime = 0.0;
+  const int ncomp = sinkComps.computations.size();
+  double srctime = 0.0, invtime = 0.0, evprojtime = 0.0, writetime = 0.0;
   int count = 0;
-  int ncomp = sinkComps.computations.size();
 
   for (list<SinkComputation>::const_iterator it =
            sinkComps.computations.begin();
@@ -803,11 +789,12 @@ void QuarkHandler::computeSinks(bool verbose, bool extra_soln_check) {
 //  do inversions for all spin-laph-eigenvector dilution indices
 //  but for one noise, one time projector index
 
-void QuarkHandler::computeSinks(const LaphNoiseInfo &noise, int time_proj_index,
-                                const std::vector<void *> &evList, bool verbose,
-                                bool extra_soln_check, double &src_time,
-                                double &inv_time, double &evproj_time,
-                                double &write_time) {
+void QuarkHandler::computeSinks(const LaphNoiseInfo &noise,
+                                const int time_proj_index,
+                                const std::vector<void *> &evList,
+                                const bool verbose, const bool extra_soln_check,
+                                double &src_time, double &inv_time,
+                                double &evproj_time, double &write_time) {
   if (!dilHandler->isValidTimeProjectorIndex(time_proj_index)) {
     printLaph(
         make_strf("invalid time projector index %d for compute in QuarkHandler",
@@ -822,15 +809,15 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise, int time_proj_index,
   printLaph(" one time dilution projector beginning");
   printLaph(make_strf(" Time dilution projector index = %d", time_proj_index));
 
-  int Textent = uPtr->getTimeExtent();
-  int Nspin = FieldNspin;
-  int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
-  int ndil = dilHandler->getNumberOfSpinEigvecProjectors();
-  int minTime = 0;
-  int maxTime = Textent - 1;
-  uint nSinkLaphBatch = sinkComps.nSinkLaphBatch;
-  uint nSinkQudaBatch = sinkComps.nSinkQudaBatch;
-  uint nEigQudaBatch = sinkComps.nEigQudaBatch;
+  const int Textent = uPtr->getTimeExtent();
+  const int Nspin = FieldNspin;
+  const int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
+  const int ndil = dilHandler->getNumberOfSpinEigvecProjectors();
+  const int minTime = 0;
+  const int maxTime = Textent - 1;
+  const uint nSinkLaphBatch = sinkComps.nSinkLaphBatch;
+  const uint nSinkQudaBatch = sinkComps.nSinkQudaBatch;
+  const uint nEigQudaBatch = sinkComps.nEigQudaBatch;
 
   // generate the source noise field
   LaphZnNoise rho(noise.getZNGroup(), noise.getSeed(*uPtr));
@@ -838,7 +825,7 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise, int time_proj_index,
       rho.generateLapHQuarkSourceForSink(Textent, Nspin, nEigs);
   // time dilution masks
   const list<int> &on_times = dilHandler->getOnTimes(time_proj_index);
-  double soln_rescale = qactionPtr->getSolutionRescaleFactor();
+  const double soln_rescale = qactionPtr->getSolutionRescaleFactor();
 
   // allocate space for batched solutions and make pointers suitable for quda
   int iSinkBatch = 0;
@@ -858,12 +845,9 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise, int time_proj_index,
   DHputPtr->open(fkey);
   bulova.stop();
   double srctime = bulova.getTimeInSeconds();
-  double invtime = 0.0;
-  double writetime = 0.0;
-  double evprojtime = 0.0;
+  double invtime = 0.0, writetime = 0.0, evprojtime = 0.0;
 
   // loop over dilutions
-
   for (int dil = 0; dil < ndil; dil++) {
 
     printLaph(
@@ -952,7 +936,7 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise, int time_proj_index,
 
       bulova.reset();
       bulova.start();
-      int nSinks = iSinkBatch;
+      const int nSinks = iSinkBatch;
       int nSinksBatch = std::min(nSinks, int(nSinkQudaBatch));
 
       Array<dcmplx> qudaRes(Nspin, Textent, nEigs,
@@ -1027,11 +1011,11 @@ void QuarkHandler::make_source(LattField &ferm_src,
         "Cannot make fermion source since no Laph eigenvectors available");
   }
   ferm_src.reset(FieldSiteType::ColorSpinVector);
-  bool dp = (ferm_src.bytesPerWord() == sizeof(std::complex<double>));
+  const bool dp = (ferm_src.bytesPerWord() == sizeof(std::complex<double>));
   // initialize source field to zero
-  int loc_nsites = LayoutInfo::getRankLatticeNumSites();
-  int ncmplx_per_site = ferm_src.elemsPerSite();
-  int ncmplx = ncmplx_per_site * loc_nsites;
+  const int loc_nsites = LayoutInfo::getRankLatticeNumSites();
+  const int ncmplx_per_site = ferm_src.elemsPerSite();
+  const int ncmplx = ncmplx_per_site * loc_nsites;
   int cbytes;
   dcmplx zrhodp;
   fcmplx zrhosp;
@@ -1048,16 +1032,16 @@ void QuarkHandler::make_source(LattField &ferm_src,
     zrho = reinterpret_cast<char *>(&zrhosp);
   }
 
-  int loc_npsites = loc_nsites / 2;
-  int start_parity = LayoutInfo::getMyStartParity();
-  int mytmin =
+  const int loc_npsites = loc_nsites / 2;
+  const int start_parity = LayoutInfo::getMyStartParity();
+  const int mytmin =
       LayoutInfo::getMyCommCoords()[3] * LayoutInfo::getRankLattExtents()[3];
-  int mytmax = mytmin + LayoutInfo::getRankLattExtents()[3] - 1;
-  int tstride = LayoutInfo::getRankLattExtents()[0] *
-                LayoutInfo::getRankLattExtents()[1] *
-                LayoutInfo::getRankLattExtents()[2];
-  int incx = FieldNcolor;
-  int incy = FieldNcolor * FieldNspin;
+  const int mytmax = mytmin + LayoutInfo::getRankLattExtents()[3] - 1;
+  const int tstride = LayoutInfo::getRankLattExtents()[0] *
+                      LayoutInfo::getRankLattExtents()[1] *
+                      LayoutInfo::getRankLattExtents()[2];
+  const int incx = FieldNcolor;
+  const int incy = FieldNcolor * FieldNspin;
 
   for (list<int>::const_iterator it0 = on_times.begin(); it0 != on_times.end();
        it0++) {
@@ -1070,7 +1054,6 @@ void QuarkHandler::make_source(LattField &ferm_src,
       const int n1 = stop1 - start1;
 
       parshift = loc_npsites * ((start_parity + 1 + tloc) % 2);
-
       const int start2 = ((1 + tstride * tloc) / 2) + parshift;
       const int stop2 = ((tstride * (tloc + 1)) / 2) + parshift;
       const int n2 = stop2 - start2;

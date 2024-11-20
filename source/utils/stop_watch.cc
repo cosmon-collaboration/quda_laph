@@ -3,8 +3,6 @@
 
 namespace LaphEnv {
 
-// **********************************************************
-
 void StopWatch::start() {
   if (m_timer.running) {
     printLaph("Warning: calling start() on running StopWatch");
@@ -36,5 +34,4 @@ double StopWatch::getLastIntervalInSeconds() const {
 
 bool StopWatch::isRunning() const { return m_timer.running; }
 
-// ****************************************************
 } // namespace LaphEnv

@@ -1,18 +1,11 @@
+#include "QudaLaphIncludes.h"
+
 #include "laph_stdio.h"
 #include "layout_info.h"
 #include "named_obj_map.h"
-#include "quda.h"
-#include "quda_info.h"
-#include "stop_watch.h"
 #include "tasks.h"
 #include "utils.h"
 #include "xml_handler.h"
-#include <cstdio>
-#include <ctime>
-#include <map>
-#ifdef ARCH_PARALLEL
-#include <mpi.h>
-#endif
 
 using namespace std;
 using namespace LaphEnv;
@@ -112,7 +105,7 @@ void Tasker::do_task(XMLHandler &xml_task, bool echo) {
 
 static void initRand() {
   int rank = 0;
-#if defined(ARCH_PARALLEL)
+#ifdef ARCH_PARALLEL
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 #endif
   srand(17 * rank + 137);
@@ -203,11 +196,11 @@ int init_quda_laph(int argc, char *argv[], XMLHandler &xml_in) {
   try {
     xml_in.seek_first_child();
     while (xml_in.good()) {
-      if (xml_in.get_node_name() == "Task")
+      if (xml_in.get_node_name() == "Task") {
         ntasks++;
-      else if (xml_in.get_node_name() == "EchoXML")
+      } else if (xml_in.get_node_name() == "EchoXML") {
         echo = true;
-      else if (xml_in.get_node_name() == "LatticeLayoutInfo") {
+      } else if (xml_in.get_node_name() == "LatticeLayoutInfo") {
         layoutinfo = true;
         xml_layoutinfo.set(xml_in);
       } else if (xml_in.get_node_name() == "QudaInfo") {
@@ -243,8 +236,7 @@ int init_quda_laph(int argc, char *argv[], XMLHandler &xml_in) {
 
   printLaph(make_strf("\n\n  Number of tasks is %d", ntasks));
 #ifdef OPENMP
-  printLaph(
-      make_strf("  Maximum number of threads is %d", omp_get_max_threads));
+  printLaph(make_strf("  Maximum number of threads is %d", omp_get_max_threads()));
 #endif
 #ifdef ARCH_PARALLEL
   printLaph(make_strf("  Number of MPI ranks = %d", comm_size()));

@@ -286,6 +286,8 @@ public:
                           const QuarkActionInfo &qactioninfo) const;
 
 private:
+  void commonQudaInvertParam(QudaInvertParam &invParam) const;
+
   void set_info_cgnr(XMLHandler &xmlr);
 
   void output_cgnr(XMLHandler &xmlout) const;
@@ -350,7 +352,5 @@ private:
   friend class QuarkHandler;
   friend class PerambulatorHandler;
 };
-
-// *****************************************************************
 } // namespace LaphEnv
 #endif

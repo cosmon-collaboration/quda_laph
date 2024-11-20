@@ -4,8 +4,6 @@ using namespace std;
 
 namespace LaphEnv {
 
-// *************************************************************
-
 // XMLHandler constructor
 
 GluonSmearingInfo::GluonSmearingInfo(const XMLHandler &xmlin) {
@@ -23,8 +21,6 @@ void GluonSmearingInfo::extract_info_from_reader(XMLHandler &xml_in) {
                 "invalid smearing scheme parameters in GluonSmearingInfo");
   }
 }
-
-// *************************************************************
 
 // copy constructor
 
@@ -76,8 +72,6 @@ void GluonSmearingInfo::setQudaGaugeSmearParam(
   gauge_smear_param.struct_size = sizeof(gauge_smear_param);
 }
 
-// *************************************************************
-
 // XMLHandler constructor
 
 QuarkSmearingInfo::QuarkSmearingInfo(const XMLHandler &xmlin) {
@@ -95,8 +89,6 @@ void QuarkSmearingInfo::extract_info_from_reader(XMLHandler &xml_in) {
         "error: invalid smearing scheme parameters in QuarkSmearingInfo"));
   }
 }
-
-// ************************************************************
 
 // copy constructor
 
@@ -155,6 +147,4 @@ void QuarkSmearingInfo::output(XMLHandler &xmlout) const {
   xmlout.put_child("LaphSigmaCutoff", make_string(laphSigma));
   xmlout.put_child("NumberLaphEigvecs", make_string(laphNumEigvecs));
 }
-
-// *************************************************************
 } // namespace LaphEnv

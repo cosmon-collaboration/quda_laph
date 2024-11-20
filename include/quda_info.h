@@ -100,7 +100,5 @@ public:
   friend class QuarkHandler;
   friend class PerambulatorHandler;
 };
-
-// *************************************************************
 } // namespace LaphEnv
 #endif

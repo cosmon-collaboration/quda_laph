@@ -43,6 +43,7 @@ add_compile_options(-march=native -Wall)
 
 if(OPENMP)
   add_compile_options(-fopenmp)
+  add_compile_definitions(OPENMP)
 endif()
 
 if(PARALLEL_BUILD)
