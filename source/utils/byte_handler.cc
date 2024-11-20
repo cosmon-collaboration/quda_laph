@@ -1,6 +1,5 @@
 #include "byte_handler.h"
 #include <cstdlib>
-#include <iostream>
 #include <stdexcept>
 
 /*
@@ -55,9 +54,6 @@ Comments) 1950 to 1952 in the files ftp://ds.internic.net/rfc/rfc1950.txt
   the information needed to generate CRC's on data a byte at a time for all
   combinations of CRC register values and incoming bytes.
 */
-
-using namespace std;
-
 namespace LaphEnv {
 
 // **************************************************************
@@ -281,5 +277,4 @@ ByteHandler::n_uint32_t ByteHandler::get_checksum(n_uint32_t crc,
   return get_checksum(crc, (const unsigned char *)(buf), len);
 }
 
-// ****************************************************************************************
 } // namespace LaphEnv

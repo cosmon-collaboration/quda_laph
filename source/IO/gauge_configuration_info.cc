@@ -122,8 +122,6 @@ void GaugeConfigurationInfo::output(XMLHandler &xmlout) const {
 
 void GaugeConfigurationInfo::setQudaGaugeParam(
     QudaGaugeParam &gauge_param) const {
-  // gauge_param.location = QUDA_CPU_FIELD_LOCATION; /**< The location of the
-  // gauge field */
   gauge_param.type = QUDA_WILSON_LINKS;
 
   gauge_param.X[0] = LayoutInfo::getRankLattExtents()[0];
@@ -145,7 +143,6 @@ void GaugeConfigurationInfo::setQudaGaugeParam(
 
   gauge_param.anisotropy = gluon_anisotropy;
   gauge_param.tadpole_coeff = 1.0; // used only by staggered
-  // gauge_param.scale = ????;            // Used by staggered long links
 
   gauge_param.ga_pad = 0;
   gauge_param.mom_ga_pad = 0;

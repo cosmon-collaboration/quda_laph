@@ -5,8 +5,7 @@
 #include "stop_watch.h"
 
 // STILL TO DO:  single asynchronous thread for output so can continue next
-// computations
-//                   while output occurs
+// computations while output occurs
 using namespace std;
 
 namespace LaphEnv {
@@ -19,7 +18,7 @@ QuarkSmearingHandler::QuarkSmearingHandler(
     const GluonSmearingInfo &gluon_smearing,
     const GaugeConfigurationInfo &gauge,
     const QuarkSmearingInfo &quark_smearing,
-    const string &smeared_quark_file_stub, bool read_mode) {
+    const string &smeared_quark_file_stub, const bool read_mode) {
   set_info(gluon_smearing, gauge, quark_smearing, smeared_quark_file_stub,
            read_mode);
 }
@@ -28,7 +27,7 @@ void QuarkSmearingHandler::setInfo(const GluonSmearingInfo &gluon_smearing,
                                    const GaugeConfigurationInfo &gauge,
                                    const QuarkSmearingInfo &quark_smearing,
                                    const string &smeared_quark_file_stub,
-                                   bool read_mode) {
+                                   const bool read_mode) {
   clear();
   set_info(gluon_smearing, gauge, quark_smearing, smeared_quark_file_stub,
            read_mode);
@@ -38,7 +37,7 @@ void QuarkSmearingHandler::set_info(const GluonSmearingInfo &gluon_smearing,
                                     const GaugeConfigurationInfo &gauge,
                                     const QuarkSmearingInfo &quark_smearing,
                                     const string &smeared_quark_file_stub,
-                                    bool read_mode) {
+                                    const bool read_mode) {
   smearedQuarkFileStub = tidyString(smeared_quark_file_stub);
   if (smearedQuarkFileStub.empty()) {
     errorLaph("empty file name or stub in QuarkSmearingHandler");
@@ -112,7 +111,7 @@ bool QuarkSmearingHandler::isInfoSet() const {
 // check_mode = 0 means no check, 1 means check for read mode,
 // 2 means check for write mode
 void QuarkSmearingHandler::check_info_set(const string &name,
-                                          int check_mode) const {
+                                          const int check_mode) const {
   if (!isInfoSet()) {
     errorLaph(make_strf(
         "error in QuarkSmearingHandler: must setInfo before calling %s", name));
@@ -302,10 +301,11 @@ void QuarkSmearingHandler::computeLaphEigenvectors(
 // broadcast these rephase factors to the ranks that need them
 template <class T> static void communicate_phase(vector<T> &rephase) {
 #ifdef ARCH_PARALLEL
-  vector<int> comm_coords = { 0, 0, 0, LayoutInfo::getMyCommCoords()[LayoutInfo::Ndim - 1] } ;
+  vector<int> comm_coords = {
+      0, 0, 0, LayoutInfo::getMyCommCoords()[LayoutInfo::Ndim - 1]};
   const int orig_sender_rank = LayoutInfo::getRankFromCommCoords(comm_coords);
-  int sender_rank = 0 , count ;
-  vector<int> broadcast_ranks ;
+  int sender_rank = 0, count;
+  vector<int> broadcast_ranks;
   for (comm_coords[0] = 0;
        comm_coords[0] < LayoutInfo::getCommNumPartitions()[0];
        ++comm_coords[0]) {
@@ -353,14 +353,12 @@ template <class T> static void communicate_phase(vector<T> &rephase) {
 #endif
 }
 
-template<class T>
-static void
-getPhase( vector<T> &rephase ,
-	  vector<LattField> &laph_evecs) {
-  const int nev          = laph_evecs.size();
-  const int nloctime     = LayoutInfo::getRankLattExtents()[3];
-  const int loc_nsites   = LayoutInfo::getRankLatticeNumSites();
-  const int loc_npsites  = loc_nsites / 2;
+template <class T>
+static void getPhase(vector<T> &rephase, vector<LattField> &laph_evecs) {
+  const int nev = laph_evecs.size();
+  const int nloctime = LayoutInfo::getRankLattExtents()[3];
+  const int loc_nsites = LayoutInfo::getRankLatticeNumSites();
+  const int loc_npsites = loc_nsites / 2;
   const int start_parity = LayoutInfo::getMyStartParity();
   const int tstride = LayoutInfo::getRankLattExtents()[0] *
                       LayoutInfo::getRankLattExtents()[1] *
@@ -370,47 +368,46 @@ getPhase( vector<T> &rephase ,
   if ((LayoutInfo::getMyCommCoords()[0] == 0) &&
       (LayoutInfo::getMyCommCoords()[1] == 0) &&
       (LayoutInfo::getMyCommCoords()[2] == 0)) {
-    int v ;
-    #pragma omp parallel for private(v) collapse(2)
+    int v;
+#pragma omp parallel for private(v) collapse(2)
     for (v = 0; v < nev; ++v) {
       for (int tloc = 0; tloc < nloctime; ++tloc) {
-	const T *fp = reinterpret_cast<const T*>(laph_evecs[v].getDataPtr());
-	const int parshift = loc_npsites * ((start_parity + tloc) % 2);
-        const int start1   = (tstride * tloc)/2 + parshift;
-	const T x1 = fp[ FieldNcolor*start1 ] ; 
-	rephase[ tloc+v*nloctime ] = conj(x1)/abs(x1) ;
+        const T *fp = reinterpret_cast<const T *>(laph_evecs[v].getDataPtr());
+        const int parshift = loc_npsites * ((start_parity + tloc) % 2);
+        const int start1 = (tstride * tloc) / 2 + parshift;
+        const T x1 = fp[FieldNcolor * start1];
+        rephase[tloc + v * nloctime] = conj(x1) / abs(x1);
       }
     }
   }
 }
 
-template<class T>
-static void
-applyPhase( vector<LattField> &laph_evecs,
-	    const vector<T> rephase ,
-	    void (*blasfunc)( const int N , const void* alpha , void* x, const int incX ) )
-{
-  const int nev          = laph_evecs.size();
-  const int nloctime     = LayoutInfo::getRankLattExtents()[3];
-  const int loc_nsites   = LayoutInfo::getRankLatticeNumSites();
-  const int loc_npsites  = loc_nsites / 2;
+template <class T>
+static void applyPhase(vector<LattField> &laph_evecs, const vector<T> rephase,
+                       void (*blasfunc)(const int N, const void *alpha, void *x,
+                                        const int incX)) {
+  const int nev = laph_evecs.size();
+  const int nloctime = LayoutInfo::getRankLattExtents()[3];
+  const int loc_nsites = LayoutInfo::getRankLatticeNumSites();
+  const int loc_npsites = loc_nsites / 2;
   const int start_parity = LayoutInfo::getMyStartParity();
-  const int tstride      = LayoutInfo::getRankLattExtents()[0] *
-                           LayoutInfo::getRankLattExtents()[1] *
-                           LayoutInfo::getRankLattExtents()[2];
+  const int tstride = LayoutInfo::getRankLattExtents()[0] *
+                      LayoutInfo::getRankLattExtents()[1] *
+                      LayoutInfo::getRankLattExtents()[2];
+
   // now apply the rephase factors
-  int v ;
-  #pragma omp parallel for private(v) collapse(2)
+  int v;
+#pragma omp parallel for private(v) collapse(2)
   for (v = 0; v < nev; ++v) {
     for (int tloc = 0; tloc < nloctime; ++tloc) {
-      T *fp = reinterpret_cast<T*>(laph_evecs[v].getDataPtr());
-      for( int cb = 0 ; cb < 2 ; cb++ ) {
-	const int parshift = loc_npsites * ((start_parity + cb + tloc) % 2);
-	// stop-start is just spatial volume/2
-	const int start    = (( (cb^1) + tstride * tloc) / 2) + parshift;
-	const int stop     = (( (cb^0) + tstride * (tloc + 1)) / 2) + parshift;
-	T *x = fp + FieldNcolor*start ;
-	blasfunc( FieldNcolor*(stop-start), &rephase[tloc+v*nloctime] , x, 1 ) ;
+      T *fp = reinterpret_cast<T *>(laph_evecs[v].getDataPtr());
+      for (int cb = 0; cb < 2; cb++) {
+        const int parshift = loc_npsites * ((start_parity + cb + tloc) % 2);
+        const int start = (((cb ^ 1) + tstride * tloc) / 2) + parshift;
+        const int stop = (((cb ^ 0) + tstride * (tloc + 1)) / 2) + parshift;
+        T *x = fp + FieldNcolor * start;
+        blasfunc(FieldNcolor * (stop - start), &rephase[tloc + v * nloctime], x,
+                 1);
       }
     }
   }
@@ -418,7 +415,7 @@ applyPhase( vector<LattField> &laph_evecs,
 
 //  This is temporary; should be done on the device
 void QuarkSmearingHandler::applyLaphPhaseConvention(
-      vector<LattField> &laph_evecs) {
+    vector<LattField> &laph_evecs) {
   const int nev = laph_evecs.size();
   if (nev == 0) {
     return;
@@ -429,27 +426,27 @@ void QuarkSmearingHandler::applyLaphPhaseConvention(
           "Applying phase convention can only be done to ColorVector fields");
     }
   }
-  
+
   const bool dp =
       (laph_evecs[0].bytesPerWord() == sizeof(std::complex<double>));
   const int nloctime = LayoutInfo::getRankLattExtents()[3];
 
-  if( dp ) {
-    vector<complex<double>>rephasedp( nev*nloctime ) ;
-    getPhase<complex<double>>( rephasedp , laph_evecs ) ;
+  if (dp) {
+    vector<complex<double>> rephasedp(nev * nloctime);
+    getPhase<complex<double>>(rephasedp, laph_evecs);
 
     communicate_phase<complex<double>>(rephasedp);
 
-    applyPhase<complex<double>>( laph_evecs, rephasedp , cblas_zscal ) ;
+    applyPhase<complex<double>>(laph_evecs, rephasedp, cblas_zscal);
 
   } else {
-    vector<complex<float>>rephasesp( nev*nloctime ) ;
-    getPhase<complex<float>>( rephasesp , laph_evecs ) ;
+    vector<complex<float>> rephasesp(nev * nloctime);
+    getPhase<complex<float>>(rephasesp, laph_evecs);
 
     // (possibly) send it to the other nodes
     communicate_phase<complex<float>>(rephasesp);
 
-    applyPhase<complex<float>>( laph_evecs, rephasesp , cblas_cscal ) ;
+    applyPhase<complex<float>>(laph_evecs, rephasesp, cblas_cscal);
   }
 
 #ifdef ARCH_PARALLEL
@@ -496,22 +493,23 @@ void QuarkSmearingHandler::checkLaphEigvecComputation(
                         "-Delta | eigvec[vv]> = %g",
                         offmaxmag[t]));
     for (int v = 0; v < nEigvecs; ++v) {
-      bool orderok =
+      const bool orderok =
           (v == 0) || (block_eigvals(v, t) >= block_eigvals(v - 1, t));
-      string ok = (orderok) ? "" : " Wrong order";
+      const string ok = (orderok) ? "" : " Wrong order";
       printLaph(make_strf("   Eigenvalue[%3d] = %20.15f %s", v,
                           block_eigvals(v, t), ok));
     }
   }
 }
 
-const LattField &QuarkSmearingHandler::getLaphEigenvector(int eigpair_num) {
+const LattField &
+QuarkSmearingHandler::getLaphEigenvector(const int eigpair_num) {
   check_info_set("getLaphEigenvector", 1);
   LevelKey key(eigpair_num);
   return dh_ptr->getData(key, key);
 }
 
-bool QuarkSmearingHandler::queryLaphEigenvector(int eigpair_num) {
+bool QuarkSmearingHandler::queryLaphEigenvector(const int eigpair_num) {
   check_info_set("queryLaphEigenvector", 1);
   LevelKey key(eigpair_num);
   return dh_ptr->queryData(key, key);
@@ -553,7 +551,7 @@ bool QuarkSmearingHandler::checkAllLevelFilesExist() {
 }
 
 void QuarkSmearingHandler::writeHeader(XMLHandler &xmlw, const LevelKey &fkey,
-                                       int suffix) {
+                                       const int suffix) {
   if (suffix != fkey.value) {
     errorLaph("level suffix does not match file key");
   }
@@ -569,7 +567,7 @@ void QuarkSmearingHandler::writeHeader(XMLHandler &xmlw, const LevelKey &fkey,
   xmlw.put_child(xmltmp);
 }
 
-bool QuarkSmearingHandler::checkHeader(XMLHandler &xml_in, int suffix) {
+bool QuarkSmearingHandler::checkHeader(XMLHandler &xml_in, const int suffix) {
   if (xml_tag_count(xml_in, "LaphEigenvectors") != 1)
     return false;
   XMLHandler xmlr(xml_in, "LaphEigenvectors");
@@ -591,5 +589,4 @@ bool QuarkSmearingHandler::checkHeader(XMLHandler &xml_in, int suffix) {
   }
   return true;
 }
-// namespace
 } // namespace LaphEnv

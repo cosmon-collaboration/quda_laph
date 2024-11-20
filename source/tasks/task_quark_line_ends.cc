@@ -183,6 +183,4 @@ void doLaphQuarkLineEnds(XMLHandler &xmltask) {
                       outer.getTimeInSeconds()));
   printLaph("LAPH_QUARK_LINE_ENDS: ran successfully\n");
 }
-
-// ******************************************************************
 } // namespace LaphEnv

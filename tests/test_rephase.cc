@@ -2,6 +2,7 @@
 #include "quark_smearing_handler.h"
 #include "field_ops.h"
 #include "QudaLaphBlas.h"
+#include "stop_watch.h"
 
 #ifdef PARALLEL_ARCH
 #include <mpi.h>
@@ -185,7 +186,9 @@ set_constant( vector<LattField> &laphEigvecs )
 
 int main(int argc, char *argv[]) {
   XMLHandler xml_in;
-  const int ntasks = init_quda_laph(argc, argv, xml_in);
+  if( init_quda_laph(argc, argv, xml_in) != 0 ) {
+    exit(1) ;
+  }
 
   int global = 1 ;
 #ifdef ARCH_PARALLEL
@@ -193,7 +196,7 @@ int main(int argc, char *argv[]) {
 #endif
   
   // call rephase here
-  const int Nev = 5 ;
+  const int Nev = 8 ;
   vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
 
   cout<<"Constant Eigvecs"<<std::endl ;
@@ -204,8 +207,14 @@ int main(int argc, char *argv[]) {
   
   // why is everything a fucking "Handler"
   QuarkSmearingHandler Handle ;
+  StopWatch timer ;
+  timer.start() ;
   Handle.applyLaphPhaseConvention( laphEigvecs ) ;
-
+  timer.stop() ;
+  printLaph(make_strf("\nNew code took = %g seconds\n",
+                      timer.getTimeInSeconds()));
+  
+  
   cout<<"Rephased Eigvecs"<<std::endl ;
   for( int i = 0 ; i < global ; i++ ) {
     printevecs( laphEigvecs , i ) ;
@@ -214,7 +223,13 @@ int main(int argc, char *argv[]) {
   cout<<"Old code"<<std::endl ;
   vector<LattField> laphEigvecsComp( Nev, FieldSiteType::ColorVector);
   set_constant( laphEigvecsComp ) ;
+  timer.reset() ;
+  timer.start() ;
   old_code( laphEigvecsComp ) ;
+  timer.stop();
+  printLaph(make_strf("\nOld code took = %g seconds\n",
+                      timer.getTimeInSeconds()));
+
   for( int i = 0 ; i < global ; i++ ) {
     printevecs( laphEigvecsComp , i ) ;
   }

@@ -151,8 +151,6 @@ void IOFMHandler::compute_lattice_checksum(char *data, size_t bytes_per_site,
       m_bytehandler.get_checksum(checksum, data, bytes_per_site * nsites);
 }
 
-// *************************************************************************
-
 //  parallel MPI-IO  code
 
 #else
@@ -462,8 +460,8 @@ IOFMHandler::IOFMHandler(bool global)
 
 IOFMHandler::IOFMHandler(const std::string &filename, OpenMode mode,
                          const std::string &filetype_id, char endianness,
-                         int striping_factor, int striping_unit,
-                         bool turn_on_checksum, bool global)
+                         const int striping_factor, const int striping_unit,
+                         const bool turn_on_checksum, const bool global)
     : global_mode(global), lattinfo(1),
       lattcmplxbytes(LattField::get_cpu_prec_bytes()) {
   static_assert(sizeof(int) == 4, "sizeof(int) must be 4");
@@ -477,9 +475,9 @@ IOFMHandler::IOFMHandler(const std::string &filename, OpenMode mode,
 
 IOFMHandler::IOFMHandler(const std::string &filename,
                          std::ios_base::openmode mode,
-                         const std::string &filetype_id, char endianness,
-                         int striping_factor, int striping_unit,
-                         bool turn_on_checksum, bool global)
+                         const std::string &filetype_id, const char endianness,
+                         const int striping_factor, const int striping_unit,
+                         const bool turn_on_checksum, const bool global)
     : global_mode(global), lattinfo(1),
       lattcmplxbytes(LattField::get_cpu_prec_bytes()) {
   static_assert(sizeof(int) == 4, "sizeof(int) must be 4");
@@ -492,9 +490,9 @@ IOFMHandler::IOFMHandler(const std::string &filename,
 }
 
 void IOFMHandler::open(const std::string &filename, IOFMHandler::OpenMode mode,
-                       const std::string &filetype_id, char endianness,
-                       int striping_factor, int striping_unit,
-                       bool turn_on_checksum) {
+                       const std::string &filetype_id, const char endianness,
+                       const int striping_factor, const int striping_unit,
+                       const bool turn_on_checksum) {
   close();
   read_only = (mode == ReadOnly) ? true : false;
 
@@ -531,9 +529,9 @@ void IOFMHandler::open(const std::string &filename, IOFMHandler::OpenMode mode,
 
 void IOFMHandler::open(const std::string &filename,
                        std::ios_base::openmode mode,
-                       const std::string &filetype_id, char endianness,
-                       int striping_factor, int striping_unit,
-                       bool turn_on_checksum) {
+                       const std::string &filetype_id, const char endianness,
+                       const int striping_factor, const int striping_unit,
+                       const bool turn_on_checksum) {
   IOFMHandler::OpenMode iomode;
   if (!(mode & std::ios_base::out))
     iomode = ReadOnly;
@@ -549,24 +547,25 @@ void IOFMHandler::open(const std::string &filename,
 
 void IOFMHandler::openReadOnly(const std::string &filename,
                                const std::string &filetype_id,
-                               bool turn_on_checksum) {
+                               const bool turn_on_checksum) {
   open(filename, ReadOnly, filetype_id, 'N', 1, 0, turn_on_checksum);
 }
 
 void IOFMHandler::openNew(const std::string &filename, bool fail_if_exists,
-                          const std::string &filetype_id, char endianness,
-                          int striping_factor, int striping_unit,
-                          bool turn_on_checksum) {
-  OpenMode iomode =
+                          const std::string &filetype_id, const char endianness,
+                          const int striping_factor, const int striping_unit,
+                          const bool turn_on_checksum) {
+  const OpenMode iomode =
       (fail_if_exists) ? ReadWriteFailIfExists : ReadWriteEraseIfExists;
   open(filename, iomode, filetype_id, endianness, striping_factor,
        striping_unit, turn_on_checksum);
 }
 
 void IOFMHandler::openUpdate(const std::string &filename,
-                             const std::string &filetype_id, char endianness,
-                             int striping_factor, int striping_unit,
-                             bool turn_on_checksum) {
+                             const std::string &filetype_id,
+                             const char endianness, const int striping_factor,
+                             const int striping_unit,
+                             const bool turn_on_checksum) {
   open(filename, ReadWriteUpdateIfExists, filetype_id, endianness,
        striping_factor, striping_unit, turn_on_checksum);
 }
@@ -610,8 +609,10 @@ void IOFMHandler::open_existing_file(const std::string &filetype_id,
     endian_convert = (endian_format == 'B') ? true : false;
 }
 
-void IOFMHandler::open_new_file(const std::string &filetype_id, char endianness,
-                                int striping_factor, int striping_unit) {
+void IOFMHandler::open_new_file(const std::string &filetype_id,
+                                const char endianness,
+                                const int striping_factor,
+                                const int striping_unit) {
   if (endianness == 'N') { // native
     endian_format = m_bytehandler.big_endian() ? 'B' : 'L';
     endian_convert = false;
@@ -650,7 +651,7 @@ IOFMHandler::~IOFMHandler() {
 // "stringvalue".  This routine is used by objects in data_io_handler.h
 // when the multi-file handlers build up their maps of file keys.
 
-bool IOFMHandler::peekString(std::string &stringvalue, size_t byte_offset,
+bool IOFMHandler::peekString(std::string &stringvalue, const size_t byte_offset,
                              const std::string &filename,
                              const std::string &filetype_id) {
   stringvalue.clear();
@@ -670,7 +671,7 @@ bool IOFMHandler::peekString(std::string &stringvalue, size_t byte_offset,
   return flag;
 }
 
-bool IOFMHandler::peeker(std::string &stringvalue, size_t byte_offset,
+bool IOFMHandler::peeker(std::string &stringvalue, const size_t byte_offset,
                          const std::string &fname,
                          const std::string &filetype_id) {
   ifstream in(fname.c_str(), std::ios::binary | std::ios::in);
@@ -741,37 +742,37 @@ void IOFMHandler::clear() {
 //  Set the file pointer relative to start of file,
 //  end of file (positive is backward), or current location
 
-void IOFMHandler::seekFromStart(off_type offset) {
+void IOFMHandler::seekFromStart(const off_type offset) {
   file_seek(offset + data_start_pos, IOFMHandler::IO_SEEK_BEG);
   checksum = 0;
 }
 
-void IOFMHandler::seekFromCurr(off_type offset) {
+void IOFMHandler::seekFromCurr(const off_type offset) {
   file_seek(offset, IOFMHandler::IO_SEEK_CUR);
   checksum = 0;
 }
 
-void IOFMHandler::seekFromEnd(off_type offset) {
+void IOFMHandler::seekFromEnd(const off_type offset) {
   file_seek(offset, IOFMHandler::IO_SEEK_END);
   checksum = 0;
 }
 
-void IOFMHandler::seek(pos_type offset) {
+void IOFMHandler::seek(const pos_type offset) {
   file_seek(offset + data_start_pos, IOFMHandler::IO_SEEK_BEG);
   checksum = 0;
 }
 
-void IOFMHandler::seekBegin(off_type offset) {
+void IOFMHandler::seekBegin(const off_type offset) {
   file_seek(offset + data_start_pos, IOFMHandler::IO_SEEK_BEG);
   checksum = 0;
 }
 
-void IOFMHandler::seekRelative(off_type offset) {
+void IOFMHandler::seekRelative(const off_type offset) {
   file_seek(offset, IOFMHandler::IO_SEEK_CUR);
   checksum = 0;
 }
 
-void IOFMHandler::seekEnd(off_type offset) {
+void IOFMHandler::seekEnd(const off_type offset) {
   file_seek(offset, IOFMHandler::IO_SEEK_END);
   checksum = 0;
 }
@@ -877,7 +878,7 @@ bool IOFMHandler::file_exists() {
 
 // Converts an integer to a string
 
-string IOFMHandler::int_to_string(int intval) {
+string IOFMHandler::int_to_string(const int intval) {
   std::ostringstream oss;
   oss << intval;
   return oss.str();
@@ -900,8 +901,8 @@ string IOFMHandler::tidyString(const string &str) {
 //   Main input/output routines that do the byte-swapping (if needed),
 //   update the check sum, and do the read/write.
 
-void IOFMHandler::write_common(const char *output, size_t elementbytes,
-                               size_t nelements) {
+void IOFMHandler::write_common(const char *output, const size_t elementbytes,
+                               const size_t nelements) {
   if (!openflag)
     check_for_failure(IO_ERR_OTHER, "Write failure--no open file");
   if (read_only)
@@ -927,8 +928,8 @@ void IOFMHandler::write_common(const char *output, size_t elementbytes,
   }
 }
 
-void IOFMHandler::read_common(char *input, size_t elementbytes,
-                              size_t nelements) {
+void IOFMHandler::read_common(char *input, const size_t elementbytes,
+                              const size_t nelements) {
   if (!openflag)
     check_for_failure(IO_ERR_OTHER, "Read failure--no open file");
   if (!read_mode) {
@@ -951,7 +952,7 @@ void IOFMHandler::read_common(char *input, size_t elementbytes,
 //   etc) of each component of the quantity at each site.  This information is
 //   needed for byte-swapping.
 
-void IOFMHandler::write_lattice(const char *output, size_t bytes_per_word,
+void IOFMHandler::write_lattice(const char *output, const size_t bytes_per_word,
                                 const DistArrayViewInfo &dinfo) {
   if (!openflag)
     check_for_failure(IO_ERR_OTHER, "Write failure--no open file");
@@ -990,7 +991,7 @@ void IOFMHandler::write_lattice(const char *output, size_t bytes_per_word,
   }
 }
 
-void IOFMHandler::read_lattice(char *input, size_t bytes_per_word,
+void IOFMHandler::read_lattice(char *input, const size_t bytes_per_word,
                                const DistArrayViewInfo &dinfo) {
   if (!openflag)
     check_for_failure(IO_ERR_OTHER, "Read failure--no open file");
@@ -1095,7 +1096,7 @@ void IOFMHandler::write(const std::string &output) {
   write_common(output.data(), sizeof(char), n);
 }
 
-void IOFMHandler::read(std::string &input, bool broadcast) {
+void IOFMHandler::read(std::string &input, const bool broadcast) {
   int n;
   read_common((char *)&n, sizeof(int), 1);
   // if reading in wrong location, could get nonsense here,
@@ -1221,7 +1222,7 @@ bool DistArrayViewInfo::checker(const vector<int> &gsizes,
   return true;
 }
 
-void DistArrayViewInfo::error_return(bool cond, const string &msg) {
+void DistArrayViewInfo::error_return(const bool cond, const string &msg) {
   if (cond) {
     errorLaph(make_strf("Error in DistArrayViewInfo: %s\n", msg));
   }
@@ -1229,7 +1230,7 @@ void DistArrayViewInfo::error_return(bool cond, const string &msg) {
 
 // constructor for full lattice quantity
 
-DistArrayViewInfo::DistArrayViewInfo(IOH_int bytes_per_site) {
+DistArrayViewInfo::DistArrayViewInfo(const IOH_int bytes_per_site) {
   setup_full(LayoutInfo::getLattExtents(), LayoutInfo::getCommNumPartitions(),
              LayoutInfo::getMyCommCoords());
   set_bytes(bytes_per_site);
@@ -1241,9 +1242,9 @@ DistArrayViewInfo::DistArrayViewInfo(IOH_int bytes_per_site) {
 // distribute over the ranks
 
 DistArrayViewInfo::DistArrayViewInfo(const vector<int> &gsizes,
-                                     IOH_int bytes_per_element) {
-  int nranks = comm_size();
-  int nd = gsizes.size();
+                                     const IOH_int bytes_per_element) {
+  const int nranks = comm_size();
+  const int nd = gsizes.size();
   error_return(nd == 0, "bad global sizes");
   vector<int> numranks(nd, 0);
   error_return(MPI_Dims_create(nranks, nd, &numranks[0]),
@@ -1258,7 +1259,7 @@ DistArrayViewInfo::DistArrayViewInfo(const vector<int> &gsizes,
 
 DistArrayViewInfo::DistArrayViewInfo(const vector<int> &gsizes,
                                      const vector<int> &numranks,
-                                     IOH_int bytes_per_element) {
+                                     const IOH_int bytes_per_element) {
   error_return(!checker(gsizes, numranks), "invalid input");
   vector<int> comm_coord(LayoutInfo::getMyCommCoords());
   setup_full(gsizes, numranks, comm_coord);
@@ -1277,7 +1278,7 @@ void DistArrayViewInfo::create_filetype() {
   MPI_Type_commit(&ftype);
 }
 
-void DistArrayViewInfo::resetBytes(IOH_int bytes_per_element) {
+void DistArrayViewInfo::resetBytes(const IOH_int bytes_per_element) {
   if (bytes_per_element == nbytes_per_element)
     return;
   set_bytes(bytes_per_element);
@@ -1331,7 +1332,7 @@ bool DistArrayViewInfo::checker(const vector<int> &gsizes) {
   return true;
 }
 
-void DistArrayViewInfo::error_return(bool cond, const string &msg) {
+void DistArrayViewInfo::error_return(const bool cond, const string &msg) {
   if (cond) {
     errorLaph(make_strf("Error in DistArrayViewInfo: %s\n", msg));
   }
@@ -1339,7 +1340,7 @@ void DistArrayViewInfo::error_return(bool cond, const string &msg) {
 
 // constructor for full lattice quantity
 
-DistArrayViewInfo::DistArrayViewInfo(IOH_int bytes_per_site) {
+DistArrayViewInfo::DistArrayViewInfo(const IOH_int bytes_per_site) {
   setup_full(LayoutInfo::getLattExtents());
   set_bytes(bytes_per_site);
 }
@@ -1348,7 +1349,7 @@ DistArrayViewInfo::DistArrayViewInfo(IOH_int bytes_per_site) {
 // distribute over the ranks
 
 DistArrayViewInfo::DistArrayViewInfo(const vector<int> &gsizes,
-                                     IOH_int bytes_per_element) {
+                                     const IOH_int bytes_per_element) {
   error_return(!checker(gsizes), "invalid input");
   setup_full(gsizes);
   set_bytes(bytes_per_element);
@@ -1356,18 +1357,18 @@ DistArrayViewInfo::DistArrayViewInfo(const vector<int> &gsizes,
 
 DistArrayViewInfo::DistArrayViewInfo(const vector<int> &gsizes,
                                      const vector<int> &numranks,
-                                     IOH_int bytes_per_element) {
+                                     const IOH_int bytes_per_element) {
   error_return(!checker(gsizes), "invalid input");
   setup_full(gsizes);
   set_bytes(bytes_per_element);
 }
 
-void DistArrayViewInfo::resetBytes(IOH_int bytes_per_element) {
+void DistArrayViewInfo::resetBytes(const IOH_int bytes_per_element) {
   if (bytes_per_element == nbytes_per_element)
     return;
   set_bytes(bytes_per_element);
 }
 
 #endif
-  
+
 } // namespace LaphEnv

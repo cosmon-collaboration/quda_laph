@@ -10,8 +10,13 @@
 #include <cstdio>
 #include <ctime>
 #include <map>
+
 #ifdef ARCH_PARALLEL
 #include <mpi.h>
+#endif
+
+#ifdef OPENMP
+#include <omp.h>
 #endif
 
 using namespace std;
@@ -203,11 +208,11 @@ int init_quda_laph(int argc, char *argv[], XMLHandler &xml_in) {
   try {
     xml_in.seek_first_child();
     while (xml_in.good()) {
-      if (xml_in.get_node_name() == "Task")
+      if (xml_in.get_node_name() == "Task") {
         ntasks++;
-      else if (xml_in.get_node_name() == "EchoXML")
+      } else if (xml_in.get_node_name() == "EchoXML") {
         echo = true;
-      else if (xml_in.get_node_name() == "LatticeLayoutInfo") {
+      } else if (xml_in.get_node_name() == "LatticeLayoutInfo") {
         layoutinfo = true;
         xml_layoutinfo.set(xml_in);
       } else if (xml_in.get_node_name() == "QudaInfo") {
@@ -243,8 +248,7 @@ int init_quda_laph(int argc, char *argv[], XMLHandler &xml_in) {
 
   printLaph(make_strf("\n\n  Number of tasks is %d", ntasks));
 #ifdef OPENMP
-  printLaph(
-      make_strf("  Maximum number of threads is %d", omp_get_max_threads));
+  printLaph(make_strf("  Maximum number of threads is %d", omp_get_max_threads()));
 #endif
 #ifdef ARCH_PARALLEL
   printLaph(make_strf("  Number of MPI ranks = %d", comm_size()));

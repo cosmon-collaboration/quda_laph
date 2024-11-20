@@ -70,6 +70,5 @@ void applyMinusSpatialLaplacian(
     LattField &outfield, const LattField &infield,
     const std::vector<LattField> &smeared_gauge_field);
 
-// **************************************************************************
 } // namespace LaphEnv
 #endif

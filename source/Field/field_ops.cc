@@ -39,22 +39,25 @@ getTimeSlicedInnerProducts(const LattField &leftfield,
     errorLaph(
         "getTimeSlicedInnerProducts requires both fields have same precision");
   }
-  bool dp = (leftfield.bytesPerWord() == sizeof(std::complex<double>));
-  int loc_nsites = LayoutInfo::getRankLatticeNumSites();
-  int loc_npsites = loc_nsites / 2;
-  int start_parity = LayoutInfo::getMyStartParity();
-  int nloctime = LayoutInfo::getRankLattExtents()[3];
-  int tstride = LayoutInfo::getRankLattExtents()[0] *
-                LayoutInfo::getRankLattExtents()[1] *
-                LayoutInfo::getRankLattExtents()[2];
-  int cbytes =
+  const bool dp = (leftfield.bytesPerWord() == sizeof(std::complex<double>));
+  const int loc_nsites = LayoutInfo::getRankLatticeNumSites();
+  const int loc_npsites = loc_nsites / 2;
+  const int start_parity = LayoutInfo::getMyStartParity();
+  const int nloctime = LayoutInfo::getRankLattExtents()[3];
+  const int tstride = LayoutInfo::getRankLattExtents()[0] *
+                      LayoutInfo::getRankLattExtents()[1] *
+                      LayoutInfo::getRankLattExtents()[2];
+  const int cbytes =
       (dp) ? sizeof(std::complex<double>) : sizeof(std::complex<float>);
-  int bps = leftfield.bytesPerSite();
+  const int bps = leftfield.bytesPerSite();
 
   vector<char> iprods1(nloctime * cbytes);
   vector<char> iprods2(nloctime * cbytes);
   const char *lp = reinterpret_cast<const char *>(leftfield.getDataConstPtr());
   const char *rp = reinterpret_cast<const char *>(rightfield.getDataConstPtr());
+
+  // there is a more efficient and readable version of this in
+  // quark_smearing_handler.cc TODO
   char *ip1 = reinterpret_cast<char *>(iprods1.data());
   char *ip2 = reinterpret_cast<char *>(iprods2.data());
   for (int tloc = 0; tloc < nloctime; ++tloc, ip1 += cbytes, ip2 += cbytes) {
@@ -79,12 +82,12 @@ getTimeSlicedInnerProducts(const LattField &leftfield,
     }
   }
 
-  int ntime = LayoutInfo::getLattExtents()[3];
+  const int ntime = LayoutInfo::getLattExtents()[3];
   vector<complex<double>> iprods(ntime);
   for (int t = 0; t < ntime; ++t) {
     iprods[t] = complex<double>(0.0, 0.0);
   }
-  int mytmin =
+  const int mytmin =
       LayoutInfo::getMyCommCoords()[3] * LayoutInfo::getRankLattExtents()[3];
   if (dp) {
     complex<double> *z1 = reinterpret_cast<complex<double> *>(iprods1.data());
@@ -106,8 +109,8 @@ getTimeSlicedInnerProducts(const LattField &leftfield,
 
 #ifdef ARCH_PARALLEL
   vector<complex<double>> results(ntime);
-  int status = MPI_Allreduce(iprods.data(), results.data(), 2 * ntime,
-                             MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  const int status = MPI_Allreduce(iprods.data(), results.data(), 2 * ntime,
+                                   MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
   if (status != MPI_SUCCESS) {
     errorLaph("Problem occurred in getTimeSlicedInnerProducts");
   }
@@ -118,8 +121,8 @@ getTimeSlicedInnerProducts(const LattField &leftfield,
 }
 
 void setConstantField(LattField &field, const std::complex<double> &zconst) {
-  bool dp = (field.bytesPerWord() == sizeof(complex<double>));
-  int n = field.elemsPerSite() * LayoutInfo::getRankLatticeNumSites();
+  const bool dp = (field.bytesPerWord() == sizeof(complex<double>));
+  const int n = field.elemsPerSite() * LayoutInfo::getRankLatticeNumSites();
   if (dp) {
     complex<double> *z =
         reinterpret_cast<complex<double> *>(field.getDataPtr());
@@ -145,13 +148,11 @@ void setZeroField(LattField &field) {
 
 void compare_latt_fields(const LattField &src1, const LattField &src2) {
   bool flag = true;
-  int n1 = src1.elemsPerSite();
-  int n2 = src2.elemsPerSite();
+  const int n1 = src1.elemsPerSite(), n2 = src2.elemsPerSite();
   if (n1 != n2) {
     flag = false;
   } else {
-    int s1 = src1.get_cpu_prec_bytes();
-    int s2 = src2.get_cpu_prec_bytes();
+    const int s1 = src1.get_cpu_prec_bytes(), s2 = src2.get_cpu_prec_bytes();
     if (s1 != s2) {
       flag = false;
     } else {
@@ -192,8 +193,8 @@ void compare_latt_fields(const LattField &src1, const LattField &src2) {
 
 template <typename T>
 void su3color_mult(complex<T> *prod, const complex<T> *cdata1,
-                   const complex<T> *cdata2, int krange, int kstride,
-                   int istride, int jstride) {
+                   const complex<T> *cdata2, const int krange,
+                   const int kstride, const int istride, const int jstride) {
   for (int k = 0; k < krange; ++k)
     for (int i = 0; i < FieldNcolor; ++i) {
       complex<T> z(0.0, 0.0);
@@ -206,8 +207,8 @@ void su3color_mult(complex<T> *prod, const complex<T> *cdata1,
 
 template <typename T>
 void su3color_adjmult(complex<T> *prod, const complex<T> *cdata1,
-                      const complex<T> *cdata2, int krange, int kstride,
-                      int istride, int jstride) {
+                      const complex<T> *cdata2, const int krange,
+                      const int kstride, const int istride, const int jstride) {
   for (int k = 0; k < krange; ++k)
     for (int i = 0; i < FieldNcolor; ++i) {
       complex<T> z(0.0, 0.0);
@@ -236,26 +237,33 @@ void su3color_multiplier(LattField &outfield, const LattField &fieldL,
     errorLaph(
         "su3color_mult requires same precision between left and right fields");
   }
-  int oinc = outfield.elemsPerSite();
-  int rinc = fieldR.elemsPerSite();
-  int linc = fieldL.elemsPerSite();
-  int nsites = LayoutInfo::getRankLatticeNumSites();
+  const int oinc = outfield.elemsPerSite();
+  const int rinc = fieldR.elemsPerSite();
+  const int linc = fieldL.elemsPerSite();
+  const int nsites = LayoutInfo::getRankLatticeNumSites();
   int kextent = 0, kstride = 0, jstride = 0, istride = 0;
-  if (fieldR.getFieldSiteType() == FieldSiteType::ColorMatrix) {
+  switch (fieldR.getFieldSiteType()) {
+  case FieldSiteType::ColorMatrix:
     kstride = 1;
     kextent = 3;
     istride = 3;
     jstride = 3;
-  } else if (fieldR.getFieldSiteType() == FieldSiteType::ColorVector) {
+    break;
+  case FieldSiteType::ColorVector:
     kstride = 1;
     kextent = 1;
     istride = 1;
     jstride = 1;
-  } else if (fieldR.getFieldSiteType() == FieldSiteType::ColorSpinVector) {
+    break;
+  case FieldSiteType::ColorSpinVector:
     kstride = 3;
     kextent = 4;
     istride = 1;
     jstride = 1;
+    break;
+  default:
+    exit(1);
+    break;
   }
   if (fieldR.bytesPerWord() == sizeof(complex<double>)) {
     complex<double> *op =
@@ -353,15 +361,16 @@ void flipsign(char *sitedata, int bps, bool dp) {
 void latt_shifter(LattField &outfield, const LattField &infield, int dir,
                   void (*indexfunc)(int, int, vector<int> &,
                                     const vector<int> &, const vector<int> &),
-                  char fwd_or_bwd, bool apply_antiperiodic_fermbc = false) {
+                  const char fwd_or_bwd,
+                  const bool apply_antiperiodic_fermbc = false) {
   if ((dir < 0) || (dir > 3)) {
     errorLaph("Invalid direction in lattice field shift");
   }
   outfield.reset(infield.getFieldSiteType());
   const vector<int> &N = LayoutInfo::getLattExtents();
-  int nsites = LayoutInfo::getLatticeNumSites();
-  int npsites = nsites / 2;
-  int bps = infield.bytesPerSite();
+  const int nsites = LayoutInfo::getLatticeNumSites();
+  const int npsites = nsites / 2;
+  const int bps = infield.bytesPerSite();
   char *oute = outfield.getDataPtr();
   char *outo = oute + npsites * bps;
   const char *ine = infield.getDataConstPtr();
@@ -410,8 +419,9 @@ void latt_shifter(LattField &outfield, const LattField &infield, int dir,
 //   outfield(x) <=  infield(x+dir)  if fwd_or_bwd=='F'
 //   outfield(x) <=  infield(x-dir)  if fwd_or_bwd=='B'
 
-void lattice_shift(LattField &outfield, const LattField &infield, int dir,
-                   char fwd_or_bwd, bool apply_antiperiodic_fermbc = false) {
+void lattice_shift(LattField &outfield, const LattField &infield, const int dir,
+                   const char fwd_or_bwd,
+                   const bool apply_antiperiodic_fermbc = false) {
   if (fwd_or_bwd == 'F') {
     latt_shifter(outfield, infield, dir, &index_increaser, fwd_or_bwd,
                  apply_antiperiodic_fermbc);
@@ -425,21 +435,21 @@ void lattice_shift(LattField &outfield, const LattField &infield, int dir,
 
 #else // parallel version now
 
-bool fwd_stay_local(int dir, const vector<int> &x, const vector<int> &N,
-                    bool nocomm) {
+bool fwd_stay_local(const int dir, const vector<int> &x, const vector<int> &N,
+                    const bool nocomm) {
   if (x[dir] < (N[dir] - 1))
     return true;
   return nocomm;
 }
 
-bool bwd_stay_local(int dir, const vector<int> &x, const vector<int> &N,
-                    bool nocomm) {
+bool bwd_stay_local(const int dir, const vector<int> &x, const vector<int> &N,
+                    const bool nocomm) {
   if (x[dir] > 0)
     return true;
   return nocomm;
 }
 
-void get_fwd_comm_to_from(int dir, int &send_to, int &recv_from) {
+void get_fwd_comm_to_from(const int dir, int &send_to, int &recv_from) {
   vector<int> rank_coord(
       LayoutInfo::getMyCommCoords()); // rank coords of this node
                                       // get mpi rank where to send
@@ -456,7 +466,7 @@ void get_fwd_comm_to_from(int dir, int &send_to, int &recv_from) {
   recv_from = LayoutInfo::getRankFromCommCoords(rank_coord);
 }
 
-void get_bwd_comm_to_from(int dir, int &send_to, int &recv_from) {
+void get_bwd_comm_to_from(const int dir, int &send_to, int &recv_from) {
   vector<int> rank_coord(
       LayoutInfo::getMyCommCoords()); // rank coords of this node
                                       // get mpi rank where to receive from
@@ -480,22 +490,22 @@ void get_bwd_comm_to_from(int dir, int &send_to, int &recv_from) {
 // linear index for site (x,y,z,t) is
 //      (x+Nx*(y+Ny*(z+Nz*t)))/2 + (nsites/2)*((x+y+z+t)%2);
 
-void latt_shifter(LattField &outfield, const LattField &infield, int dir,
+void latt_shifter(LattField &outfield, const LattField &infield, const int dir,
                   void (*indexfunc)(int, int, vector<int> &,
                                     const vector<int> &, const vector<int> &),
                   bool (*staylocal)(int, const vector<int> &,
                                     const vector<int> &, bool),
-                  void (*neighbors)(int, int &, int &), char fwd_or_bwd,
-                  bool apply_antiperiodic_fermbc = false) {
+                  void (*neighbors)(int, int &, int &), const char fwd_or_bwd,
+                  const bool apply_antiperiodic_fermbc = false) {
   int start_parity = LayoutInfo::getMyStartParity();
   if ((dir < 0) || (dir > 3)) {
     errorLaph("Invalid direction in lattice field shift");
   }
   outfield.reset(infield.getFieldSiteType());
   const vector<int> &N = LayoutInfo::getRankLattExtents();
-  int nsites = LayoutInfo::getRankLatticeNumSites();
-  int npsites = nsites / 2;
-  int bps = infield.bytesPerSite();
+  const int nsites = LayoutInfo::getRankLatticeNumSites();
+  const int npsites = nsites / 2;
+  const int bps = infield.bytesPerSite();
   char *oute = outfield.getDataPtr();
   char *outo = oute + npsites * bps;
   const char *ine = infield.getDataConstPtr();
@@ -632,8 +642,9 @@ void latt_shifter(LattField &outfield, const LattField &infield, int dir,
 //   outfield(x) <=  infield(x+dir)  if fwd_or_bwd=='F'
 //   outfield(x) <=  infield(x-dir)  if fwd_or_bwd=='B'
 
-void lattice_shift(LattField &outfield, const LattField &infield, int dir,
-                   char fwd_or_bwd, bool apply_antiperiodic_fermbc = false) {
+void lattice_shift(LattField &outfield, const LattField &infield, const int dir,
+                   const char fwd_or_bwd,
+                   const bool apply_antiperiodic_fermbc = false) {
   if (fwd_or_bwd == 'F') {
     latt_shifter(outfield, infield, dir, &index_increaser, &fwd_stay_local,
                  &get_fwd_comm_to_from, fwd_or_bwd, apply_antiperiodic_fermbc);
@@ -654,9 +665,9 @@ void lattice_shift(LattField &outfield, const LattField &infield, int dir,
 //   for 'B', shift(  su3mult( adj(U[dir]), infield ), mu, 'B')
 
 void lattice_cov_shift(LattField &outfield, const LattField &infield,
-                       const vector<LattField> &gauge_field, int dir,
-                       char fwd_or_bwd,
-                       bool apply_antiperiodic_fermbc = false) {
+                       const vector<LattField> &gauge_field, const int dir,
+                       const char fwd_or_bwd,
+                       const bool apply_antiperiodic_fermbc = false) {
   if (int(gauge_field.size()) != LayoutInfo::Ndim) {
     errorLaph("invalid gauge field in lattice_cov_shift");
   }
@@ -902,13 +913,13 @@ void assign_spin_matrix(int spin_matrix_index,
 }
 
 void lattice_spin_multiply(LattField &outfield, const LattField &infield,
-                           int spin_matrix_index) {
+                           const int spin_matrix_index) {
   if (infield.getFieldSiteType() != FieldSiteType::ColorSpinVector) {
     errorLaph("spin_multiply can only be done on a ColorSpinVector");
   }
   outfield.reset(FieldSiteType::ColorSpinVector);
-  int nsites = LayoutInfo::getRankLatticeNumSites();
-  int nelem = infield.elemsPerSite();
+  const int nsites = LayoutInfo::getRankLatticeNumSites();
+  const int nelem = infield.elemsPerSite();
   if (infield.bytesPerWord() == sizeof(complex<double>)) {
     vector<pair<int, complex<double>>> spin_mat(4);
     assign_spin_matrix<double>(spin_matrix_index, spin_mat);
@@ -933,7 +944,8 @@ void lattice_spin_multiply(LattField &outfield, const LattField &infield,
 }
 
 void calcCloverLeaves(LattField &cloverleaf,
-                      const vector<LattField> &gaugefield, int dir1, int dir2) {
+                      const vector<LattField> &gaugefield, const int dir1,
+                      const int dir2) {
   LattField Utmp;
   vector<int> path(4);
   // upper right leaf
@@ -1106,6 +1118,4 @@ void applyMinusSpatialLaplacian(LattField &outfield, const LattField &infield,
     lattice_addto(outfield, phi, complex<double>(-1.0, 0.0));
   }
 }
-
-// **************************************************************************
 } // namespace LaphEnv

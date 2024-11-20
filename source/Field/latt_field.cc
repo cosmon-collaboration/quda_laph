@@ -37,16 +37,24 @@ void LattField::do_resize() {
 }
 
 void LattField::calc_site_elems() {
-  if (m_sitetype == Complex)
+  switch (m_sitetype) {
+  case Complex:
     m_site_elems = 1;
-  else if (m_sitetype == ColorMatrix)
+    break;
+  case ColorMatrix:
     m_site_elems = FieldNcolor * FieldNcolor;
-  else if (m_sitetype == ColorVector)
+    break;
+  case ColorVector:
     m_site_elems = FieldNcolor;
-  else if (m_sitetype == ColorSpinVector)
+    break;
+  case ColorSpinVector:
     m_site_elems = FieldNspin * FieldNcolor;
-  else
+    break;
+  default:
     m_site_elems = 0;
+    ;
+    break;
+  }
 }
 
 //  This is private.  Useful for constructing a lattice field that has
@@ -55,7 +63,8 @@ void LattField::calc_site_elems() {
 //  have the same precision as that requested in QudaInfo.
 //  "prec" should be 'S' or 'D' for single or double precision.
 
-LattField &LattField::reset_by_precision(FieldSiteType sitetype, char prec) {
+LattField &LattField::reset_by_precision(const FieldSiteType sitetype,
+                                         const char prec) {
   m_sitetype = sitetype;
   calc_site_elems();
   if (prec == 'S') {
@@ -78,35 +87,33 @@ LattField &LattField::reset_by_precision(FieldSiteType sitetype, char prec) {
 //  may or may not match the current quda precision.  The IOHandlerFM
 //  read must then convert the precision as needed.
 
-LattField &LattField::reset_by_bytes_per_site(int bytes_per_site) {
+LattField &LattField::reset_by_bytes_per_site(const int bytes_per_site) {
   m_site_bytes = bytes_per_site;
-  if (m_site_bytes == 8) {
+  switch (m_site_bytes) {
+  case 8:
+  case 16:
     m_site_elems = 1;
     m_sitetype = Complex;
-  } else if (m_site_bytes == 16) {
-    m_site_elems = 1;
-    m_sitetype = Complex;
-  } else if (m_site_bytes == 24) {
+    break;
+  case 24:
+  case 48:
     m_site_elems = 3;
     m_sitetype = ColorVector;
-  } else if (m_site_bytes == 48) {
-    m_site_elems = 3;
-    m_sitetype = ColorVector;
-  } else if (m_site_bytes == 72) {
+    break;
+  case 72:
+  case 144:
     m_site_elems = 9;
     m_sitetype = ColorMatrix;
-  } else if (m_site_bytes == 144) {
-    m_site_elems = 9;
-    m_sitetype = ColorMatrix;
-  } else if (m_site_bytes == 96) {
+    break;
+  case 96:
+  case 192:
     m_site_elems = 12;
     m_sitetype = ColorSpinVector;
-  } else if (m_site_bytes == 192) {
-    m_site_elems = 12;
-    m_sitetype = ColorSpinVector;
-  } else {
+    break;
+  default:
     errorLaph(make_str("Invalid resizing of LattField with bytes_per_site = ",
                        bytes_per_site));
+    break;
   }
   if (m_site_bytes > 0) {
     m_data.resize(LayoutInfo::getRankLatticeNumSites() * m_site_bytes);
@@ -210,8 +217,9 @@ void LattField::applyFermionTemporalAntiPeriodic() {
   for (int z = 0; z < N[2]; ++z)
     for (int y = 0; y < N[1]; ++y)
       for (int x = 0; x < N[0]; ++x) {
-        const int sindex = nreal * ((x + N[0] * (y + N[1] * (z + N[2] * t))) / 2 +
-				    npsites * ((start_parity + x + y + z + t) % 2));
+        const int sindex =
+            nreal * ((x + N[0] * (y + N[1] * (z + N[2] * t))) / 2 +
+                     npsites * ((start_parity + x + y + z + t) % 2));
         if (dp) {
           double *ptr = reinterpret_cast<double *>(m_data.data()) + sindex;
           for (int s = 0; s < nreal; ++s, ++ptr)
@@ -223,5 +231,4 @@ void LattField::applyFermionTemporalAntiPeriodic() {
         }
       }
 }
-
 } // namespace LaphEnv

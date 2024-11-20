@@ -6,7 +6,7 @@ namespace LaphEnv {
 
 std::string make_str(const std::string &mesg) { return mesg; }
 
-std::string charstar_to_string(const char *buffer, int checklength) {
+std::string charstar_to_string(const char *buffer, const int checklength) {
   std::string result(buffer);
   if (int(result.length()) >= checklength) {
     throw(std::invalid_argument("Buffer overflow in make_strf"));
@@ -21,7 +21,7 @@ void printLaph(const std::string &mesg) {
   }
 }
 
-void errorLaph(const std::string &mesg, bool abort) {
+void errorLaph(const std::string &mesg, const bool abort) {
 #ifdef ARCH_PARALLEL
   std::string errmsg("Error from rank ");
   errmsg += make_string(comm_rank());

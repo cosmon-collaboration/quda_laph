@@ -15,8 +15,6 @@ namespace LaphEnv {
 //    rvalues[0] =  factor to multiply solution by (if want
 //                   normalization different from quda)
 
-// ************************************************************
-
 QuarkActionInfo::QuarkActionInfo(const XMLHandler &xml_in) {
   XMLHandler xmlr(xml_in, "QuarkActionInfo");
   string name;
@@ -65,7 +63,7 @@ bool QuarkActionInfo::operator==(const QuarkActionInfo &rhs) const {
   return true;
 }
 
-string QuarkActionInfo::output(int indent) const {
+string QuarkActionInfo::output(const int indent) const {
   XMLHandler xmlh;
   output(xmlh);
   return xmlh.output(indent);
@@ -82,8 +80,6 @@ void QuarkActionInfo::setQudaInvertParam(QudaInvertParam &invParam) const {
     setQudaInvertParam_wilson_clover(invParam);
   }
 }
-
-// ****************************************************************
 
 //    rvalues[0] =  factor to multiply solution by (if want
 //                   normalization different from quda)
@@ -185,11 +181,8 @@ void QuarkActionInfo::output_wilson_clover(XMLHandler &xmlout) const {
 void QuarkActionInfo::setQudaInvertParam_wilson_clover(
     QudaInvertParam &invParam) const {
   invParam.gamma_basis = QUDA_DIRAC_PAULI_GAMMA_BASIS;
-  // invParam.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
   invParam.dirac_order = QUDA_DIRAC_ORDER;
   invParam.dslash_type = QUDA_CLOVER_WILSON_DSLASH;
-  // invParam.dslash_type = QUDA_WILSON_DSLASH;
-  // invParam.mass_normalization = QUDA_KAPPA_NORMALIZATION;
   invParam.mass_normalization = QUDA_MASS_NORMALIZATION;
   invParam.kappa = rvalues[2];
   invParam.mass = rvalues[1];
@@ -201,11 +194,8 @@ void QuarkActionInfo::setQudaInvertParam_wilson_clover(
   invParam.clover_cuda_prec_precondition = QudaInfo::get_cuda_prec_sloppy();
   invParam.clover_cuda_prec_eigensolver = QudaInfo::get_cuda_prec_sloppy();
   invParam.clover_order = QUDA_PACKED_CLOVER_ORDER;
-  // invParam.clover_order = QUDA_FLOAT8_CLOVER_ORDER;
   invParam.clover_coeff = rvalues[4] * rvalues[2];
   invParam.clover_rho = 0.0;
-  // invParam.clover_csw = clover_csw;
-  // invParam.compute_clover_trlog = compute_clover_trlog ? 1 : 0;
   invParam.Ls = 1;
   invParam.compute_clover = 1;
   invParam.compute_clover_inverse = 1;
@@ -214,54 +204,4 @@ void QuarkActionInfo::setQudaInvertParam_wilson_clover(
   invParam.struct_size = sizeof(invParam);
 }
 
-// ************************************************************
-/*
-// This is added for support of a map<QuarkActionInfo, ..>
-// in CurrentHandler. Let's hope this won't break something else..
-
-bool QuarkActionInfo::operator<(const QuarkActionInfo& rhs) const
-{
- return mass < rhs.mass;
-}
-
-
-string QuarkActionInfo::indentDescription(int indent) const
-{
- if (indent==0) return description;
- string pad(3*indent,' ');
- string temp(pad);
- size_t pos1=0;
- size_t pos2=description.find('\n',pos1);
- while (pos2!=string::npos){
-    temp+=description.substr(pos1,pos2-pos1+1)+pad;
-    pos1=pos2+1;
-    pos2=description.find('\n',pos1);}
- temp+=description.substr(pos1,description.length()-pos1+1);
- return temp;
-}
-
-string QuarkActionInfo::output(int indent) const
-{
- string pad(3*indent,' ');
- ostringstream oss;
- oss << pad << "<QuarkActionInfo>"<<endl;
- oss << pad << "   <Name>" << action_id << "</Name>"<<endl;
- oss << pad << "   <"<<mass_name<<">" << mass << "</"<<mass_name<<">"<<endl;
- oss << indentDescription(indent+1)<<endl;
- oss << pad << "</QuarkActionInfo>"<<endl;
- return oss.str();
-}
-
-void QuarkActionInfo::output(XmlWriter& xmlout) const
-{
- push(xmlout,"QuarkActionInfo");
- write(xmlout,"Name",action_id);
- write(xmlout,mass_name,mass);
- xmlout.writeXML("\n"+indentDescription(1)+"\n");
- pop(xmlout);
-}
-
-
-*/
-// ***********************************************************
 } // namespace LaphEnv

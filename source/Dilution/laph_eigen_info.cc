@@ -200,7 +200,7 @@ void LaphEigenSolverInfo::setQudaParam(QudaInvertParam &eig_inv_param,
   strcpy(eig_param.vec_infile, "");
   strcpy(eig_param.vec_outfile, "");
 
-  eig_param.block_size = 1 ;
+  eig_param.block_size = 1;
   eig_param.require_convergence = QUDA_BOOLEAN_TRUE;
 
   eig_param.use_norm_op = QUDA_BOOLEAN_FALSE;
@@ -215,7 +215,6 @@ void LaphEigenSolverInfo::setQudaParam(QudaInvertParam &eig_inv_param,
 
   eig_param.preserve_deflation =
       QUDA_BOOLEAN_FALSE; // do not keep eigenvectors in gpu device memory
-  // eig_param.preserve_deflation_space =
   eig_param.preserve_evals = QUDA_BOOLEAN_FALSE;
 
   eig_param.struct_size = sizeof(eig_param);

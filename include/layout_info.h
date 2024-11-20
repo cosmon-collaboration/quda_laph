@@ -148,7 +148,5 @@ private:
                                      const std::vector<int> &loc_extents,
                                      int loc_nsites, int start_parity);
 };
-
-// *************************************************************************
 } // namespace LaphEnv
 #endif

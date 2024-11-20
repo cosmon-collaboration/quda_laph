@@ -13,7 +13,7 @@ namespace LaphEnv {
 //       <CUDASloppyPrecision>double</CUDASloppyPrecision> (or single)
 //    </QudaInfo>
 
-void QudaInfo::init(const XMLHandler &xml_in, bool echo) {
+void QudaInfo::init(const XMLHandler &xml_in, const bool echo) {
   XMLHandler xmlr(xml_in, "QudaInfo");
   string response;
   if (xmlreadif(xmlr, "CPUPrecision", response, "QudaInfo")) {
@@ -124,6 +124,4 @@ void QudaInfo::clearDeviceCloverField() {
     clover_on_device = false;
   }
 }
-
-// **********************************************************************
 } // namespace LaphEnv

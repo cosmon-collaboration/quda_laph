@@ -139,7 +139,5 @@ public:
 private:
   void extract_info_from_reader(XMLHandler &xml_in);
 };
-
-// **************************************************
 } // namespace LaphEnv
 #endif

@@ -52,7 +52,7 @@ DilutionSchemeInfo::operator=(const DilutionSchemeInfo &in) {
 }
 
 void DilutionSchemeInfo::assign(const int spin_dil_type,
-				const int eigvec_dil_type,
+                                const int eigvec_dil_type,
                                 const int time_dil_type) {
   try {
     if ((time_dil_type == -1) || (spin_dil_type == -1) ||

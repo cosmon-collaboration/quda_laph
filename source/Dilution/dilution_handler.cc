@@ -7,8 +7,8 @@ using namespace std;
 namespace LaphEnv {
 
 DilutionHandler::DilutionHandler()
-  : dilPtr(0), Textent(0), nEigvecs(0), nSpinProjectors(0), nEigvecProjectors(0),
-    nTimeProjectors(0), Nspin(4) {}
+    : dilPtr(0), Textent(0), nEigvecs(0), nSpinProjectors(0),
+      nEigvecProjectors(0), nTimeProjectors(0), Nspin(4) {}
 
 DilutionHandler::DilutionHandler(const DilutionSchemeInfo &dilScheme,
                                  const QuarkSmearingInfo &qSmear,
@@ -77,8 +77,7 @@ void DilutionHandler::set_info(const DilutionSchemeInfo &dilScheme,
 }
 
 bool DilutionHandler::isInfoSet() const {
-  return ((dilPtr != 0) && (Textent > 0) &&
-          (nEigvecs > 0) );
+  return ((dilPtr != 0) && (Textent > 0) && (nEigvecs > 0));
 }
 
 const DilutionSchemeInfo &DilutionHandler::getDilutionSchemeInfo() const {

@@ -136,7 +136,5 @@ private:
 
   friend class GaugeConfigurationHandler;
 };
-
-// *************************************************************
 } // namespace LaphEnv
 #endif
