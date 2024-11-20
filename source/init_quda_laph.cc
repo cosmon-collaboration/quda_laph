@@ -105,7 +105,7 @@ void Tasker::do_task(XMLHandler &xml_task, bool echo) {
 
 static void initRand() {
   int rank = 0;
-#if defined(ARCH_PARALLEL)
+#ifdef ARCH_PARALLEL
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 #endif
   srand(17 * rank + 137);

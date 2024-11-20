@@ -181,6 +181,7 @@ set_constant( vector<LattField> &laphEigvecs )
 
 int main(int argc, char *argv[]) {
   XMLHandler xml_in;
+
   if( init_quda_laph(argc, argv, xml_in) != 0 ) {
     exit(1) ;
   }
@@ -241,7 +242,11 @@ int main(int argc, char *argv[]) {
       }
     }
     double deviation = 0 ;
+    #ifdef ARCH_PARALLEL
     MPI_Allreduce(&loc_dev, &deviation, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD) ;
+    #else
+    deviation = loc_dev ;
+    #endif
     int my_rank = 0 ;
     #ifdef ARCH_PARALLEL
     MPI_Comm_rank( MPI_COMM_WORLD, &my_rank ) ;
