@@ -37,7 +37,6 @@
         <LinkIterations>20</LinkIterations>
         <LinkStapleWeight>0.1</LinkStapleWeight>
      </GluonStoutSmearingInfo>
-   <!--  <SmearedGaugeFileName>/latticeQCD/raid4/laph/cls21_A653_r000/smeared_gauge_field/1/smeared_gauge_field4D_1_qudalaphB</SmearedGaugeFileName>-->
      <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>
      <QuarkLaphSmearingInfo>
         <LaphSigmaCutoff>0.32</LaphSigmaCutoff>
@@ -69,13 +68,11 @@
            <LinkIterations>20</LinkIterations>
            <LinkStapleWeight>0.1</LinkStapleWeight>
         </GluonStoutSmearingInfo>
-    <!--    <SmearedGaugeFileName>/latticeQCD/raid4/laph/cls21_A653_r000/smeared_gauge_field/1/smeared_gauge_field4D_1_qudalaphB</SmearedGaugeFileName>-->
         <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>
         <QuarkLaphSmearingInfo>
            <LaphSigmaCutoff>0.32</LaphSigmaCutoff>
            <NumberLaphEigvecs> 32 </NumberLaphEigvecs>
         </QuarkLaphSmearingInfo>
-    <!--    <SmearedQuarkFileStub>/latticeQCD/raid4/laph/cls21_A653_r000/smeared_quark_field/1_Nev32/smeared_quark_field_1</SmearedQuarkFileStub>-->
         <SmearedQuarkFileStub>NOM_smeared_quark_field</SmearedQuarkFileStub>
         <QuarkActionInfo>
            <Name> WILSON_CLOVER </Name>
@@ -85,52 +82,37 @@
            <TimeBC> antiperiodic </TimeBC>
          </QuarkActionInfo>
         <FileListInfo>
-           <FileNameStub>/latticeQCD/raid4/laph/cls21_A653_r000/quark_sinks/1/quark_perambs_test_mpi</FileNameStub>
+           <FileNameStub>testperam</FileNameStub>
            <MinFileNumber>0</MinFileNumber>
            <MaxFileNumber>1000</MaxFileNumber>
         </FileListInfo>
-     <!--   <InverterInfo>            
-           <Name>CGNR</Name> 
-           <Tolerance>1.0e-10</Tolerance>
-           <MaxIterations>35000</MaxIterations>
-        </InverterInfo> -->
-     <!--   <InverterInfo>            
-           <Name>BICGSTAB</Name> 
-           <Tolerance>1.0e-11</Tolerance>
-           <MaxIterations>35000</MaxIterations>
-        </InverterInfo> -->
-     <!--   <InverterInfo>            
-           <Name>GCR</Name> 
-           <Tolerance>1.0e-11</Tolerance>
-           <MaxIterations>35000</MaxIterations>
-           <NKrylov>24</NKrylov>
-        </InverterInfo> -->
-
         <InverterInfo>            
            <Name>GCR_MULTIGRID</Name>
-      <!--     <MGPreconditioner>
+	   <MGPreconditioner>
               <NumLevels>2</NumLevels>
               <Level0>
-                 <XYZTBlockExtents>6 6 6 6</XYZTBlockExtents>
+                <XYZTBlockExtents>4 6 6 6</XYZTBlockExtents>
+                <NullSpaceDim>L</NullSpaceDim>          
+                <NullSpaceSolveSteps>500</NullSpaceSolveSteps>                    
+                <CoarseSolverTolerance>0.25</CoarseSolverTolerance>               
+                <CoarseSolverMaxIterations>32</CoarseSolverMaxIterations>         
+                <NumPreSmooth>0</NumPreSmooth>                                    
+                <NumPostSmooth>8</NumPostSmooth>
               </Level0>
               <Level1>
-                 <TRLMDeflation>
-                    <NumVectors> 32 </NumVectors>
-                    <Tolerance> 1e-6 </Tolerance> 
-                    <MaxIterations> 100 </MaxIterations>
-                    <ChebyshevOrder> 8 </ChebyshevOrder> 
-                    <CutoffEigenvalue> 0.1 </CutoffEigenvalue> 
-                 </TRLMDeflation>
+                <TRLMDeflation>
+                  <NumVectors>256</NumVectors>
+                  <Tolerance>1e-6</Tolerance> 
+                  <MaxIterations>64</MaxIterations>
+                  <ChebyshevOrder>16</ChebyshevOrder> 
+                  <CutoffEigenvalue>0.1</CutoffEigenvalue> 
+                </TRLMDeflation>
               </Level1>
               <PreOrthoNullVectors>false</PreOrthoNullVectors>
               <PostOrthoNullVectors>false</PostOrthoNullVectors>
-           </MGPreconditioner> -->
+           </MGPreconditioner>
         </InverterInfo>
-
         <Verbosity>full</Verbosity> 
-     <!--   <Verbosity>medium</Verbosity> -->
-     <!--   <Verbosity>none</Verbosity> -->
-      <!--  <ExtraSolutionChecks/> -->
      </QuarkPerambulatorInfo> 
      <ComputationSet>
         <NumSinksBeforeProject>  4 </NumSinksBeforeProject>
@@ -138,12 +120,10 @@
         <NumEigsInProjectBatch>  4 </NumEigsInProjectBatch>
         <Computation>
            <SourceTime>8</SourceTime>
-      <!--     <SourceLaphEigvecIndices>12 17 23 24 25</SourceLaphEigvecIndices> -->
            <SourceLaphEigvecIndices>24  27 28 </SourceLaphEigvecIndices>
         </Computation>
         <Computation>
            <SourceTime>12</SourceTime>
-      <!--     <SourceLaphEigvecIndexMin>24</SourceLaphEigvecIndexMin> -->
            <SourceLaphEigvecIndexMin>29</SourceLaphEigvecIndexMin>
            <SourceLaphEigvecIndexMax>31</SourceLaphEigvecIndexMax>
         </Computation>
@@ -180,7 +160,7 @@
            <TimeBC> antiperiodic </TimeBC>
          </QuarkActionInfo>
         <FileListInfo>
-           <FileNameStub>/latticeQCD/raid4/laph/cls21_A653_r000/quark_sinks/1/quark_perambs_test_mpi</FileNameStub>
+           <FileNameStub>test</FileNameStub>
            <MinFileNumber>0</MinFileNumber>
            <MaxFileNumber>1000</MaxFileNumber>
         </FileListInfo>

@@ -524,7 +524,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
 
   double setup_tolerance = 1e-10; // so setup will continue to max iteration
   double smoother_tol = 1e-6;     // so will go to max iteration
-
+  
   // set the QudaInvertParam
   invParam.cpu_prec = QudaInfo::get_cpu_prec();
   invParam.cuda_prec = QudaInfo::get_cuda_prec();
@@ -539,7 +539,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
   invParam.dagger = QUDA_DAG_NO;
   invParam.verbosity = getVerbosity();
   invParam.verbosity_precondition = getVerbosity();
-  invParam.compute_true_res = true;
+  invParam.compute_true_res = QUDA_BOOLEAN_FALSE ; //true;
   invParam.preserve_source = QUDA_PRESERVE_SOURCE_NO;
   invParam.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
   invParam.cuda_prec_refinement_sloppy = QudaInfo::get_cuda_prec_sloppy();
@@ -549,7 +549,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
   invParam.input_location = QUDA_CPU_FIELD_LOCATION;
   invParam.output_location = QUDA_CPU_FIELD_LOCATION;
   invParam.inv_type_precondition =
-      QUDA_MG_INVERTER; // the crucial preconditioner
+    QUDA_MG_INVERTER; // the crucial preconditioner
   invParam.preconditioner = nullptr;
   invParam.deflation_op = nullptr;
   invParam.eig_param = nullptr;
@@ -634,6 +634,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
     mg_param.smoother[level] = QUDA_CA_GCR_INVERTER;
     mg_param.smoother_solve_type[level] = QUDA_DIRECT_PC_SOLVE;
     mg_param.smoother_tol[level] = smoother_tol;
+    mg_param.smoother_halo_precision[level] = QUDA_HALF_PRECISION ;
     mg_param.smoother_solver_ca_basis[level] = QUDA_POWER_BASIS;
     mg_param.smoother_solver_ca_lambda_min[level] = 0.0;
     mg_param.smoother_solver_ca_lambda_max[level] = -1.0;
@@ -646,8 +647,10 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
     mg_param.verbosity[level] = QUDA_SUMMARIZE;
     mg_param.global_reduction[level] = QUDA_BOOLEAN_YES;
     mg_param.use_eig_solver[level] = QUDA_BOOLEAN_FALSE;
-    mg_param.setup_use_mma[level] = QUDA_BOOLEAN_FALSE;
-    mg_param.dslash_use_mma[level] = QUDA_BOOLEAN_FALSE;
+
+    mg_param.setup_use_mma[level] = QUDA_BOOLEAN_TRUE;
+    //mg_param.dslash_use_mma[level] = QUDA_BOOLEAN_TRUE;
+
     strcpy(mg_param.vec_infile[level], "");
     strcpy(mg_param.vec_outfile[level], "");
     mg_param.n_block_ortho[level] = 2;
