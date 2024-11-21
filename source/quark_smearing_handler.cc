@@ -403,7 +403,7 @@ void QuarkSmearingHandler::applyLaphPhaseConvention(vector<LattField>& laph_evec
 
 #ifdef ARCH_PARALLEL
     // now broadcast these rephase factors to the ranks that need them
- vector<int> comm_coords(LayoutInfo::Ndim-1);
+ vector<int> comm_coords(LayoutInfo::Ndim);
  comm_coords[LayoutInfo::Ndim-1]=LayoutInfo::getMyCommCoords()[LayoutInfo::Ndim-1];
  comm_coords[0]=0; comm_coords[1]=0; comm_coords[2]=0;
  int orig_sender_rank=LayoutInfo::getRankFromCommCoords(comm_coords);
