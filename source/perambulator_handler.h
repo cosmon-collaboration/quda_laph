@@ -63,21 +63,15 @@ namespace LaphEnv {
 // *         Nspin  (4 or 2)                                       *
 // *                                                               *
 // *   - The specific header info includes (FileKey)               *
-// *         int snk_time, src_time                                *
+// *         int src_time, src_spin                                *
 // *                                                               *
 // *   - Each file contains several records whose access is given  *
 // *     by a RecordKey.  The RecordKey contains an integer        *
-// *     that specifies source spin and source eigenvec index.     *
-// *     The data in each record (DataType) is a multi1d<Complex>  *
-// *     containing "nev" * Nspin complex numbers, where "nev" is  *
-// *     the number of Laph eigenvectors.   The Dirac-Pauli spin   *
-// *     convention is used.                                       *
-// *                                                               *
-// *   - In 3d, the "get" function takes source and sink times     *
-// *     and spins and returns a multi2d<Complex> which is a       *
-// *     square matrix in terms of the LapH eigenvector indices.   *
-// *     A smaller "neigsize" by "neigsize" matrix can also be     *
-// *     returned.                                                 *
+// *     that specifies sink spin, sink time, and source eigenvec  *
+// *     index.  The data in each record (DataType) is a           *
+// *     vector<complex<double>> containing "nev" complex numbers, *
+// *     where "nev" is the number of Laph eigenvectors.   The     *
+// *     Dirac-Pauli spin convention is used.                      *
 // *                                                               *
 // *  All Laph Handlers follow the member naming convention:       *
 // *                                                               *
@@ -319,7 +313,7 @@ class PerambulatorHandler
 
    const InverterInfo& getInverterInfo() const;
 
-   void setUpPreconditioning(QudaInvertParam& invParam);
+   bool setUpPreconditioning(QudaInvertParam& invParam);
 
    void clearComputationSet();
       

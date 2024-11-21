@@ -397,7 +397,7 @@ class QuarkHandler
 
    const InverterInfo& getInverterInfo() const;
 
-   void setUpPreconditioning(QudaInvertParam& invParam);
+   bool setUpPreconditioning(QudaInvertParam& invParam);
 
 
         // if "verbose" is set to true, the quark sinks

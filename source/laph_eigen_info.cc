@@ -165,6 +165,8 @@ void LaphEigenSolverInfo::setQudaParam(QudaInvertParam& eig_inv_param,
  eig_inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
  eig_inv_param.cpu_prec = QudaInfo::get_cpu_prec();
  eig_inv_param.cuda_prec = QudaInfo::get_cuda_prec();
+ eig_inv_param.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
+ eig_inv_param.cuda_prec_eigensolver = QudaInfo::get_cuda_prec();
  if (getOutputVerbosity()==0){
     eig_inv_param.verbosity = QUDA_SILENT;}
  else if (getOutputVerbosity()==1){

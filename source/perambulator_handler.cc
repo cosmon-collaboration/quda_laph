@@ -9,6 +9,9 @@
 #include "cblas.h"
 #endif
 
+    // STILL TO DO:  single asynchronous thread for output so can continue next computations
+    //                   while output occurs
+
 using namespace std;
 
 typedef std::complex<double> dcmplx;
@@ -519,7 +522,7 @@ void PerambulatorHandler::writeHeader(XMLHandler& xmlout,
  // ************************************************************************************
 
 
-void PerambulatorHandler::setUpPreconditioning(QudaInvertParam& invParam)
+bool PerambulatorHandler::setUpPreconditioning(QudaInvertParam& invParam)
 {
  if (invertPtr->getName()=="GCR_MULTIGRID"){
     if (invertPtr->QudaMGInfoPtr){
@@ -527,9 +530,11 @@ void PerambulatorHandler::setUpPreconditioning(QudaInvertParam& invParam)
           destroyMultigridQuda(preconditioner);}
        printLaph("Initializing the fabulous Multigrid preconditioner!");
        preconditioner=newMultigridQuda(&invertPtr->QudaMGInfoPtr->mg_param);
-       invParam.preconditioner=preconditioner;}
+       invParam.preconditioner=preconditioner;
+       return true;}
     else{
        throw(std::invalid_argument("setUpPreconditioning failed since invParam not set"));}}
+ return false;
 }
 
 
@@ -585,7 +590,13 @@ void PerambulatorHandler::computePerambulators(bool verbose, bool extra_soln_che
        QudaInfo::clover_on_device=true;}}
 
     // set up any preconditioning in the inverter
- setUpPreconditioning(quda_inv_param);
+ double precondtime=0.0;
+ rolex.reset(); rolex.start();
+ bool precond=setUpPreconditioning(quda_inv_param);
+ rolex.stop();
+ precondtime=rolex.getTimeInSeconds();
+ if (precond){
+    printLaph(make_str(" Time to set up inverter preconditioner was ",precondtime," seconds"));}
 
      // load the LapH eigenvectors onto host, store pointers
  rolex.reset(); rolex.start();
@@ -627,6 +638,8 @@ void PerambulatorHandler::computePerambulators(bool verbose, bool extra_soln_che
  if (quda_inv_param.dslash_type == QUDA_CLOVER_WILSON_DSLASH){ 
     printLaph(make_str("       Time to set up clover term = ",clovertime," seconds"));}
  printLaph(make_str("         Total source set up time = ",srctime," seconds"));
+ if (precond){
+    printLaph(make_str("     Inverter preconditioner time = ",precondtime," seconds"));}
  printLaph(make_str("           Total time in inverter = ",invtime," seconds"));
  printLaph(make_str("Projection onto LapH eigvecs time = ",evprojtime," seconds"));
  printLaph(make_str("          Total file writing time = ",writetime," seconds\n\n"));
