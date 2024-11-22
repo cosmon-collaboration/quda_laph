@@ -140,9 +140,6 @@ void GaugeConfigurationInfo::setQudaGaugeParam(QudaGaugeParam &gauge_param) cons
 
  gauge_param.cpu_prec = QudaInfo::cpu_prec;
  gauge_param.cuda_prec = QudaInfo::cuda_prec;
- gauge_param.cuda_prec_sloppy = QudaInfo::cuda_prec_sloppy;
- gauge_param.cuda_prec_precondition = QudaInfo::cuda_prec;
- gauge_param.cuda_prec_eigensolver = QudaInfo::cuda_prec;
 
  gauge_param.reconstruct = QudaInfo::link_recon;
  gauge_param.reconstruct_sloppy = QudaInfo::link_recon;
