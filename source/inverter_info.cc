@@ -353,7 +353,6 @@ void InverterInfo::setQudaInvertParam_gcr(QudaInvertParam& invParam) const
 // *        <GenerateAllLevels>true</GenerateAllLevels>  all or level 0 only     *
 // *        <PreOrthoNullVectors>true</PreOrthoNullVectors>                      *
 // *        <PostOrthoNullVectors>true</PostOrthoNullVectors>                    *
-// *        <SetupMinimizeMemory>false<SetupMinimizeMemory>                      *
 // *        <RunVerify>false</RunVerify>   (use true for initial runs)           *
 // *     </MGPreconditioner>                                                     *
 // *   </InvertInfo>                                                             *
@@ -451,7 +450,6 @@ void InverterInfo::set_info_gcr_multigrid(XMLHandler& xmlr)
  xmlsetQLBool(xmlmg,"GenerateAllLevels",ivalues,ivalindex,true,true);
  xmlsetQLBool(xmlmg,"PreOrthoNullVectors",ivalues,ivalindex,true,true);
  xmlsetQLBool(xmlmg,"PostOrthoNullVectors",ivalues,ivalindex,true,true);
- xmlsetQLBool(xmlmg,"SetupMinimizeMemory",ivalues,ivalindex,true,false);
  xmlsetQLBool(xmlmg,"RunVerify",ivalues,ivalindex,true,true);
 // printLaph(make_str("rvalindex = ",rvalindex," size of rvalues = ",rvalues.size()));
 // printLaph(make_str("ivalindex = ",ivalindex," size of ivalues = ",ivalues.size()));
@@ -500,7 +498,6 @@ void InverterInfo::output_gcr_multigrid(XMLHandler& xmlout) const
  xmlmg.put_child(xmloutputQLBool("GenerateAllLevels",ivalues,ivalindex));
  xmlmg.put_child(xmloutputQLBool("PreOrthoNullVectors",ivalues,ivalindex));
  xmlmg.put_child(xmloutputQLBool("PostOrthoNullVectors",ivalues,ivalindex));
- xmlmg.put_child(xmloutputQLBool("SetupMinimizeMemory",ivalues,ivalindex));
  xmlmg.put_child(xmloutputQLBool("RunVerify",ivalues,ivalindex));
  xmlout.put_child(xmlmg);
 // printLaph(make_str("rvalindex = ",rvalindex," size of rvalues = ",rvalues.size()));
@@ -556,7 +553,6 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(QudaInvertParam& invParam,
  bool generate_all=(ivalues[ivalindex])?true:false; ++ivalindex;
  bool pre_ortho_setup=(ivalues[ivalindex])?true:false; ++ivalindex;
  bool post_orth_setup=(ivalues[ivalindex])?true:false; ++ivalindex;
- bool minimize_mem=(ivalues[ivalindex])?true:false; ++ivalindex;
  bool setup_verify=(ivalues[ivalindex])?true:false; ++ivalindex;
 
  double setup_tolerance=1e-10;  // so setup will continue to max iteration
@@ -579,6 +575,8 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(QudaInvertParam& invParam,
  invParam.compute_true_res=true;
  invParam.preserve_source = QUDA_PRESERVE_SOURCE_NO;
  invParam.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
+ if (invParam.cuda_prec_sloppy != QUDA_SINGLE_PRECISION){
+    throw(std::invalid_argument("Multigrid preconditioner only supports sloppy single precision"));}
  invParam.cuda_prec_refinement_sloppy = QudaInfo::get_cuda_prec_sloppy();
  invParam.cuda_prec_precondition = QUDA_HALF_PRECISION;
  invParam.cuda_prec_eigensolver = QudaInfo::get_cuda_prec_sloppy();
@@ -629,7 +627,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(QudaInvertParam& invParam,
  mg_param.generate_all_levels=(generate_all)?QUDA_BOOLEAN_TRUE:QUDA_BOOLEAN_FALSE;
  mg_param.pre_orthonormalize=(pre_ortho_setup)?QUDA_BOOLEAN_TRUE:QUDA_BOOLEAN_FALSE;
  mg_param.post_orthonormalize=(post_orth_setup)?QUDA_BOOLEAN_TRUE:QUDA_BOOLEAN_FALSE;
- mg_param.setup_minimize_memory=(minimize_mem)?QUDA_BOOLEAN_TRUE:QUDA_BOOLEAN_FALSE;
+ mg_param.setup_minimize_memory=QUDA_BOOLEAN_FALSE;
  mg_param.run_verify=(setup_verify)?QUDA_BOOLEAN_TRUE:QUDA_BOOLEAN_FALSE;
 
  for (int level=0;level<nlevels;++level){
