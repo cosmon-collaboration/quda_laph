@@ -132,12 +132,12 @@ class PerambulatorHandler
     public:
 
       RecordKey() : code(0) {}
-      RecordKey(int spin, int time, int srcev_index)
-       {encode(spin,time,srcev_index);}
+      RecordKey(int snkspin, int snktime, int srcev_index)
+       {encode(snkspin,snktime,srcev_index);}
       RecordKey(const RecordKey& in) : code(in.code) {}
       RecordKey& operator=(const RecordKey& in) {code=in.code; return *this;}
-      RecordKey& set(int spin, int time, int srcev_index)
-       {encode(spin,time,srcev_index); return *this;}
+      RecordKey& set(int snkspin, int snktime, int srcev_index)
+       {encode(snkspin,snktime,srcev_index); return *this;}
       ~RecordKey() {}
 
       bool operator<(const RecordKey& rhs) const {return (code<rhs.code);}
@@ -164,15 +164,15 @@ class PerambulatorHandler
 
     private:
 
-      void encode(int spin, int time, int srcev_index)
+      void encode(int snkspin, int snktime, int srcev_index)
       {
        const int imax=32768;
-       if  ((spin<1)||(spin>4)||(time<0)||(srcev_index<0)){
+       if  ((snkspin<1)||(snkspin>4)||(snktime<0)||(srcev_index<0)){
           errorLaph("invalid indices in QuarkHandler::RecordKey");}
-       if  ((time>=imax)||(srcev_index>=imax)){
+       if  ((snktime>=imax)||(srcev_index>=imax)){
           errorLaph("indices in QuarkHandler::RecordKey exceed maximum");}
        code=srcev_index; code<<=15; 
-       code|=time; code<<=2; code|=spin-1;
+       code|=snktime; code<<=2; code|=snkspin-1;
       }
 
    };
