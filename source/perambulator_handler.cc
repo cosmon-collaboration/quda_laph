@@ -332,11 +332,11 @@ void PerambulatorHandler::setComputationSet(const XMLHandler& xmlin)
              if ((srcev_inds[k]<0)||(srcev_inds[k]>=int(nEigs))){
                 errorLaph(make_strf("Invalid src laph eigvec index %d",srcev_inds[k]));}
           srcev_indices.insert(srcev_inds[k]);}}
-       else if (  (xml_tag_count(xmlrd,"SourceLaphEigvecIndexMin")==1)
-                &&(xml_tag_count(xmlrd,"SourceLaphEigvecIndexMax")==1)){
+       else if (  (xml_tag_count(*it,"SourceLaphEigvecIndexMin")==1)
+                &&(xml_tag_count(*it,"SourceLaphEigvecIndexMax")==1)){
           int sevmin=-1, sevmax=-1;
-          xmlread(xmlrd,"SourceLaphEigvecIndexMin",sevmin,"LAPH_PERAMBULATORS");
-          xmlread(xmlrd,"SourceLaphEigvecIndexMax",sevmax,"LAPH_PERAMBULATORS");
+          xmlread(*it,"SourceLaphEigvecIndexMin",sevmin,"LAPH_PERAMBULATORS");
+          xmlread(*it,"SourceLaphEigvecIndexMax",sevmax,"LAPH_PERAMBULATORS");
           if (sevmin<0) sevmin=0;
           if (sevmax>=int(nEigs)) sevmax=nEigs-1;
           if (sevmax<sevmin) sevmax=sevmin;
@@ -765,7 +765,7 @@ void PerambulatorHandler::computePerambulators(int src_time, const set<int>& src
        Array<dcmplx> qudaRes(Nspin, Textent, nEigs, nSinks);   // quda laph reversing major order
        __complex__ double* qudaResPtr = (__complex__ double*)(&qudaRes(0,0,0,0));
 
-	   // do the projections
+         // do the projections
        printLaph("projecting batch of solutions onto LapH eigenvectors");
        laphSinkProject(qudaResPtr, sinks_ptr, nSinks, nSinksBatch, evs_ptr, nEigs, 
                        nEigQudaBatch, &quda_inv_param, LayoutInfo::getRankLattExtents().data());
@@ -775,7 +775,7 @@ void PerambulatorHandler::computePerambulators(int src_time, const set<int>& src
        printLaph(make_str(" this batch of projections onto Laph evs took ",addevprojtime," seconds"));
        evprojtime+=addevprojtime;
 
-	   // rearrange data then output to file
+         // rearrange data then output to file
        bulova.reset(); bulova.start();
        for (int iSink=0; iSink<nSinks; ++iSink) {
           for (int t=minTime;t<=maxTime;t++){
@@ -785,10 +785,10 @@ void PerambulatorHandler::computePerambulators(int src_time, const set<int>& src
                    quark_sink[iEv] = soln_rescale*qudaRes(iSpin, t, iEv, iSink);}
                    DHputPtr->putData(RecordKey(iSpin+1,t,sinkBatchInds[iSink]),quark_sink);
                    if (verbose){
-		      printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchInds[iSink],iSpin+1,t));
+                      printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchInds[iSink],iSpin+1,t));
                       for (int n=0;n<nEigs;n++){
-		         printLaph(make_strf("coef for eigenlevel %d = (%14.8f, %14.8f)",
-                                    n,real(quark_sink[n]),imag(quark_sink[n])));}}}}}
+                         printLaph(make_strf("coef for eigenlevel %d = (%14.8f, %14.8f)",
+                                   n,real(quark_sink[n]),imag(quark_sink[n])));}}}}}
        bulova.stop();
        double otime=bulova.getTimeInSeconds();
        printLaph(make_str(" Output of this batch to file took ",otime," seconds"));
