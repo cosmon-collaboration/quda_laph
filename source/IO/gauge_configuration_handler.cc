@@ -4,9 +4,6 @@
 #include "named_obj_map.h"
 #include "read_gauge_field.h"
 #include "timer.h"
-#include "xml_handler.h"
-
-using namespace quda;
 
 namespace LaphEnv {
 

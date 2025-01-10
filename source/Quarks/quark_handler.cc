@@ -9,9 +9,6 @@
 // computations
 //                   while output occurs
 
-typedef std::complex<double> dcmplx;
-typedef std::complex<float> fcmplx;
-
 namespace LaphEnv {
 
 void QuarkHandler::RecordKey::output(XMLHandler &xmlw) const {
@@ -945,7 +942,7 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise,
       const int nSinks = iSinkBatch;
       int nSinksBatch = std::min(nSinks, int(nSinkQudaBatch));
 
-      Array<dcmplx> qudaRes(Nspin, Textent, nEigs,
+      Array<std::complex<double>> qudaRes(Nspin, Textent, nEigs,
                             nSinks); // quda laph reversing major order
       __complex__ double *qudaResPtr =
           (__complex__ double *)(&qudaRes(0, 0, 0, 0));
@@ -968,7 +965,7 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise,
       for (int iSink = 0; iSink < nSinks; ++iSink) {
         for (int t = minTime; t <= maxTime; t++) {
           for (int iSpin = 0; iSpin < Nspin; ++iSpin) {
-	    std::vector<dcmplx> quark_sink(nEigs);
+	    std::vector<std::complex<double>> quark_sink(nEigs);
             for (int iEv = 0; iEv < nEigs; ++iEv) {
               quark_sink[iEv] = soln_rescale * qudaRes(iSpin, t, iEv, iSink);
             }
@@ -1023,8 +1020,8 @@ void QuarkHandler::make_source(LattField &ferm_src,
   const int ncmplx_per_site = ferm_src.elemsPerSite();
   const int ncmplx = ncmplx_per_site * loc_nsites;
   int cbytes;
-  dcmplx zrhodp;
-  fcmplx zrhosp;
+  std::complex<double> zrhodp;
+  std::complex<float> zrhosp;
   char *zrho;
   if (dp) {
     double *z0 = reinterpret_cast<double *>(ferm_src.getDataPtr());
@@ -1087,15 +1084,15 @@ void QuarkHandler::make_source(LattField &ferm_src,
           for (int c = 0; c < FieldNcolor; ++c) {
             // branching in the hot part of the code is inneficient
             if (dp) {
-              cblas_zaxpy(n1, (dcmplx *)(zrho), (dcmplx *)(x1), incx,
-                          (dcmplx *)(y1), incy);
-              cblas_zaxpy(n2, (dcmplx *)(zrho), (dcmplx *)(x2), incx,
-                          (dcmplx *)(y2), incy);
+              cblas_zaxpy(n1, (std::complex<double> *)(zrho), (std::complex<double> *)(x1), incx,
+                          (std::complex<double>*)(y1), incy);
+              cblas_zaxpy(n2, (std::complex<double>*)(zrho), (std::complex<double>*)(x2), incx,
+                          (std::complex<double>*)(y2), incy);
             } else {
-              cblas_caxpy(n1, (fcmplx *)(zrho), (fcmplx *)(x1), incx,
-                          (fcmplx *)(y1), incy);
-              cblas_caxpy(n2, (fcmplx *)(zrho), (fcmplx *)(x2), incx,
-                          (fcmplx *)(y2), incy);
+              cblas_caxpy(n1, (std::complex<float>*)(zrho), (std::complex<float>*)(x1), incx,
+                          (std::complex<float>*)(y1), incy);
+              cblas_caxpy(n2, (std::complex<float>*)(zrho), (std::complex<float>*)(x2), incx,
+                          (std::complex<float>*)(y2), incy);
             }
             x1 += cbytes;
             y1 += cbytes;

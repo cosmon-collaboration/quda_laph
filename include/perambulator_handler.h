@@ -326,7 +326,15 @@ public:
   void computePerambulators(bool verbose = false,
                             bool extra_soln_check = false);
 
-  //   void mergeData(const FileListInfo& input_files);
+  // Makes the source in the Dirac-Pauli basis.  The source is
+  // gamma_4 times the usual source since we use the chi = psi-bar gamma_4
+  // field operator.   "src_spin" is 1,2,3,4
+
+  void make_source(LattField &ferm_src,
+		   const void *ev_src_ptr,
+		   const int src_time,
+                   const int src_spin);
+
 
 private:
   void set_info(const GaugeConfigurationInfo &gaugeinfo,
@@ -355,13 +363,6 @@ private:
                             bool extra_soln_check, double &makesrc_time,
                             double &inv_time, double &evproj_time,
                             double &write_time);
-
-  // Makes the source in the Dirac-Pauli basis.  The source is
-  // gamma_4 times the usual source since we use the chi = psi-bar gamma_4
-  // field operator.   "src_spin" is 1,2,3,4
-
-  void make_source(LattField &ferm_src, const void *ev_src_ptr, int src_time,
-                   int src_spin);
 
   friend class DataPutHandlerMF<PerambulatorHandler, FileKey, RecordKey,
                                 DataType>;

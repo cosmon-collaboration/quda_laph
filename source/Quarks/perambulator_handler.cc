@@ -4,9 +4,6 @@
 #include "field_ops.h"
 #include "multi_compare.h"
 
-typedef std::complex<double> dcmplx;
-typedef std::complex<float> fcmplx;
-
 namespace LaphEnv {
 
 void PerambulatorHandler::RecordKey::output(XMLHandler &xmlw) const {
@@ -335,12 +332,12 @@ void PerambulatorHandler::setComputationSet(const XMLHandler &xmlin) {
           }
           srcev_indices.insert(srcev_inds[k]);
         }
-      } else if ((xml_tag_count(xmlrd, "SourceLaphEigvecIndexMin") == 1) &&
-                 (xml_tag_count(xmlrd, "SourceLaphEigvecIndexMax") == 1)) {
+      } else if ((xml_tag_count(*it, "SourceLaphEigvecIndexMin") == 1) &&
+                 (xml_tag_count(*it, "SourceLaphEigvecIndexMax") == 1)) {
         int sevmin = -1, sevmax = -1;
-        xmlread(xmlrd, "SourceLaphEigvecIndexMin", sevmin,
+        xmlread(*it, "SourceLaphEigvecIndexMin", sevmin,
                 "LAPH_PERAMBULATORS");
-        xmlread(xmlrd, "SourceLaphEigvecIndexMax", sevmax,
+        xmlread(*it, "SourceLaphEigvecIndexMax", sevmax,
                 "LAPH_PERAMBULATORS");
         if (sevmin < 0)
           sevmin = 0;
@@ -816,7 +813,7 @@ void PerambulatorHandler::computePerambulators(const int src_time,
         int nSinks = iSinkBatch;
         int nSinksBatch = std::min(nSinks, int(nSinkQudaBatch));
 
-        Array<dcmplx> qudaRes(Nspin, Textent, nEigs,
+        Array<std::complex<double>> qudaRes(Nspin, Textent, nEigs,
                               nSinks); // quda laph reversing major order
         __complex__ double *qudaResPtr =
             (__complex__ double *)(&qudaRes(0, 0, 0, 0));
@@ -839,7 +836,7 @@ void PerambulatorHandler::computePerambulators(const int src_time,
         for (int iSink = 0; iSink < nSinks; ++iSink) {
           for (int t = minTime; t <= maxTime; t++) {
             for (int iSpin = 0; iSpin < int(Nspin); ++iSpin) {
-	      std::vector<dcmplx> quark_sink(nEigs);
+	      std::vector<std::complex<double>> quark_sink(nEigs);
               for (int iEv = 0; iEv < nEigs; ++iEv) {
                 quark_sink[iEv] = soln_rescale * qudaRes(iSpin, t, iEv, iSink);
               }
@@ -864,7 +861,7 @@ void PerambulatorHandler::computePerambulators(const int src_time,
         writetime += otime;
 
         iSinkBatch = 0;
-      } // batch end */
+      } // batch end
       DHputPtr->flush();
     }
   } // src_ind, src_spin loop end
@@ -890,8 +887,8 @@ void PerambulatorHandler::make_source(LattField &ferm_src,
   const int ncmplx_per_site = ferm_src.elemsPerSite();
   const int ncmplx = ncmplx_per_site * loc_nsites;
   int cbytes;
-  dcmplx zrhodp;
-  fcmplx zrhosp;
+  std::complex<double> zrhodp;
+  std::complex<float>  zrhosp;
   char *zrho;
   if (dp) {
     double *z0 = reinterpret_cast<double *>(ferm_src.getDataPtr());
@@ -916,7 +913,7 @@ void PerambulatorHandler::make_source(LattField &ferm_src,
   const int incx = FieldNcolor;
   const int incy = FieldNcolor * FieldNspin;
 
-  // could be more efficient
+  // TODO :: could be more efficient
   if ((src_time >= mytmin) && (src_time <= mytmax)) {
     int tloc = src_time - mytmin;
     int parshift = loc_npsites * ((start_parity + tloc) % 2);
@@ -933,7 +930,7 @@ void PerambulatorHandler::make_source(LattField &ferm_src,
     char *ystart2 = ferm_src.getDataPtr() + start2 * incy * cbytes;
 
     const char *x0 = reinterpret_cast<const char *>(ev_src_ptr);
-    zrhodp = dcmplx(1.0, 0.0);
+    zrhodp = std::complex<double>(1.0, 0.0);
     if (src_spin > 2) {
       zrhodp = -zrhodp;
     } // multiply by gamma_4
@@ -946,14 +943,14 @@ void PerambulatorHandler::make_source(LattField &ferm_src,
     char *y2 = ystart2 + (src_spin - 1) * incx * cbytes;
     for (int c = 0; c < FieldNcolor; ++c) {
       if (dp) {
-        cblas_zaxpy(n1, (dcmplx *)(zrho), (dcmplx *)(x1), incx, (dcmplx *)(y1),
+        cblas_zaxpy(n1, (std::complex<double>*)(zrho), (std::complex<double>*)(x1), incx, (std::complex<double>*)(y1),
                     incy);
-        cblas_zaxpy(n2, (dcmplx *)(zrho), (dcmplx *)(x2), incx, (dcmplx *)(y2),
+        cblas_zaxpy(n2, (std::complex<double>*)(zrho), (std::complex<double>*)(x2), incx, (std::complex<double>*)(y2),
                     incy);
       } else {
-        cblas_caxpy(n1, (fcmplx *)(zrho), (fcmplx *)(x1), incx, (fcmplx *)(y1),
+        cblas_caxpy(n1, (std::complex<float>*)(zrho), (std::complex<float>*)(x1), incx, (std::complex<float>*)(y1),
                     incy);
-        cblas_caxpy(n2, (fcmplx *)(zrho), (fcmplx *)(x2), incx, (fcmplx *)(y2),
+        cblas_caxpy(n2, (std::complex<float>*)(zrho), (std::complex<float>*)(x2), incx, (std::complex<float>*)(y2),
                     incy);
       }
       x1 += cbytes;

@@ -3,8 +3,6 @@
 #include <cstdlib>
 #include <ctime>
 
-//using namespace std;
-
 namespace LaphEnv {
 
 UniformDeviate32::UniformDeviate32() {

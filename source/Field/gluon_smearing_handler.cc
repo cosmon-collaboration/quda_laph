@@ -1,7 +1,7 @@
 #include "gluon_smearing_handler.h"
 #include "stop_watch.h"
 
-using namespace quda ;
+//using namespace quda ;
 
 namespace LaphEnv {
 
