@@ -7,15 +7,12 @@
 #include "xml_handler.h"
 #include <unistd.h>
 
-using namespace quda;
-using namespace std;
-
 namespace LaphEnv {
 
 //  Tests if file having name "file_name" exists on disk: works
 //  in global or local mode.
 
-bool doesFileExist(const std::string &file_name, bool global_mode) {
+bool doesFileExist(const std::string &file_name, const bool global_mode) {
   bool result;
   if ((isPrimaryRank()) || (!global_mode)) {
     result = (access(file_name.c_str(), F_OK) == 0) ? true : false;
@@ -31,7 +28,7 @@ bool doesFileExist(const std::string &file_name, bool global_mode) {
 //  in global or local mode. If starts with "NOM_", checks to
 //  see if exists in the NamedObjMap.
 
-bool fileExists(const std::string &file_name, bool global_mode) {
+bool fileExists(const std::string &file_name, const bool global_mode) {
   bool result = false;
   if (file_name.find("NOM_") != 0) {
     if ((isPrimaryRank()) || (!global_mode)) {
@@ -43,7 +40,7 @@ bool fileExists(const std::string &file_name, bool global_mode) {
     }
 #endif
   } else {
-    string objname(tidyString(file_name));
+    std::string objname(tidyString(file_name));
     objname.erase(0, 4);
     result = NamedObjMap::query(objname);
   }
@@ -51,7 +48,7 @@ bool fileExists(const std::string &file_name, bool global_mode) {
 }
 
 bool emptyFileName(const std::string &file_name) {
-  string ftidy(tidyString(file_name));
+  std::string ftidy(tidyString(file_name));
   return ((ftidy.empty()) || (ftidy == "NOM_"));
 }
 
@@ -235,7 +232,7 @@ bool isBooleanSameAllRanks(bool bval) {
 // convert a vector of int to a vector of unsigned int
 
 std::vector<uint> unsign(const std::vector<int> &ivector) {
-  return vector<uint>(ivector.begin(), ivector.end());
+  return std::vector<uint>(ivector.begin(), ivector.end());
 }
 
 #ifdef ARCH_PARALLEL
@@ -293,8 +290,11 @@ void laph_abort() {
 //  found.  If not optional and the child tag cannot be found,
 //  an exception is thrown.
 
-void xmlsetQLInt(XMLHandler &xmlin, const std::string &tagname,
-                 vector<int> &ivalues, int &index, const bool optional,
+void xmlsetQLInt(XMLHandler &xmlin,
+		 const std::string &tagname,
+                 std::vector<int> &ivalues,
+		 int &index,
+		 const bool optional,
                  const int default_value) {
   if (index >= int(ivalues.size())) {
     throw(std::runtime_error("ivalues vector not large enough for QL int set"));
@@ -311,7 +311,7 @@ void xmlsetQLInt(XMLHandler &xmlin, const std::string &tagname,
     if (optional) {
       ivalues[index] = default_value;
     } else {
-      throw(std::invalid_argument(string("Invalid QL integer read: ") +
+      throw(std::invalid_argument(std::string("Invalid QL integer read: ") +
                                   err_msg.what()));
     }
   }
@@ -321,8 +321,11 @@ void xmlsetQLInt(XMLHandler &xmlin, const std::string &tagname,
 //  Same as the above routine, except the value is of type bool.
 //  Will be stored as int though.
 
-void xmlsetQLBool(XMLHandler &xmlin, const std::string &tagname,
-                  vector<int> &ivalues, int &index, const bool optional,
+void xmlsetQLBool(XMLHandler &xmlin,
+		  const std::string &tagname,
+                  std::vector<int> &ivalues,
+		  int &index,
+		  const bool optional,
                   const bool default_value) {
   if (index >= int(ivalues.size())) {
     throw(
@@ -346,7 +349,7 @@ void xmlsetQLBool(XMLHandler &xmlin, const std::string &tagname,
     if (optional) {
       ivalues[index] = int(default_value);
     } else {
-      throw(std::invalid_argument(string("Invalid QL bool read: ") +
+      throw(std::invalid_argument(std::string("Invalid QL bool read: ") +
                                   err_msg.what()));
     }
   }
@@ -355,8 +358,11 @@ void xmlsetQLBool(XMLHandler &xmlin, const std::string &tagname,
 
 //  Same as the above routine, except the value is of type double.
 
-void xmlsetQLReal(XMLHandler &xmlin, const std::string &tagname,
-                  vector<double> &rvalues, int &index, const bool optional,
+void xmlsetQLReal(XMLHandler &xmlin,
+		  const std::string &tagname,
+                  std::vector<double> &rvalues,
+		  int &index,
+		  const bool optional,
                   const double default_value) {
   if (index >= int(rvalues.size())) {
     throw(
@@ -374,16 +380,20 @@ void xmlsetQLReal(XMLHandler &xmlin, const std::string &tagname,
     if (optional) {
       rvalues[index] = default_value;
     } else {
-      throw(std::invalid_argument(string("Invalid QL real read: ") +
+      throw(std::invalid_argument(std::string("Invalid QL real read: ") +
                                   err_msg.what()));
     }
   }
   ++index;
 }
 
-void xmlsetQLIntVector(XMLHandler &xmlin, const std::string &tagname,
-                       vector<int> &ivalues, int &index, const int nvalues,
-                       const bool optional, const vector<int> &default_value) {
+void xmlsetQLIntVector(XMLHandler &xmlin,
+		       const std::string &tagname,
+                       std::vector<int> &ivalues,
+		       int &index,
+		       const int nvalues,
+                       const bool optional,
+		       const std::vector<int> &default_value) {
   if (index >= (int(ivalues.size()) - nvalues + 1)) {
     throw(std::runtime_error(
         "ivalues vector not large enough for QL int vector set"));
@@ -397,7 +407,7 @@ void xmlsetQLIntVector(XMLHandler &xmlin, const std::string &tagname,
     xmlh.set_exceptions_on();
     xmlh.seek_child(tagname);
     std::string content = xmlh.get_text_content();
-    vector<int> values_read;
+    std::vector<int> values_read;
     extract_from_string(content, values_read);
     if (nvalues != int(values_read.size())) {
       throw(std::invalid_argument(
@@ -415,7 +425,7 @@ void xmlsetQLIntVector(XMLHandler &xmlin, const std::string &tagname,
         ++index;
       }
     } else {
-      throw(std::invalid_argument(string("Invalid QL int vector read: ") +
+      throw(std::invalid_argument(std::string("Invalid QL int vector read: ") +
                                   err_msg.what()));
     }
   }
@@ -428,9 +438,13 @@ void xmlsetQLIntVector(XMLHandler &xmlin, const std::string &tagname,
 //  the **index** in xmlchoices is saved, not the string itself.
 //  If optional and no tag found, the default index is saved.
 
-void xmlsetQLEnum(XMLHandler &xmlin, const std::string &tagname,
-                  const vector<string> &xmlchoices, vector<int> &ivalues,
-                  int &index, const bool optional, const int default_index) {
+void xmlsetQLEnum(XMLHandler &xmlin,
+		  const std::string &tagname,
+                  const std::vector<std::string> &xmlchoices,
+		  std::vector<int> &ivalues,
+                  int &index,
+		  const bool optional,
+		  const int default_index) {
   if (index >= int(ivalues.size())) {
     throw(
         std::runtime_error("ivalues vector not large enough for QL enum set"));
@@ -458,7 +472,7 @@ void xmlsetQLEnum(XMLHandler &xmlin, const std::string &tagname,
     if ((optional) && (!invalid)) {
       ivalues[index] = default_index;
     } else {
-      throw(std::invalid_argument(string("Invalid QL enum read: ") +
+      throw(std::invalid_argument(std::string("Invalid QL enum read: ") +
                                   err_msg.what()));
     }
   }
@@ -469,11 +483,12 @@ void xmlsetQLEnum(XMLHandler &xmlin, const std::string &tagname,
 //  "ivalues[index]".  "index" is incremented afterwards.
 
 XMLHandler xmloutputQLInt(const std::string &tagname,
-                          const vector<int> &ivalues, int &index) {
+                          const std::vector<int> &ivalues,
+			  int &index) {
   if (index >= int(ivalues.size())) {
     throw(std::runtime_error("ivalues vector not large enough for QL output"));
   }
-  string val(make_string(ivalues[index]));
+  std::string val(make_string(ivalues[index]));
   ++index;
   return XMLHandler(tagname, val);
 }
@@ -481,11 +496,12 @@ XMLHandler xmloutputQLInt(const std::string &tagname,
 //  Same as the above routine, except the value is of type bool.
 
 XMLHandler xmloutputQLBool(const std::string &tagname,
-                           const vector<int> &ivalues, int &index) {
+                           const std::vector<int> &ivalues,
+			   int &index) {
   if (index >= int(ivalues.size())) {
     throw(std::runtime_error("ivalues vector not large enough for QL output"));
   }
-  string val((ivalues[index] == 0) ? "false" : "true");
+  std::string val((ivalues[index] == 0) ? "false" : "true");
   ++index;
   return XMLHandler(tagname, val);
 }
@@ -493,39 +509,42 @@ XMLHandler xmloutputQLBool(const std::string &tagname,
 //  Same as the above routine, except the value is of type double.
 
 XMLHandler xmloutputQLReal(const std::string &tagname,
-                           const vector<double> &rvalues, int &index) {
+                           const std::vector<double> &rvalues,
+			   int &index) {
   if (index >= int(rvalues.size())) {
     throw(std::runtime_error("rvalues vector not large enough for QL output"));
   }
-  string val(make_string(rvalues[index]));
+  std::string val(make_string(rvalues[index]));
   ++index;
   return XMLHandler(tagname, val);
 }
 
 XMLHandler xmloutputQLIntVector(const std::string &tagname,
-                                const vector<int> &ivalues, int &index,
+                                const std::vector<int> &ivalues,
+				int &index,
                                 const int nvalues) {
   if (index >= (int(ivalues.size()) - nvalues + 1)) {
     throw(std::runtime_error("ivalues vector not large enough for QL output"));
   }
-  vector<int> res(nvalues);
+  std::vector<int> res(nvalues);
   for (int j = 0; j < nvalues; ++j) {
     res[j] = ivalues[index];
     ++index;
   }
-  string val(make_string(res));
+  std::string val(make_string(res));
   return XMLHandler(tagname, val);
 }
 
 //  Same as above, except the enum string is output.
 
 XMLHandler xmloutputQLEnum(const std::string &tagname,
-                           const vector<string> &xmlchoices,
-                           const vector<int> &ivalues, int &index) {
+                           const std::vector<std::string> &xmlchoices,
+                           const std::vector<int> &ivalues,
+			   int &index) {
   if (index >= int(ivalues.size())) {
     throw(std::runtime_error("ivalues vector not large enough for QL output"));
   }
-  string val(xmlchoices[ivalues[index]]);
+  std::string val(xmlchoices[ivalues[index]]);
   ++index;
   return XMLHandler(tagname, val);
 }
@@ -534,7 +553,8 @@ XMLHandler xmloutputQLEnum(const std::string &tagname,
 //  "ivalues[index]".  "index" is incremented afterwards.
 //  The "tagname" is not used but is informational.
 
-int xmlputQLInt(const std::string &tagname, const vector<int> &ivalues,
+int xmlputQLInt(const std::string &tagname,
+		const std::vector<int> &ivalues,
                 int &index) {
   if (index >= int(ivalues.size())) {
     throw(std::runtime_error("ivalues vector not large enough for QL put"));
@@ -546,19 +566,21 @@ int xmlputQLInt(const std::string &tagname, const vector<int> &ivalues,
 
 //  Same as the above routine, except the value is of type bool.
 
-bool xmlputQLBool(const std::string &tagname, const vector<int> &ivalues,
+bool xmlputQLBool(const std::string &tagname,
+		  const std::vector<int> &ivalues,
                   int &index) {
   if (index >= int(ivalues.size())) {
     throw(std::runtime_error("ivalues vector not large enough for QL put"));
   }
-  bool result = (ivalues[index] == 0) ? false : true;
+  const bool result = (ivalues[index] == 0) ? false : true;
   ++index;
   return result;
 }
 
 //  Same as the above routine, except the value is of type double.
 
-double xmlputQLReal(const std::string &tagname, const vector<double> &rvalues,
+double xmlputQLReal(const std::string &tagname,
+		    const std::vector<double> &rvalues,
                     int &index) {
   if (index >= int(rvalues.size())) {
     throw(std::runtime_error("rvalues vector not large enough for QL put"));
@@ -568,13 +590,14 @@ double xmlputQLReal(const std::string &tagname, const vector<double> &rvalues,
   return result;
 }
 
-vector<int> xmlputQLIntVector(const std::string &tagname,
-                              const vector<int> &ivalues, int &index,
+std::vector<int> xmlputQLIntVector(const std::string &tagname,
+				   const std::vector<int> &ivalues,
+				   int &index,
                               const int nvalues) {
   if (index >= (int(ivalues.size()) - nvalues + 1)) {
     throw(std::runtime_error("ivalues vector not large enough for QL put"));
   }
-  vector<int> res(nvalues);
+  std::vector<int> res(nvalues);
   for (int j = 0; j < nvalues; ++j) {
     res[j] = ivalues[index];
     ++index;
@@ -584,8 +607,10 @@ vector<int> xmlputQLIntVector(const std::string &tagname,
 
 //  Same as above, except the enum integer is output.
 
-int xmlputQLEnum(const std::string &tagname, const std::vector<int> &quda_enums,
-                 const vector<int> &ivalues, int &index) {
+int xmlputQLEnum(const std::string &tagname,
+		 const std::vector<int> &quda_enums,
+                 const std::vector<int> &ivalues,
+		 int &index) {
   if (index >= int(ivalues.size())) {
     throw(std::runtime_error("ivalues vector not large enough for QL put"));
   }

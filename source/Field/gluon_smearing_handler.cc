@@ -1,8 +1,7 @@
 #include "gluon_smearing_handler.h"
 #include "stop_watch.h"
 
-using namespace std;
-using namespace quda;
+using namespace quda ;
 
 namespace LaphEnv {
 
@@ -13,26 +12,27 @@ GluonSmearingHandler::GluonSmearingHandler()
 
 GluonSmearingHandler::GluonSmearingHandler(
     const GluonSmearingInfo &gluon_smearing,
-    const GaugeConfigurationInfo &gauge, const string &smearedFieldFileName,
-    bool readmode) {
+    const GaugeConfigurationInfo &gauge,
+    const std::string &smearedFieldFileName,
+    const bool readmode) {
   dh_ptr = 0;
   set_info(gluon_smearing, gauge, smearedFieldFileName, readmode);
 }
 
 void GluonSmearingHandler::setInfo(const GluonSmearingInfo &gluon_smearing,
                                    const GaugeConfigurationInfo &gauge,
-                                   const string &smearedFieldFileName,
-                                   bool readmode) {
+                                   const std::string &smearedFieldFileName,
+                                   const bool readmode) {
   clear();
   set_info(gluon_smearing, gauge, smearedFieldFileName, readmode);
 }
 
 void GluonSmearingHandler::set_info(const GluonSmearingInfo &gluon_smearing,
                                     const GaugeConfigurationInfo &gauge,
-                                    const string &smearedFieldFileName,
-                                    bool readmode) {
+                                    const std::string &smearedFieldFileName,
+                                    const bool readmode) {
   m_read_mode = readmode;
-  string ftype("Laph--SmearedGaugeField4D");
+  std::string ftype("Laph--SmearedGaugeField4D");
   h_filename = tidyString(smearedFieldFileName);
   if (emptyFileName(h_filename)) {
     errorLaph("empty file name in GluonSmearingHandler");
@@ -49,7 +49,7 @@ void GluonSmearingHandler::set_info(const GluonSmearingInfo &gluon_smearing,
   if (m_read_mode) {
     printLaph(make_strf("Checking file: %s", h_filename));
     if (!fileExists(h_filename)) {
-      string mesg("file ");
+      std::string mesg("file ");
       mesg += h_filename + " does not exist\n";
       mesg += " reading the smeared gauge time slices\n";
       mesg += "   will not be possible\n";
@@ -63,7 +63,7 @@ void GluonSmearingHandler::set_info(const GluonSmearingInfo &gluon_smearing,
 
   if (m_read_mode) {
     dh_ptr = new DataGetHandlerSFO<GluonSmearingHandler, RecordKey,
-                                   vector<LattField>>(*this, h_filename, ftype);
+                                   std::vector<LattField>>(*this, h_filename, ftype);
     printLaph(make_strf("File %s successfully opened and header matches\n",
                         h_filename));
   }
@@ -93,9 +93,9 @@ bool GluonSmearingHandler::isInfoSet() const {
   return ((smearPtr != 0) && (uPtr != 0));
 }
 
-void GluonSmearingHandler::check_info_set(const string &name) const {
+  void GluonSmearingHandler::check_info_set(const std::string &name) const {
   if (!isInfoSet()) {
-    string mesg("error in GluonSmearingHandler:");
+    std::string mesg("error in GluonSmearingHandler:");
     mesg += "  must setInfo before calling " + name;
     errorLaph(mesg);
   }
@@ -112,7 +112,7 @@ GluonSmearingHandler::getGaugeConfigurationInfo() const {
   return *uPtr;
 }
 
-void GluonSmearingHandler::filefail(const string &message) {
+void GluonSmearingHandler::filefail(const std::string &message) {
   clear();
   errorLaph(message);
 }
@@ -143,7 +143,7 @@ void GluonSmearingHandler::computeSmearedGaugeField() {
   smearPtr->setQudaGaugeSmearParam(gauge_smear_param);
 
   int calcobs = gauge_smear_param.n_steps / gauge_smear_param.meas_interval + 1;
-  vector<QudaGaugeObservableParam> gauge_obs_param(calcobs);
+  std::vector<QudaGaugeObservableParam> gauge_obs_param(calcobs);
   for (int i = 0; i < calcobs; ++i) {
     gauge_obs_param[i] = newQudaGaugeObservableParam();
     gauge_obs_param[i].compute_plaquette = QUDA_BOOLEAN_TRUE;
@@ -177,7 +177,7 @@ void GluonSmearingHandler::computeSmearedGaugeField() {
   printLaph("Smeared links saved to host");
 
   //  Now output to file or the NamedObjMap
-  DataPutHandlerSFO<GluonSmearingHandler, UIntKey, vector<LattField>> dhput(
+  DataPutHandlerSFO<GluonSmearingHandler, UIntKey, std::vector<LattField>> dhput(
       *this, h_filename, "Laph--SmearedGaugeField4D");
   UIntKey dummykey(0);
   dhput.putData(dummykey, stoutlinks);
@@ -191,7 +191,7 @@ void GluonSmearingHandler::computeSmearedGaugeField() {
   QudaInfo::clearDeviceSmearedGaugeConfiguration(); // remove from device
 }
 
-const vector<LattField> &GluonSmearingHandler::getSmearedGaugeField() const {
+  const std::vector<LattField> &GluonSmearingHandler::getSmearedGaugeField() const {
   if (!m_read_mode)
     throw(std::runtime_error("Cannot getSmearedGaugeField in write mode"));
   check_info_set("setSmearedGaugeFieldTimeSlice");
@@ -231,8 +231,8 @@ void GluonSmearingHandler::copyDataToDevice() {
     return;
 
   // Create the array of pointers, and call the load function
-  const vector<LattField> &stoutlinks = getSmearedGaugeField();
-  vector<const char *> gauge_ptrs(LayoutInfo::Ndim);
+  const std::vector<LattField> &stoutlinks = getSmearedGaugeField();
+  std::vector<const char *> gauge_ptrs(LayoutInfo::Ndim);
   for (int dir = 0; dir < LayoutInfo::Ndim; ++dir) {
     gauge_ptrs[dir] = stoutlinks[dir].getDataConstPtr();
   }
@@ -261,5 +261,4 @@ void GluonSmearingHandler::eraseDataOnDevice() {
     QudaInfo::smeared_gauge_on_device = false;
   }
 }
-
 } // namespace LaphEnv

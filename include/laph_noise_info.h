@@ -2,8 +2,7 @@
 #define LAPH_NOISE_INFO_H
 
 #include "gauge_configuration_info.h"
-
-typedef unsigned long uint32;
+#include <cstdint>
 
 namespace LaphEnv {
 
@@ -62,14 +61,14 @@ namespace LaphEnv {
 
 class LaphNoiseInfo {
 
-  uint32 store;
+  uint32_t store;
 
 public:
   LaphNoiseInfo();
 
   LaphNoiseInfo(const XMLHandler &xml_in);
 
-  LaphNoiseInfo(int znGroup, int seed);
+  LaphNoiseInfo(const int znGroup, const int seed);
 
   LaphNoiseInfo(const LaphNoiseInfo &in);
 
@@ -87,16 +86,16 @@ public:
 
   // output functions
 
-  uint32 getSeed(const GaugeConfigurationInfo &G) const;
+  uint32_t getSeed(const GaugeConfigurationInfo &G) const;
 
   unsigned int getZNGroup() const {
     const unsigned int GP = 0x3Fu;
     return (store & GP);
   }
 
-  uint32 getSeed() const { return (store >> 6); }
+  uint32_t getSeed() const { return (store >> 6); }
 
-  std::string output(int indent = 0) const;
+  std::string output(const int indent = 0) const;
 
   std::string str() const;
 
@@ -109,9 +108,9 @@ public:
 private:
   void extract_info_from_reader(XMLHandler &xml_in);
 
-  void encode(int znGroup, int seed);
+  void encode(const int znGroup,const int seed);
 
-  void check_assignment(int znGroup, int seed);
+  void check_assignment(const int znGroup,const int seed);
 
   friend class MesonHandler;
   friend class CurrentHandler;

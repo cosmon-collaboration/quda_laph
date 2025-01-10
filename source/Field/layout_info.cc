@@ -4,8 +4,6 @@
 #include "laph_stdio.h"
 #include "utils.h"
 
-using namespace std;
-
 namespace LaphEnv {
 
 std::vector<int> LayoutInfo::latt_extents;
@@ -36,7 +34,8 @@ int LayoutInfo::my_start_parity;
 //   This should be called AFTER QUDA has set up communications.
 
 void LayoutInfo::init(const XMLHandler &xmlin,
-                      const std::vector<int> npartitions, bool echo) {
+                      const std::vector<int> npartitions,
+		      const bool echo) {
   XMLHandler xml_in(xmlin);
   if (latt_extents.size() == Ndim) {
     throw(std::runtime_error(
@@ -130,15 +129,14 @@ void LayoutInfo::get_comm_ranksite_coords(const std::vector<int> &latt_coords,
   }
 }
 
-std::vector<int> LayoutInfo::getCommCoordsFromLatticeCoords(
-    const std::vector<int> &latt_coords) {
-  vector<int> comm_coords, rank_site_coords;
+std::vector<int> LayoutInfo::getCommCoordsFromLatticeCoords( const std::vector<int> &latt_coords) {
+  std::vector<int> comm_coords, rank_site_coords;
   get_comm_ranksite_coords(latt_coords, comm_coords, rank_site_coords);
   return comm_coords;
 }
 
 int LayoutInfo::getRankFromLatticeCoords(const std::vector<int> &latt_coords) {
-  vector<int> comm_coords = getCommCoordsFromLatticeCoords(latt_coords);
+  std::vector<int> comm_coords = getCommCoordsFromLatticeCoords(latt_coords);
   return get_rank_from_comm_coords(comm_coords);
 }
 
@@ -149,7 +147,7 @@ int LayoutInfo::getRankFromLatticeCoords(const std::vector<int> &latt_coords) {
 void LayoutInfo::getCommInfoFromLatticeCoords(
     const std::vector<int> &latt_coords, int &rank,
     int &rank_site_linear_index) {
-  vector<int> comm_coords, rank_site_coords;
+  std::vector<int> comm_coords, rank_site_coords;
   get_comm_ranksite_coords(latt_coords, comm_coords, rank_site_coords);
   rank = get_rank_from_comm_coords(comm_coords);
   int start_parity = 0;
@@ -164,15 +162,17 @@ void LayoutInfo::getCommInfoFromLatticeCoords(
 }
 
 // assumes only that number of sites on each MPI process is even
-int LayoutInfo::get_linear_index(int start_parity, int x, int y, int z, int t,
-                                 int Nx, int Ny, int Nz, int loc_nsites) {
+int LayoutInfo::get_linear_index(const int start_parity,
+				 const int x, const int y, const int z, const int t,
+                                 const int Nx, const int Ny, const int Nz,
+				 const int loc_nsites) {
   return ((x + Nx * (y + Ny * (z + Nz * t))) / 2) +
          (loc_nsites / 2) * ((start_parity + x + y + z + t) % 2);
 }
 
-int LayoutInfo::getRankFromLexicoLinearIndex(int lexico_lin_index) {
+int LayoutInfo::getRankFromLexicoLinearIndex(const int lexico_lin_index) {
   int index = lexico_lin_index;
-  vector<int> latt_coords(Ndim);
+  std::vector<int> latt_coords(Ndim);
   for (int k = 0; k < Ndim; ++k) {
     latt_coords[k] = index % latt_extents[k];
     index -= latt_coords[k];
@@ -190,14 +190,14 @@ int LayoutInfo::getRankFromCommCoords(const std::vector<int> &comm_coords) {
 //  a linear index which is used as the key in the map.
 
 void LayoutInfo::set_up_comm_map() {
-  vector<int> comm_codes(num_ranks, 0);
-  vector<int> gl_comm_codes(num_ranks);
+  std::vector<int> comm_codes(num_ranks, 0);
+  std::vector<int> gl_comm_codes(num_ranks);
   comm_codes[my_rank] = rank_encode(my_comm_coords);
 #ifdef ARCH_SERIAL
   comm_map[comm_codes[my_rank]] = my_rank;
 #elif defined(ARCH_PARALLEL)
-  int status = MPI_Allreduce(comm_codes.data(), gl_comm_codes.data(), num_ranks,
-                             MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  const int status = MPI_Allreduce(comm_codes.data(), gl_comm_codes.data(), num_ranks,
+				   MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   if (status != MPI_SUCCESS) {
     errorLaph("Problem occurred in setting up the comm_map in LayoutInfo");
   }
@@ -206,8 +206,7 @@ void LayoutInfo::set_up_comm_map() {
   }
 #endif
   // do a sanity check
-  vector<int> check;
-  vector<int> comm_coords(Ndim);
+  std::vector<int> check, comm_coords(Ndim);
   for (comm_coords[0] = 0; comm_coords[0] < num_partitions[0]; ++comm_coords[0])
     for (comm_coords[1] = 0; comm_coords[1] < num_partitions[1];
          ++comm_coords[1])
@@ -241,11 +240,11 @@ int LayoutInfo::rank_encode(const std::vector<int> &comm_coords) {
 // The input lattice quantity in "src" is assumed to be in lexicographic site
 // order, then "dest" is output in even-odd site order.
 
-void LayoutInfo::lexico_to_evenodd(char *dest, const char *src, int sitebytes) {
-  int locNX = LayoutInfo::getRankLattExtents()[0];
-  int locNY = LayoutInfo::getRankLattExtents()[1];
-  int locNZ = LayoutInfo::getRankLattExtents()[2];
-  int locNT = LayoutInfo::getRankLattExtents()[3];
+void LayoutInfo::lexico_to_evenodd(char *dest, const char *src, const int sitebytes) {
+  const int locNX = LayoutInfo::getRankLattExtents()[0];
+  const int locNY = LayoutInfo::getRankLattExtents()[1];
+  const int locNZ = LayoutInfo::getRankLattExtents()[2];
+  const int locNT = LayoutInfo::getRankLattExtents()[3];
   const char *lex = src;
   char *even = dest;
   char *odd = dest + ((locNX * locNY * locNZ * locNT) / 2) * sitebytes;
@@ -269,11 +268,11 @@ void LayoutInfo::lexico_to_evenodd(char *dest, const char *src, int sitebytes) {
 // The input lattice quantity in "src" is assumed to be in even-odd site order,
 // then "dest" is output in  lexicographic site order.
 
-void LayoutInfo::evenodd_to_lexico(char *dest, const char *src, int sitebytes) {
-  int locNX = LayoutInfo::getRankLattExtents()[0];
-  int locNY = LayoutInfo::getRankLattExtents()[1];
-  int locNZ = LayoutInfo::getRankLattExtents()[2];
-  int locNT = LayoutInfo::getRankLattExtents()[3];
+void LayoutInfo::evenodd_to_lexico(char *dest, const char *src, const int sitebytes) {
+  const int locNX = LayoutInfo::getRankLattExtents()[0];
+  const int locNY = LayoutInfo::getRankLattExtents()[1];
+  const int locNZ = LayoutInfo::getRankLattExtents()[2];
+  const int locNT = LayoutInfo::getRankLattExtents()[3];
   char *lex = dest;
   const char *even = src;
   const char *odd = src + ((locNX * locNY * locNZ * locNT) / 2) * sitebytes;
@@ -294,8 +293,8 @@ void LayoutInfo::evenodd_to_lexico(char *dest, const char *src, int sitebytes) {
       }
 }
 
-int LayoutInfo::linearSiteIndex_lexico(const vector<int> &loc_coords,
-                                       const vector<int> &loc_extents) {
+int LayoutInfo::linearSiteIndex_lexico(const std::vector<int> &loc_coords,
+				       const std::vector<int> &loc_extents) {
   return loc_coords[0] +
          loc_extents[0] * (loc_coords[1] +
                            loc_extents[1] * (loc_coords[2] +
@@ -303,9 +302,9 @@ int LayoutInfo::linearSiteIndex_lexico(const vector<int> &loc_coords,
 }
 
 // assumes only that number of sites on each MPI process is even
-int LayoutInfo::linearSiteIndex_evenodd(const vector<int> &loc_coords,
-                                        const vector<int> &loc_extents,
-                                        int loc_nsites, int start_parity) {
+int LayoutInfo::linearSiteIndex_evenodd(const std::vector<int> &loc_coords,
+					const std::vector<int> &loc_extents,
+					const int loc_nsites, const int start_parity) {
   return (loc_coords[0] +
           loc_extents[0] *
               (loc_coords[1] +

@@ -113,23 +113,21 @@ public:
   bool operator<(const DilutionSchemeInfo &in) const;
 
   // output functions
-
   std::string output(int indent = 0) const; // XML output
 
   void output(XMLHandler &xmlout) const; // write header
 
   //  return true if current dilution scheme can be changed
   //  (undiluted) to scheme "newscheme"
-
   bool canUndilute(const DilutionSchemeInfo &newscheme) const;
 
 private:
-  void assign(int spin_dil_type, int eigvec_dil_type, int time_dil_type = 1);
+  void assign(const int spin_dil_type, const int eigvec_dil_type, const int time_dil_type = 1);
   void assign_from_reader(XMLHandler &xml_in);
   void dil_in(XMLHandler &xml_in, const std::string &path, int &DilType);
-  std::string dil_out(int indent, int DilType, bool out_nproj = false) const;
-  void dil_out(XMLHandler &xmlout, int DilType, bool out_nproj = false) const;
-  bool can_undilute(int dilorig, int dilnew) const;
+  std::string dil_out(const int indent, const int DilType, const bool out_nproj = false) const;
+  void dil_out(XMLHandler &xmlout, const int DilType, const bool out_nproj = false) const;
+  bool can_undilute(const int dilorig, const int dilnew) const;
 
   friend class DilutionHandler;
 };

@@ -2,9 +2,6 @@
 #include "stop_watch.h"
 #include "tasks.h"
 
-using namespace std;
-using namespace quda;
-
 namespace LaphEnv {
 
 // *****************************************************************************************
@@ -93,7 +90,7 @@ void doLaphQuarkPerambulators(XMLHandler &xmltask) {
   GaugeConfigurationInfo gaugeinfo(xmlr);
   GluonSmearingInfo gSmear(xmlr);
   QuarkSmearingInfo qSmear(xmlr);
-  string smeared_quark_filestub;
+  std::string smeared_quark_filestub;
   xmlread(xmlr, "SmearedQuarkFileStub", smeared_quark_filestub,
           "LAPH_QUARK_PERAMBULATORS");
   QuarkActionInfo quark(xmlr);
@@ -104,7 +101,7 @@ void doLaphQuarkPerambulators(XMLHandler &xmltask) {
     upper_spin_only = true;
   }
   bool verbose = false; // output final results
-  string verbosity;
+  std::string verbosity;
   xmlreadif(xmlr, "Verbosity", verbosity, "LAPH_QUARK_PERAMBULATORS");
   if (tidyString(verbosity) == "full") {
     verbose = true;

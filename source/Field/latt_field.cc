@@ -5,17 +5,17 @@
 #include <complex>
 #include <cstring>
 
-using namespace std;
+//using namespace std;
 
 namespace LaphEnv {
 
 int LattField::cpu_prec_bytes = 2 * sizeof(double); // default value
 
-LattField::LattField(FieldSiteType sitetype) : m_sitetype(sitetype) {
+LattField::LattField(const FieldSiteType sitetype) : m_sitetype(sitetype) {
   do_resize();
 }
 
-LattField &LattField::reset(FieldSiteType sitetype) {
+LattField &LattField::reset(const FieldSiteType sitetype) {
   m_sitetype = sitetype;
   do_resize();
   return *this;
@@ -52,7 +52,6 @@ void LattField::calc_site_elems() {
     break;
   default:
     m_site_elems = 0;
-    ;
     break;
   }
 }
@@ -148,7 +147,7 @@ void LattField::putSiteData(const std::vector<int> &latt_coords,
   LayoutInfo::getCommInfoFromLatticeCoords(latt_coords, recv_rank,
                                            rank_site_linear_index);
   if (recv_rank == LayoutInfo::getMyRank()) {
-    int offset = m_site_bytes * rank_site_linear_index;
+    const int offset = m_site_bytes * rank_site_linear_index;
     std::memcpy(&m_data[offset], siteData.data(), m_site_bytes);
   }
 }
@@ -158,19 +157,19 @@ void LattField::putSiteData(const std::vector<int> &latt_coords,
 // precision).
 
 LattField &LattField::to_quda_precision() {
-  size_t cmplx_bytes = m_site_bytes / m_site_elems;
+  const size_t cmplx_bytes = m_site_bytes / m_site_elems;
   if (cmplx_bytes == size_t(cpu_prec_bytes)) {
     return *this;
   } // nothing to do
   else if (cmplx_bytes ==
            size_t(2 * cpu_prec_bytes)) { // convert double to single
-    vector<char> buffer;
+    std::vector<char> buffer;
     to_single_precision(buffer);
     m_data = std::move(buffer);
     m_site_bytes /= 2;
   } else if ((2 * cmplx_bytes) ==
              size_t(cpu_prec_bytes)) { // convert single to double (warn!)
-    vector<char> buffer;
+    std::vector<char> buffer;
     to_double_precision(buffer);
     m_data = std::move(buffer);
     m_site_bytes *= 2;
@@ -178,27 +177,27 @@ LattField &LattField::to_quda_precision() {
   return *this;
 }
 
-void LattField::to_single_precision(vector<char> &buffer) {
+void LattField::to_single_precision(std::vector<char> &buffer) {
   buffer.resize(m_data.size() / 2);
-  int n = 2 * LayoutInfo::getRankLatticeNumSites() *
+  const int n = 2 * LayoutInfo::getRankLatticeNumSites() *
           m_site_elems; // number of reals
   float *dest = reinterpret_cast<float *>(buffer.data());
-  double *src = reinterpret_cast<double *>(m_data.data());
+  const double *src = reinterpret_cast<double *>(m_data.data());
   for (int k = 0; k < n; ++k, ++dest, ++src) {
-    *dest = *src;
+    *dest = (float)*src;
   }
 }
 
-void LattField::to_double_precision(vector<char> &buffer) {
+void LattField::to_double_precision(std::vector<char> &buffer) {
   printLaph(
       "WARNING: converting lattice field from single to double precision");
   buffer.resize(2 * m_data.size());
-  int n = 2 * LayoutInfo::getRankLatticeNumSites() *
-          m_site_elems; // number of reals
+  const int n = 2 * LayoutInfo::getRankLatticeNumSites() *
+    m_site_elems; // number of reals
   double *dest = reinterpret_cast<double *>(buffer.data());
-  float *src = reinterpret_cast<float *>(m_data.data());
+  const float *src = reinterpret_cast<float *>(m_data.data());
   for (int k = 0; k < n; ++k, ++dest, ++src) {
-    *dest = *src;
+    *dest = (double)*src;
   }
 }
 
@@ -210,8 +209,8 @@ void LattField::applyFermionTemporalAntiPeriodic() {
   }
   const int start_parity = LayoutInfo::getMyStartParity();
   const int npsites = LayoutInfo::getRankLatticeNumSites() / 2;
-  const vector<int> &N = LayoutInfo::getRankLattExtents();
-  const bool dp = (bytesPerWord() == sizeof(complex<double>));
+  const std::vector<int> &N = LayoutInfo::getRankLattExtents();
+  const bool dp = (bytesPerWord() == sizeof(std::complex<double>));
   const int nreal = 2 * elemsPerSite();
   const int t = N[Tdir] - 1;
   for (int z = 0; z < N[2]; ++z)

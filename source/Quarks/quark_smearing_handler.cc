@@ -6,7 +6,6 @@
 
 // STILL TO DO:  single asynchronous thread for output so can continue next
 // computations while output occurs
-using namespace std;
 
 namespace LaphEnv {
 
@@ -18,7 +17,7 @@ QuarkSmearingHandler::QuarkSmearingHandler(
     const GluonSmearingInfo &gluon_smearing,
     const GaugeConfigurationInfo &gauge,
     const QuarkSmearingInfo &quark_smearing,
-    const string &smeared_quark_file_stub, const bool read_mode) {
+    const std::string &smeared_quark_file_stub, const bool read_mode) {
   set_info(gluon_smearing, gauge, quark_smearing, smeared_quark_file_stub,
            read_mode);
 }
@@ -26,7 +25,7 @@ QuarkSmearingHandler::QuarkSmearingHandler(
 void QuarkSmearingHandler::setInfo(const GluonSmearingInfo &gluon_smearing,
                                    const GaugeConfigurationInfo &gauge,
                                    const QuarkSmearingInfo &quark_smearing,
-                                   const string &smeared_quark_file_stub,
+                                   const std::string &smeared_quark_file_stub,
                                    const bool read_mode) {
   clear();
   set_info(gluon_smearing, gauge, quark_smearing, smeared_quark_file_stub,
@@ -36,7 +35,7 @@ void QuarkSmearingHandler::setInfo(const GluonSmearingInfo &gluon_smearing,
 void QuarkSmearingHandler::set_info(const GluonSmearingInfo &gluon_smearing,
                                     const GaugeConfigurationInfo &gauge,
                                     const QuarkSmearingInfo &quark_smearing,
-                                    const string &smeared_quark_file_stub,
+                                    const std::string &smeared_quark_file_stub,
                                     const bool read_mode) {
   smearedQuarkFileStub = tidyString(smeared_quark_file_stub);
   if (smearedQuarkFileStub.empty()) {
@@ -110,7 +109,7 @@ bool QuarkSmearingHandler::isInfoSet() const {
 
 // check_mode = 0 means no check, 1 means check for read mode,
 // 2 means check for write mode
-void QuarkSmearingHandler::check_info_set(const string &name,
+void QuarkSmearingHandler::check_info_set(const std::string &name,
                                           const int check_mode) const {
   if (!isInfoSet()) {
     errorLaph(make_strf(
@@ -147,12 +146,12 @@ QuarkSmearingHandler::getGaugeConfigurationInfo() const {
   return *uPtr;
 }
 
-const string &QuarkSmearingHandler::getSmearedQuarkFieldFileStub() const {
+const std::string &QuarkSmearingHandler::getSmearedQuarkFieldFileStub() const {
   check_info_set("getSmearedQuarkFieldFileStub");
   return smearedQuarkFileStub;
 }
 
-void QuarkSmearingHandler::failure(const string &message) {
+void QuarkSmearingHandler::failure(const std::string &message) {
   errorLaph(make_strf("%s in QuarkSmearingHandler", message));
 }
 
@@ -160,7 +159,7 @@ void QuarkSmearingHandler::failure(const string &message) {
 // time slices (from mintime to maxtime in the *u_ptr).
 // Put results into TheNamedObjMap or to level files.
 void QuarkSmearingHandler::computeLaphEigenvectors(
-    const LaphEigenSolverInfo &solver_info, const string &smeared_gauge_file) {
+    const LaphEigenSolverInfo &solver_info, const std::string &smeared_gauge_file) {
   check_info_set("computeLaphEigenvectors", 2);
 
   StopWatch rolex, bulova;
@@ -172,7 +171,7 @@ void QuarkSmearingHandler::computeLaphEigenvectors(
 
   // check to see if output files exist already
   for (int v = 0; v < nEigvecs; ++v) {
-    ostringstream oss;
+    std::ostringstream oss;
     oss << smearedQuarkFileStub << "_level." << v;
     if (fileExists(oss.str())) {
       printLaph(make_str("file ", oss.str(), " already exists:\n",
@@ -213,17 +212,17 @@ void QuarkSmearingHandler::computeLaphEigenvectors(
   solver_info.setQudaParam(eig_inv_param, eig_param, *qSmearPtr);
 
   // allocate space for eigenvectors and eigenvalues on the host
-  vector<LattField> laphEigvecs(nEigvecs, FieldSiteType::ColorVector);
-  vector<complex<double>> laphEigvals(nEigvecs * nTime);
+  std::vector<LattField> laphEigvecs(nEigvecs, FieldSiteType::ColorVector);
+  std::vector<std::complex<double>> laphEigvals(nEigvecs * nTime);
   __complex__ double *h_evals = (__complex__ double *)(laphEigvals.data());
-  vector<void *> h_evecs(nEigvecs);
+  std::vector<void *> h_evecs(nEigvecs);
   for (int v = 0; v < nEigvecs; ++v) {
     h_evecs[v] = laphEigvecs[v].getDataPtr();
   }
 
   // set starting vector to be a constant one or set to zero for random
   if (solver_info.getStartingVectorType() == "equal_components") {
-    complex<double> z(
+    std::complex<double> z(
         1.0 / double(FieldNcolor * LayoutInfo::getLatticeNumSites()), 0.0);
     setConstantField(laphEigvecs[0], z);
   } else {
@@ -299,13 +298,13 @@ void QuarkSmearingHandler::computeLaphEigenvectors(
 }
 
 // broadcast these rephase factors to the ranks that need them
-template <class T> static void communicate_phase(vector<T> &rephase) {
+template <class T> static void communicate_phase(std::vector<T> &rephase) {
 #ifdef ARCH_PARALLEL
-  vector<int> comm_coords = {
+  std::vector<int> comm_coords = {
       0, 0, 0, LayoutInfo::getMyCommCoords()[LayoutInfo::Ndim - 1]};
   const int orig_sender_rank = LayoutInfo::getRankFromCommCoords(comm_coords);
   int sender_rank = 0, count;
-  vector<int> broadcast_ranks;
+  std::vector<int> broadcast_ranks;
   for (comm_coords[0] = 0;
        comm_coords[0] < LayoutInfo::getCommNumPartitions()[0];
        ++comm_coords[0]) {
@@ -354,7 +353,7 @@ template <class T> static void communicate_phase(vector<T> &rephase) {
 }
 
 template <class T>
-static void getPhase(vector<T> &rephase, vector<LattField> &laph_evecs) {
+static void getPhase(std::vector<T> &rephase, std::vector<LattField> &laph_evecs) {
   const int nev = laph_evecs.size();
   const int nloctime = LayoutInfo::getRankLattExtents()[3];
   const int loc_nsites = LayoutInfo::getRankLatticeNumSites();
@@ -383,7 +382,8 @@ static void getPhase(vector<T> &rephase, vector<LattField> &laph_evecs) {
 }
 
 template <class T>
-static void applyPhase(vector<LattField> &laph_evecs, const vector<T> rephase,
+static void applyPhase(std::vector<LattField> &laph_evecs,
+		       const std::vector<T> rephase,
                        void (*blasfunc)(const int N, const void *alpha, void *x,
                                         const int incX)) {
   const int nev = laph_evecs.size();
@@ -414,8 +414,7 @@ static void applyPhase(vector<LattField> &laph_evecs, const vector<T> rephase,
 }
 
 //  This is temporary; should be done on the device
-void QuarkSmearingHandler::applyLaphPhaseConvention(
-    vector<LattField> &laph_evecs) {
+void QuarkSmearingHandler::applyLaphPhaseConvention(std::vector<LattField> &laph_evecs) {
   const int nev = laph_evecs.size();
   if (nev == 0) {
     return;
@@ -432,21 +431,21 @@ void QuarkSmearingHandler::applyLaphPhaseConvention(
   const int nloctime = LayoutInfo::getRankLattExtents()[3];
 
   if (dp) {
-    vector<complex<double>> rephasedp(nev * nloctime);
-    getPhase<complex<double>>(rephasedp, laph_evecs);
+    std::vector<std::complex<double>> rephasedp(nev * nloctime);
+    getPhase<std::complex<double>>(rephasedp, laph_evecs);
 
-    communicate_phase<complex<double>>(rephasedp);
+    communicate_phase<std::complex<double>>(rephasedp);
 
-    applyPhase<complex<double>>(laph_evecs, rephasedp, cblas_zscal);
+    applyPhase<std::complex<double>>(laph_evecs, rephasedp, cblas_zscal);
 
   } else {
-    vector<complex<float>> rephasesp(nev * nloctime);
-    getPhase<complex<float>>(rephasesp, laph_evecs);
+    std::vector<std::complex<float>> rephasesp(nev * nloctime);
+    getPhase<std::complex<float>>(rephasesp, laph_evecs);
 
     // (possibly) send it to the other nodes
-    communicate_phase<complex<float>>(rephasesp);
+    communicate_phase<std::complex<float>>(rephasesp);
 
-    applyPhase<complex<float>>(laph_evecs, rephasesp, cblas_cscal);
+    applyPhase<std::complex<float>>(laph_evecs, rephasesp, cblas_cscal);
   }
 
 #ifdef ARCH_PARALLEL
@@ -454,32 +453,31 @@ void QuarkSmearingHandler::applyLaphPhaseConvention(
 #endif
 }
 
-void QuarkSmearingHandler::checkLaphEigvecComputation(
-    const vector<LattField> &laphEigvecs,
-    const vector<LattField> &smeared_gauge_field) {
+void QuarkSmearingHandler::checkLaphEigvecComputation( const std::vector<LattField> &laphEigvecs,
+						       const std::vector<LattField> &smeared_gauge_field) {
   int nTime = uPtr->getTimeExtent();
   int nEigvecs = qSmearPtr->getNumberOfLaplacianEigenvectors();
   Array<double> block_eigvals(nEigvecs, nTime);
-  vector<double> offmaxmag(nTime, 0.0);
+  std::vector<double> offmaxmag(nTime, 0.0);
   LattField minus_delta_on_ev(FieldSiteType::ColorVector);
   for (int v = 0; v < nEigvecs; ++v) {
     // act with the spatial Laplacian on this eigenvector  M=-Delta  M x =
     // lambda x
     applyMinusSpatialLaplacian(minus_delta_on_ev, laphEigvecs[v],
                                smeared_gauge_field);
-    vector<complex<double>> eigvals(
+    std::vector<std::complex<double>> eigvals(
         getTimeSlicedInnerProducts(laphEigvecs[v], minus_delta_on_ev));
-    vector<complex<double>> norm(
+    std::vector<std::complex<double>> norm(
         getTimeSlicedInnerProducts(laphEigvecs[v], laphEigvecs[v]));
     for (int t = 0; t < nTime; ++t) {
       block_eigvals(v, t) = real(eigvals[t]) / real(norm[t]);
     }
     for (int vv = 0; vv < nEigvecs; ++vv) {
       if (vv != v) {
-        vector<complex<double>> offdiag(
+	std::vector<std::complex<double>> offdiag(
             getTimeSlicedInnerProducts(laphEigvecs[vv], minus_delta_on_ev));
         for (int t = 0; t < nTime; ++t) {
-          double offdiagmag = std::abs(offdiag[t]);
+          const double offdiagmag = std::abs(offdiag[t]);
           if (offdiagmag > offmaxmag[t]) {
             offmaxmag[t] = offdiagmag;
           }
@@ -495,7 +493,7 @@ void QuarkSmearingHandler::checkLaphEigvecComputation(
     for (int v = 0; v < nEigvecs; ++v) {
       const bool orderok =
           (v == 0) || (block_eigvals(v, t) >= block_eigvals(v - 1, t));
-      const string ok = (orderok) ? "" : " Wrong order";
+      const std::string ok = (orderok) ? "" : " Wrong order";
       printLaph(make_strf("   Eigenvalue[%3d] = %20.15f %s", v,
                           block_eigvals(v, t), ok));
     }
@@ -540,7 +538,7 @@ bool QuarkSmearingHandler::checkAllLevelFilesExist() {
 
   for (int level = 0; level < qSmearPtr->getNumberOfLaplacianEigenvectors();
        level++) {
-    ostringstream oss;
+    std::ostringstream oss;
     oss << smearedQuarkFileStub << "_level." << level;
     if (!fileExists(oss.str())) {
       printLaph(make_strf("needed file %s does not exists", oss.str()));
@@ -550,7 +548,8 @@ bool QuarkSmearingHandler::checkAllLevelFilesExist() {
   return true;
 }
 
-void QuarkSmearingHandler::writeHeader(XMLHandler &xmlw, const LevelKey &fkey,
+void QuarkSmearingHandler::writeHeader(XMLHandler &xmlw,
+				       const LevelKey &fkey,
                                        const int suffix) {
   if (suffix != fkey.value) {
     errorLaph("level suffix does not match file key");
@@ -573,7 +572,6 @@ bool QuarkSmearingHandler::checkHeader(XMLHandler &xml_in, const int suffix) {
   XMLHandler xmlr(xml_in, "LaphEigenvectors");
   try {
     // GaugeConfigurationInfo gauge_check(xmlr);   //  TO MATCH USQCD CHANGE
-    // LATER!! uPtr->checkEqual(gauge_check);
     GluonSmearingInfo gsmear_check(xmlr);
     gSmearPtr->checkEqual(gsmear_check);
     QuarkSmearingInfo qsmear_check(xmlr);

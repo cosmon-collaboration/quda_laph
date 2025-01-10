@@ -1,14 +1,5 @@
-#include "field_smearing_info.h"
-#include "gauge_configuration_handler.h"
-#include "gauge_configuration_info.h"
 #include "gluon_smearing_handler.h"
-#include "latt_field.h"
-#include "layout_info.h"
 #include "stop_watch.h"
-#include "tasks.h"
-
-using namespace std;
-using namespace quda;
 
 namespace LaphEnv {
 
@@ -42,7 +33,7 @@ namespace LaphEnv {
 void doSmearGaugeField(XMLHandler &xmltask) {
   GaugeConfigurationInfo gaugeinfo(xmltask);
   GluonSmearingInfo smear(xmltask);
-  string smeared_filename;
+  std::string smeared_filename;
   xmlread(xmltask, "SmearedGaugeFileName", smeared_filename,
           "SMEAR_GAUGE_FIELD");
 

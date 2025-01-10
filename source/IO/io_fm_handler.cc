@@ -5,8 +5,6 @@
 #include <unistd.h>
 #include <vector>
 
-using namespace std;
-
 #define USE_COLLECTIVE_IO
 
 namespace LaphEnv {
@@ -86,22 +84,22 @@ const IOFMHandler::whence_type IOFMHandler::IO_SEEK_BEG = std::ios::beg;
 const IOFMHandler::whence_type IOFMHandler::IO_SEEK_CUR = std::ios::cur;
 const IOFMHandler::whence_type IOFMHandler::IO_SEEK_END = std::ios::end;
 
-void IOFMHandler::check_for_failure(int errcode, const std::string &mesg) {
+void IOFMHandler::check_for_failure(const int errcode, const std::string &mesg) {
   if (errcode == IOFMHandler::IO_SUCCESS)
     return;
   errorLaph(
       make_strf("IOFMHandler error with file %s:\n %s\n", m_filename, mesg));
 }
 
-void IOFMHandler::set_striping(int striping_factor, int striping_unit) {}
+void IOFMHandler::set_striping(const int striping_factor, const int striping_unit) {}
 
-void IOFMHandler::file_seek(off_type offset, whence_type whence) {
+void IOFMHandler::file_seek(const off_type offset, const whence_type whence) {
   fh.seekg(offset, whence);
   check_for_failure(fh.fail(), "Failure during seek");
 }
 
 IOFMHandler::pos_type IOFMHandler::file_tell() {
-  pos_type current = fh.tellg();
+  const pos_type current = fh.tellg();
   if (current < 0)
     check_for_failure(1, "Failure during tell");
   return current;
@@ -111,8 +109,8 @@ void IOFMHandler::printFileHints() {
   printLaph(make_str("Serial mode: no IOFMHandler file hints\n"));
 }
 
-void IOFMHandler::writeCommon(const char *data, size_t nbytes) {
-  pos_type currdisp = fh.tellg();
+void IOFMHandler::writeCommon(const char *data, const size_t nbytes) {
+  const pos_type currdisp = fh.tellg();
   fh.seekp(currdisp); // just to be sure
   fh.write(data, nbytes);
   check_for_failure(fh.fail(), "Failure during common write");
@@ -121,22 +119,22 @@ void IOFMHandler::writeCommon(const char *data, size_t nbytes) {
 
 void IOFMHandler::writeDistributed(const char *data,
                                    const DistArrayViewInfo &dinfo,
-                                   bool datashift) {
+                                   const bool datashift) {
   const char *dataptr = data;
   if (datashift)
     dataptr += dinfo.getElementOffsetThisRank() * dinfo.getBytesPerElement();
   writeCommon(dataptr, dinfo.getViewTotalBytes());
 }
 
-void IOFMHandler::readCommon(char *data, size_t nbytes, bool broadcast) {
-  pos_type currdisp = fh.tellg();
+void IOFMHandler::readCommon(char *data, const size_t nbytes, const bool broadcast) {
+  const pos_type currdisp = fh.tellg();
   fh.read(data, nbytes);
   check_for_failure(fh.fail(), "Failure during common read");
   fh.seekg(currdisp + pos_type(nbytes));
 }
 
 void IOFMHandler::readDistributed(char *data, const DistArrayViewInfo &dinfo,
-                                  bool datashift) {
+                                  const bool datashift) {
   char *dataptr = data;
   if (datashift)
     dataptr += dinfo.getElementOffsetThisRank() * dinfo.getBytesPerElement();
@@ -145,8 +143,10 @@ void IOFMHandler::readDistributed(char *data, const DistArrayViewInfo &dinfo,
 
 //  check sum in lexico order in memory, not yet checker boarded
 
-void IOFMHandler::compute_lattice_checksum(char *data, size_t bytes_per_site,
-                                           size_t lexicostart, size_t nsites) {
+void IOFMHandler::compute_lattice_checksum(char *data,
+					   const size_t bytes_per_site,
+                                           const size_t lexicostart,
+					   const size_t nsites) {
   checksum =
       m_bytehandler.get_checksum(checksum, data, bytes_per_site * nsites);
 }
@@ -195,7 +195,7 @@ const IOFMHandler::whence_type IOFMHandler::IO_SEEK_BEG = MPI_SEEK_SET;
 const IOFMHandler::whence_type IOFMHandler::IO_SEEK_CUR = MPI_SEEK_CUR;
 const IOFMHandler::whence_type IOFMHandler::IO_SEEK_END = MPI_SEEK_END;
 
-void IOFMHandler::check_for_failure(int errcode, const std::string &mesg) {
+void IOFMHandler::check_for_failure(const int errcode, const std::string &mesg) {
   if (errcode == MPI_SUCCESS)
     return;
   char errstring[MPI_MAX_ERROR_STRING];
@@ -211,7 +211,7 @@ void IOFMHandler::check_for_failure(int errcode, const std::string &mesg) {
   errorLaph(make_strf("%d\n", errcode));
 }
 
-void IOFMHandler::set_striping(int striping_factor, int striping_unit) {
+void IOFMHandler::set_striping(const int striping_factor, const int striping_unit) {
   if (striping_factor > 1) {
     MPI_Info_set(finfo, (char *)"striping_factor",
                  (char *)int_to_string(striping_factor).c_str());
@@ -228,7 +228,7 @@ void IOFMHandler::set_striping(int striping_factor, int striping_unit) {
 //  in fstream, it is necessary to return to the default file
 //  view after an file view set in a read/write.
 
-void IOFMHandler::file_seek(off_type offset, whence_type whence) {
+void IOFMHandler::file_seek(const off_type offset, const whence_type whence) {
   if (whence ==
       IOFMHandler::IO_SEEK_END) { // MPI_SEEK_END does not seem to work properly
     MPI_Offset fsize;
@@ -273,7 +273,7 @@ void IOFMHandler::printFileHints() {
 // the default file view (entire file, etype = MPI_BYTE).
 // Should be called by all ranks.
 
-void IOFMHandler::writeCommon(const char *data, size_t nbytes) {
+void IOFMHandler::writeCommon(const char *data, const size_t nbytes) {
   pos_type currdisp = file_tell();
   MPI_Status status;
   int errcode, count;
@@ -295,7 +295,7 @@ void IOFMHandler::writeCommon(const char *data, size_t nbytes) {
 
 void IOFMHandler::writeDistributed(const char *data,
                                    const DistArrayViewInfo &dinfo,
-                                   bool datashift) {
+                                   const bool datashift) {
   if (!openflag)
     check_for_failure(IO_ERR_OTHER, "Write failure--no open file");
   if (read_only)
@@ -349,7 +349,7 @@ void IOFMHandler::writeDistributed(const char *data,
 // data is broadcast to all other ranks. This routine assumes
 // the default file view (entire file, etype = MPI_BYTE).
 
-void IOFMHandler::readCommon(char *data, size_t nbytes, bool broadcast) {
+void IOFMHandler::readCommon(char *data, const size_t nbytes, const bool broadcast) {
   pos_type currdisp = file_tell();
   MPI_Status status;
   int errcode, count;
@@ -370,8 +370,9 @@ void IOFMHandler::readCommon(char *data, size_t nbytes, bool broadcast) {
                     "Failure during primary read");
 }
 
-void IOFMHandler::readDistributed(char *data, const DistArrayViewInfo &dinfo,
-                                  bool datashift) {
+void IOFMHandler::readDistributed(char *data,
+				  const DistArrayViewInfo &dinfo,
+                                  const bool datashift) {
   if (!openflag)
     check_for_failure(IO_ERR_OTHER, "Read failure--no open file");
   if (!global_mode)
@@ -418,17 +419,19 @@ void IOFMHandler::readDistributed(char *data, const DistArrayViewInfo &dinfo,
 
 //  check sum after distribution to ranks (assume lexicographic ordering)
 
-void IOFMHandler::compute_lattice_checksum(char *data, size_t bytes_per_site,
-                                           size_t lexicostart, size_t nsites) {
+void IOFMHandler::compute_lattice_checksum(char *data,
+					   const size_t bytes_per_site,
+                                           const size_t lexicostart,
+					   const size_t nsites) {
   uint lastrank = 0;
   uint thisrank = LayoutInfo::getMyRank();
   uint rank = 0;
   uint count = 0;
   const uint xinc = LayoutInfo::getRankLattExtents()[0];
-  size_t chunksize = bytes_per_site * xinc;
-  size_t lexicostop = lexicostart + nsites;
+  const size_t chunksize = bytes_per_site * xinc;
+  const size_t lexicostop = lexicostart + nsites;
   // must loop in order of sites
-  for (uint site = lexicostart; site < lexicostop; site += xinc) {
+  for (size_t site = lexicostart; site < lexicostop; site += xinc) {
     rank = LayoutInfo::getRankFromLexicoLinearIndex(site);
     if (lastrank != rank) {
       // send checksum from last rank to new rank
@@ -447,7 +450,7 @@ void IOFMHandler::compute_lattice_checksum(char *data, size_t bytes_per_site,
 
 #endif
 
-IOFMHandler::IOFMHandler(bool global)
+IOFMHandler::IOFMHandler(const bool global)
     : read_only(true), openflag(false), read_mode(true), global_mode(global),
       endian_format('U'), endian_convert(false), checksum_on(false),
       is_new_file(false), checksum(0), lattinfo(1),
@@ -458,8 +461,8 @@ IOFMHandler::IOFMHandler(bool global)
   static_assert(sizeof(int) == 4, "sizeof(int) must be 4");
 }
 
-IOFMHandler::IOFMHandler(const std::string &filename, OpenMode mode,
-                         const std::string &filetype_id, char endianness,
+IOFMHandler::IOFMHandler(const std::string &filename, const OpenMode mode,
+                         const std::string &filetype_id, const char endianness,
                          const int striping_factor, const int striping_unit,
                          const bool turn_on_checksum, const bool global)
     : global_mode(global), lattinfo(1),
@@ -474,7 +477,7 @@ IOFMHandler::IOFMHandler(const std::string &filename, OpenMode mode,
 }
 
 IOFMHandler::IOFMHandler(const std::string &filename,
-                         std::ios_base::openmode mode,
+                         const std::ios_base::openmode mode,
                          const std::string &filetype_id, const char endianness,
                          const int striping_factor, const int striping_unit,
                          const bool turn_on_checksum, const bool global)
@@ -513,8 +516,8 @@ void IOFMHandler::open(const std::string &filename, IOFMHandler::OpenMode mode,
     exists = false;
   }
   if (exists) {
-    IOFMHandler::openmode_type access =
-        (mode == ReadOnly) ? IO_MODE_RDONLY : IO_MODE_RDWR;
+    const IOFMHandler::openmode_type access =
+      (mode == ReadOnly) ? IO_MODE_RDONLY : IO_MODE_RDWR;
     is_new_file = false;
     open_existing_file(filetype_id, access);
   } else {
@@ -528,7 +531,7 @@ void IOFMHandler::open(const std::string &filename, IOFMHandler::OpenMode mode,
 }
 
 void IOFMHandler::open(const std::string &filename,
-                       std::ios_base::openmode mode,
+                       const std::ios_base::openmode mode,
                        const std::string &filetype_id, const char endianness,
                        const int striping_factor, const int striping_unit,
                        const bool turn_on_checksum) {
@@ -575,7 +578,7 @@ void IOFMHandler::open_existing_file(const std::string &filetype_id,
   file_open(access_mode, "Could not open existing file: " + m_filename);
   // get endian info, and check file id
   openflag = true;
-  string ID_string;
+  std::string ID_string;
   readIDstring(endian_format, ID_string); // on primary rank only
   bool flag = false;
   if ((isPrimaryRank()) || (!global_mode)) {
@@ -651,11 +654,12 @@ IOFMHandler::~IOFMHandler() {
 // "stringvalue".  This routine is used by objects in data_io_handler.h
 // when the multi-file handlers build up their maps of file keys.
 
-bool IOFMHandler::peekString(std::string &stringvalue, const size_t byte_offset,
+bool IOFMHandler::peekString(std::string &stringvalue,
+			     const size_t byte_offset,
                              const std::string &filename,
                              const std::string &filetype_id) {
   stringvalue.clear();
-  string fname = tidyString(filename);
+  std::string fname = tidyString(filename);
   if (fname.empty())
     return false;
   bool flag = false;
@@ -671,13 +675,14 @@ bool IOFMHandler::peekString(std::string &stringvalue, const size_t byte_offset,
   return flag;
 }
 
-bool IOFMHandler::peeker(std::string &stringvalue, const size_t byte_offset,
+bool IOFMHandler::peeker(std::string &stringvalue,
+			 const size_t byte_offset,
                          const std::string &fname,
                          const std::string &filetype_id) {
-  ifstream in(fname.c_str(), std::ios::binary | std::ios::in);
+  std::ifstream in(fname.c_str(), std::ios::binary | std::ios::in);
   if (!in)
     return false;
-  string ID_string(ID_string_length + 1, ' ');
+  std::string ID_string(ID_string_length + 1, ' ');
   in.read((char *)&ID_string[0], ID_string_length + 1);
   if (in.fail())
     return false;
@@ -816,7 +821,7 @@ ByteHandler::n_uint32_t IOFMHandler::getChecksum() {
 
 void IOFMHandler::printFileID() {
   char endian;
-  string ID_string;
+  std::string ID_string;
   pos_type curr = file_tell();
   readIDstring(endian, ID_string);
   file_seek(curr, IOFMHandler::IO_SEEK_BEG);
@@ -834,11 +839,11 @@ void IOFMHandler::writeIDstring(const std::string &ID_string) {
   check_for_failure(int(ID_string.length()) > ID_string_length,
                     "IOFMHandler file ID string too long: cannot exceed " +
                         int_to_string(ID_string_length) + " characters");
-  string buf(1, endian_format);
+  std::string buf(1, endian_format);
   buf += ID_string;
-  int nblanks = ID_string_length - ID_string.length();
+  const int nblanks = ID_string_length - ID_string.length();
   if (nblanks > 0)
-    buf += string(nblanks, ' ');
+    buf += std::string(nblanks, ' ');
   file_seek(0, IOFMHandler::IO_SEEK_BEG);
   writeCommon(&buf[0], ID_string_length + 1);
 }
@@ -878,7 +883,7 @@ bool IOFMHandler::file_exists() {
 
 // Converts an integer to a string
 
-string IOFMHandler::int_to_string(const int intval) {
+std::string IOFMHandler::int_to_string(const int intval) {
   std::ostringstream oss;
   oss << intval;
   return oss.str();
@@ -886,22 +891,22 @@ string IOFMHandler::int_to_string(const int intval) {
 
 // Removes leading and trailing blanks in a string
 
-string IOFMHandler::tidyString(const string &str) {
-  string tmp;
+std::string IOFMHandler::tidyString(const std::string &str) {
+  std::string tmp;
   for (unsigned int i = 0; i < str.length(); i++)
     if ((str[i] != '\n') && (str[i] != '\t') && (str[i] != '\r'))
       tmp.push_back(str[i]);
-  size_t start = tmp.find_first_not_of(" ");
-  if (start == string::npos)
+  const size_t start = tmp.find_first_not_of(" ");
+  if (start == std::string::npos)
     return "";
-  size_t len = tmp.find_last_not_of(" ") - start + 1;
-  return tmp.substr(start, len);
+  return tmp.substr(start, tmp.find_last_not_of(" ") - start + 1);
 }
 
 //   Main input/output routines that do the byte-swapping (if needed),
 //   update the check sum, and do the read/write.
 
-void IOFMHandler::write_common(const char *output, const size_t elementbytes,
+void IOFMHandler::write_common(const char *output,
+			       const size_t elementbytes,
                                const size_t nelements) {
   if (!openflag)
     check_for_failure(IO_ERR_OTHER, "Write failure--no open file");
@@ -928,7 +933,8 @@ void IOFMHandler::write_common(const char *output, const size_t elementbytes,
   }
 }
 
-void IOFMHandler::read_common(char *input, const size_t elementbytes,
+void IOFMHandler::read_common(char *input,
+			      const size_t elementbytes,
                               const size_t nelements) {
   if (!openflag)
     check_for_failure(IO_ERR_OTHER, "Read failure--no open file");
@@ -952,7 +958,8 @@ void IOFMHandler::read_common(char *input, const size_t elementbytes,
 //   etc) of each component of the quantity at each site.  This information is
 //   needed for byte-swapping.
 
-void IOFMHandler::write_lattice(const char *output, const size_t bytes_per_word,
+void IOFMHandler::write_lattice(const char *output,
+				const size_t bytes_per_word,
                                 const DistArrayViewInfo &dinfo) {
   if (!openflag)
     check_for_failure(IO_ERR_OTHER, "Write failure--no open file");
@@ -963,11 +970,11 @@ void IOFMHandler::write_lattice(const char *output, const size_t bytes_per_word,
     checksum = 0;
   }
   // convert from even-odd checkerboard to lexico
-  vector<char> lexbuf(LayoutInfo::getRankLatticeNumSites() *
-                      dinfo.getBytesPerSite());
+  std::vector<char> lexbuf(LayoutInfo::getRankLatticeNumSites() *
+			   dinfo.getBytesPerSite());
   LayoutInfo::evenodd_to_lexico(lexbuf.data(), output, dinfo.getBytesPerSite());
   // set up info for writing
-  IOH_int bytes_this_rank = dinfo.getViewBytesThisRank();
+  const IOH_int bytes_this_rank = dinfo.getViewBytesThisRank();
   char *buf = lexbuf.data();
   bool datashift = true;
   char *b = buf + dinfo.getElementOffsetThisRank() * dinfo.getBytesPerElement();
@@ -991,7 +998,8 @@ void IOFMHandler::write_lattice(const char *output, const size_t bytes_per_word,
   }
 }
 
-void IOFMHandler::read_lattice(char *input, const size_t bytes_per_word,
+void IOFMHandler::read_lattice(char *input,
+			       const size_t bytes_per_word,
                                const DistArrayViewInfo &dinfo) {
   if (!openflag)
     check_for_failure(IO_ERR_OTHER, "Read failure--no open file");
@@ -999,9 +1007,9 @@ void IOFMHandler::read_lattice(char *input, const size_t bytes_per_word,
     read_mode = true;
     checksum = 0;
   }
-  vector<char> lexbuf(LayoutInfo::getRankLatticeNumSites() *
-                      dinfo.getBytesPerSite());
-  IOH_int bytes_this_rank = dinfo.getViewBytesThisRank();
+  std::vector<char> lexbuf(LayoutInfo::getRankLatticeNumSites() *
+			   dinfo.getBytesPerSite());
+  const IOH_int bytes_this_rank = dinfo.getViewBytesThisRank();
   char *buf = lexbuf.data();
   bool datashift = true;
   char *b = buf + dinfo.getElementOffsetThisRank() * dinfo.getBytesPerElement();
@@ -1011,7 +1019,7 @@ void IOFMHandler::read_lattice(char *input, const size_t bytes_per_word,
                              dinfo.getViewLexicoStart(),
                              dinfo.getViewLexicoSpan());
   if (endian_convert) {
-    size_t words_this_rank = bytes_this_rank / bytes_per_word;
+    const size_t words_this_rank = bytes_this_rank / bytes_per_word;
     m_bytehandler.byte_swap(b, bytes_per_word, words_this_rank);
   }
   // convert from lexico to even-odd checkerboard
@@ -1019,7 +1027,7 @@ void IOFMHandler::read_lattice(char *input, const size_t bytes_per_word,
 }
 
 void IOFMHandler::write(const LattField &output) {
-  int sizeT = output.bytesPerSite();
+  const int sizeT = output.bytesPerSite();
   lattinfo.resetBytes(sizeT);
   unsigned int sz[LayoutInfo::Ndim + 2];
   sz[0] = LayoutInfo::Ndim;
@@ -1032,7 +1040,7 @@ void IOFMHandler::write(const LattField &output) {
 }
 
 void IOFMHandler::write(const std::vector<LattField> &output) {
-  int n = output.size();
+  const int n = output.size();
   write(n);
   if (n == 0)
     return;
@@ -1048,10 +1056,10 @@ void IOFMHandler::read(LattField &input) {
     errflag = errflag ||
               (sz[k + 1] != (unsigned int)(LayoutInfo::getLattExtents()[k]));
   check_for_failure(errflag, "Invalid lattice read");
-  int sizeT = sz[LayoutInfo::Ndim + 1];
+  const int sizeT = sz[LayoutInfo::Ndim + 1];
   lattinfo.resetBytes(sizeT);
   input.reset_by_bytes_per_site(sizeT); // read using precision in file
-  int cmplxbytes = input.bytesPerSite() / input.elemsPerSite();
+  const int cmplxbytes = input.bytesPerSite() / input.elemsPerSite();
   read_lattice((char *)(input.getDataPtr()), cmplxbytes, lattinfo);
   if (cmplxbytes != lattcmplxbytes) {
     lattcmplxbytes = cmplxbytes;
@@ -1091,7 +1099,7 @@ size_t IOFMHandler::numbytes(const std::vector<LattField> &data) {
 }
 
 void IOFMHandler::write(const std::string &output) {
-  int n = output.length();
+  const int n = output.length();
   write_common((const char *)&n, sizeof(int), 1);
   write_common(output.data(), sizeof(char), n);
 }
@@ -1103,7 +1111,7 @@ void IOFMHandler::read(std::string &input, const bool broadcast) {
   // so limit to a 16MB string
   check_for_failure(n > 16777216,
                     "string for read too large...bad file location?");
-  char *str = new (nothrow) char[n];
+  char *str = new (std::nothrow) char[n];
   check_for_failure((str == 0),
                     "IOFMHandler::read---unable to allocate memory");
   readCommon(str, sizeof(char) * n, broadcast);
@@ -1177,9 +1185,9 @@ DistArrayViewInfo::~DistArrayViewInfo() {
 //  space-time dimensions.  "comm_coord" contains the communications
 //  coordinate of this rank.
 
-void DistArrayViewInfo::setup_full(const vector<int> &gsizes,
-                                   const vector<int> &numranks,
-                                   const vector<int> &comm_coord) {
+void DistArrayViewInfo::setup_full(const std::vector<int> &gsizes,
+				   const std::vector<int> &numranks,
+				   const std::vector<int> &comm_coord) {
   ndim = gsizes.size();
   global_sizes = gsizes;
   local_sizes.resize(ndim);
@@ -1197,13 +1205,13 @@ void DistArrayViewInfo::setup_full(const vector<int> &gsizes,
   el_offset_this_rank = 0;
 }
 
-void DistArrayViewInfo::set_bytes(IOH_int bytes_per_element) {
+void DistArrayViewInfo::set_bytes(const IOH_int bytes_per_element) {
   error_return(bytes_per_element <= 0, "invalid input set_bytes");
   nbytes_per_element = bytes_per_element;
 }
 
-bool DistArrayViewInfo::checker(const vector<int> &gsizes,
-                                const vector<int> &numranks) {
+bool DistArrayViewInfo::checker(const std::vector<int> &gsizes,
+				const std::vector<int> &numranks) {
   if ((gsizes.size() == 0) || (gsizes.size() != numranks.size()))
     return false;
   for (int k = 0; k < int(gsizes.size()); k++)
@@ -1222,7 +1230,7 @@ bool DistArrayViewInfo::checker(const vector<int> &gsizes,
   return true;
 }
 
-void DistArrayViewInfo::error_return(const bool cond, const string &msg) {
+void DistArrayViewInfo::error_return(const bool cond, const std::string &msg) {
   if (cond) {
     errorLaph(make_strf("Error in DistArrayViewInfo: %s\n", msg));
   }
@@ -1241,27 +1249,27 @@ DistArrayViewInfo::DistArrayViewInfo(const IOH_int bytes_per_site) {
 // constructor for distributed array (non-lattice), let MPI
 // distribute over the ranks
 
-DistArrayViewInfo::DistArrayViewInfo(const vector<int> &gsizes,
+DistArrayViewInfo::DistArrayViewInfo(const std::vector<int> &gsizes,
                                      const IOH_int bytes_per_element) {
   const int nranks = comm_size();
   const int nd = gsizes.size();
   error_return(nd == 0, "bad global sizes");
-  vector<int> numranks(nd, 0);
+  std::vector<int> numranks(nd, 0);
   error_return(MPI_Dims_create(nranks, nd, &numranks[0]),
                "Could not distribute array among processors");
   error_return(!checker(gsizes, numranks), "invalid input");
-  vector<int> comm_coord(LayoutInfo::getMyCommCoords());
+  std::vector<int> comm_coord(LayoutInfo::getMyCommCoords());
   setup_full(gsizes, numranks, comm_coord);
   set_bytes(bytes_per_element);
   // make and store the MPI filetype
   create_filetype();
 }
 
-DistArrayViewInfo::DistArrayViewInfo(const vector<int> &gsizes,
-                                     const vector<int> &numranks,
-                                     const IOH_int bytes_per_element) {
+DistArrayViewInfo::DistArrayViewInfo(const std::vector<int> &gsizes,
+				     const std::vector<int> &numranks,
+				     const IOH_int bytes_per_element) {
   error_return(!checker(gsizes, numranks), "invalid input");
-  vector<int> comm_coord(LayoutInfo::getMyCommCoords());
+  std::vector<int> comm_coord(LayoutInfo::getMyCommCoords());
   setup_full(gsizes, numranks, comm_coord);
   set_bytes(bytes_per_element);
   // make and store the MPI filetype
@@ -1309,7 +1317,7 @@ DistArrayViewInfo &DistArrayViewInfo::operator=(const DistArrayViewInfo &in) {
 
 DistArrayViewInfo::~DistArrayViewInfo() {}
 
-void DistArrayViewInfo::setup_full(const vector<int> &gsizes) {
+void DistArrayViewInfo::setup_full(const std::vector<int> &gsizes) {
   ndim = gsizes.size();
   local_sizes = gsizes;
   gvvol = 1;
@@ -1318,12 +1326,12 @@ void DistArrayViewInfo::setup_full(const vector<int> &gsizes) {
   lexico_start = 0;
 }
 
-void DistArrayViewInfo::set_bytes(IOH_int bytes_per_element) {
+void DistArrayViewInfo::set_bytes(const IOH_int bytes_per_element) {
   error_return(bytes_per_element <= 0, "invalid input set_bytes");
   nbytes_per_element = bytes_per_element;
 }
 
-bool DistArrayViewInfo::checker(const vector<int> &gsizes) {
+bool DistArrayViewInfo::checker(const std::vector<int> &gsizes) {
   if (gsizes.size() == 0)
     return false;
   for (int k = 0; k < int(gsizes.size()); k++)
@@ -1332,7 +1340,7 @@ bool DistArrayViewInfo::checker(const vector<int> &gsizes) {
   return true;
 }
 
-void DistArrayViewInfo::error_return(const bool cond, const string &msg) {
+void DistArrayViewInfo::error_return(const bool cond, const std::string &msg) {
   if (cond) {
     errorLaph(make_strf("Error in DistArrayViewInfo: %s\n", msg));
   }
@@ -1348,7 +1356,7 @@ DistArrayViewInfo::DistArrayViewInfo(const IOH_int bytes_per_site) {
 // constructor for distributed array (non-lattice), let MPI
 // distribute over the ranks
 
-DistArrayViewInfo::DistArrayViewInfo(const vector<int> &gsizes,
+DistArrayViewInfo::DistArrayViewInfo(const std::vector<int> &gsizes,
                                      const IOH_int bytes_per_element) {
   error_return(!checker(gsizes), "invalid input");
   setup_full(gsizes);

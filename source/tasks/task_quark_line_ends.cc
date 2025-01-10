@@ -1,15 +1,5 @@
-#include "dilution_scheme_info.h"
-#include "filelist_info.h"
-#include "gauge_configuration_info.h"
-#include "inverter_info.h"
-#include "quark_action_info.h"
 #include "quark_handler.h"
-#include "quark_smearing_handler.h"
 #include "stop_watch.h"
-#include "tasks.h"
-
-using namespace std;
-using namespace quda;
 
 namespace LaphEnv {
 
@@ -113,10 +103,10 @@ void doLaphQuarkLineEnds(XMLHandler &xmltask) {
   GaugeConfigurationInfo gaugeinfo(xmlr);
   GluonSmearingInfo gSmear(xmlr);
   QuarkSmearingInfo qSmear(xmlr);
-  string smeared_quark_filestub;
+  std::string smeared_quark_filestub;
   xmlread(xmlr, "SmearedQuarkFileStub", smeared_quark_filestub,
           "LAPH_QUARK_LINE_ENDS");
-  string smeared_gauge_filename;
+  std::string smeared_gauge_filename;
   xmlread(xmlr, "SmearedGaugeFileName", smeared_gauge_filename,
           "LAPH_QUARK_LINE_ENDS");
   DilutionSchemeInfo dil(xmlr);
@@ -124,7 +114,7 @@ void doLaphQuarkLineEnds(XMLHandler &xmltask) {
   FileListInfo files(xmlr);
   InverterInfo invinfo(xmlr);
   bool verbose = false; // output final results
-  string verbosity;
+  std::string verbosity;
   xmlreadif(xmlr, "Verbosity", verbosity, "LAPH_QUARK_LINE_ENDS");
   if (tidyString(verbosity) == "full") {
     verbose = true;

@@ -1,5 +1,6 @@
 #ifndef LAPH_NOISE_H
 #define LAPH_NOISE_H
+
 #include "array.h"
 #include <complex>
 #include <iostream>
@@ -121,11 +122,14 @@ public:
 
   cmplx generate() { return (this->*genptr)(); }
 
-  Array<cmplx> generateLapHQuarkSourceForSink(int Textent, int Nspin,
-                                              int nEigs);
+  Array<cmplx> generateLapHQuarkSourceForSink(const int Textent,
+					      const int Nspin,
+                                              const int nEigs);
 
-  Array<cmplx> generateLapHQuarkSource(int timeValue, int Textent, int Nspin,
-                                       int nEigs);
+  Array<cmplx> generateLapHQuarkSource(const int timeValue,
+				       const int Textent,
+				       const int Nspin,
+                                       const int nEigs);
 
   int getZnGroup() const { return znGroup; }
 

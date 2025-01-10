@@ -9,8 +9,6 @@
 // computations
 //                   while output occurs
 
-using namespace std;
-
 typedef std::complex<double> dcmplx;
 typedef std::complex<float> fcmplx;
 
@@ -23,7 +21,7 @@ void QuarkHandler::RecordKey::output(XMLHandler &xmlw) const {
   xmlw.put_child("SpinLaphEigvecIndex", make_string(getSpinLaphEigvecIndex()));
 }
 
-QuarkHandler::FileKey::FileKey(const LaphNoiseInfo &in_noise, int tprojind)
+QuarkHandler::FileKey::FileKey(const LaphNoiseInfo &in_noise, const int tprojind)
     : noise(in_noise), time_proj_index(tprojind) {}
 
 QuarkHandler::FileKey::FileKey(XMLHandler &xmlr) {
@@ -120,10 +118,14 @@ QuarkHandler::QuarkHandler()
 
 QuarkHandler::QuarkHandler(
     const GaugeConfigurationInfo &gaugeinfo,
-    const GluonSmearingInfo &gluonsmear, const QuarkSmearingInfo &quarksmear,
-    const DilutionSchemeInfo &dil, const QuarkActionInfo &quark,
-    const FileListInfo &flist, const string &smeared_quark_filestub,
-    const string &smeared_gauge_filename, const bool setComputeMode)
+    const GluonSmearingInfo &gluonsmear,
+    const QuarkSmearingInfo &quarksmear,
+    const DilutionSchemeInfo &dil,
+    const QuarkActionInfo &quark,
+    const FileListInfo &flist,
+    const std::string &smeared_quark_filestub,
+    const std::string &smeared_gauge_filename,
+    const bool setComputeMode)
     : invertPtr(0), compute_mode(setComputeMode), preconditioner(0),
       dilHandler(0), DHputPtr(0), DHgetPtr(0), normal_mode(true) {
   set_info(gaugeinfo, gluonsmear, quarksmear, dil, quark, flist,
@@ -132,10 +134,14 @@ QuarkHandler::QuarkHandler(
 
 void QuarkHandler::setInfo(
     const GaugeConfigurationInfo &gaugeinfo,
-    const GluonSmearingInfo &gluonsmear, const QuarkSmearingInfo &quarksmear,
-    const DilutionSchemeInfo &dil, const QuarkActionInfo &quark,
-    const FileListInfo &flist, const string &smeared_quark_filestub,
-    const string &smeared_gauge_filename, const bool setComputeMode) {
+    const GluonSmearingInfo &gluonsmear,
+    const QuarkSmearingInfo &quarksmear,
+    const DilutionSchemeInfo &dil,
+    const QuarkActionInfo &quark,
+    const FileListInfo &flist,
+    const std::string &smeared_quark_filestub,
+    const std::string &smeared_gauge_filename,
+    const bool setComputeMode) {
   clear();
   compute_mode = setComputeMode;
   set_info(gaugeinfo, gluonsmear, quarksmear, dil, quark, flist,
@@ -148,8 +154,8 @@ void QuarkHandler::set_info(const GaugeConfigurationInfo &gaugeinfo,
                             const DilutionSchemeInfo &dil,
                             const QuarkActionInfo &quark,
                             const FileListInfo &flist,
-                            const string &smeared_quark_filestub,
-                            const string &smeared_gauge_filename) {
+                            const std::string &smeared_quark_filestub,
+                            const std::string &smeared_gauge_filename) {
   try {
     uPtr = new GaugeConfigurationInfo(gaugeinfo);
     gSmearPtr = new GluonSmearingInfo(gluonsmear);
@@ -256,7 +262,7 @@ void QuarkHandler::setSinkComputations(const XMLHandler &xmlin) {
 
     if (xml_tag_count(xmlrd, "NoiseList_TimeProjIndexList") == 1) {
       XMLHandler xmlr(xmlrd, "NoiseList_TimeProjIndexList");
-      vector<int> time_proj_inds;
+      std::vector<int> time_proj_inds;
       if (xml_tag_count(xmlr, "TimeProjIndexList") == 1) {
         XMLHandler xmltpi(xmlr, "TimeProjIndexList");
         if (xml_tag_count(xmltpi, "All") == 1) {
@@ -269,8 +275,8 @@ void QuarkHandler::setSinkComputations(const XMLHandler &xmlin) {
         }
       }
       XMLHandler xmln(xmlr, "LaphNoiseList");
-      list<XMLHandler> xmlns(xmln.find("LaphNoiseInfo"));
-      for (list<XMLHandler>::iterator it = xmlns.begin(); it != xmlns.end();
+      std::list<XMLHandler> xmlns(xmln.find("LaphNoiseInfo"));
+      for (std::list<XMLHandler>::iterator it = xmlns.begin(); it != xmlns.end();
            ++it) {
         LaphNoiseInfo aNoise(*it);
         for (int t = 0; t < int(time_proj_inds.size()); t++) {
@@ -282,8 +288,8 @@ void QuarkHandler::setSinkComputations(const XMLHandler &xmlin) {
 
     if (xml_tag_count(xmlrd, "ComputationList") == 1) {
       XMLHandler xmlr(xmlrd, "ComputationList");
-      list<XMLHandler> xmlcs(xmlr.find("Computation"));
-      for (list<XMLHandler>::iterator it = xmlcs.begin(); it != xmlcs.end();
+      std::list<XMLHandler> xmlcs(xmlr.find("Computation"));
+      for (std::list<XMLHandler>::iterator it = xmlcs.begin(); it != xmlcs.end();
            ++it) {
         LaphNoiseInfo aNoise(*it);
         int time_proj_index;
@@ -304,8 +310,8 @@ void QuarkHandler::setSinkComputations(const XMLHandler &xmlin) {
   printLaph(make_strf(" Number of sink computations = %d",
                       sinkComps.computations.size()));
   int count = 0;
-  for (list<SinkComputation>::const_iterator it =
-           sinkComps.computations.begin();
+  for (std::list<SinkComputation>::const_iterator it =
+	 sinkComps.computations.begin();
        it != sinkComps.computations.end(); count++, it++) {
     XMLHandler xmlout("SinkComputation");
     XMLHandler xmln;
@@ -391,7 +397,7 @@ void QuarkHandler::disconnectGaugeConfigurationHandler() {
 }
 
 void QuarkHandler::connectGluonSmearingHandler(
-    const string &smeared_gauge_filename) {
+    const std::string &smeared_gauge_filename) {
   if ((gSmearCounter == 0) && (gSmearHandler.get() == 0)) {
     try {
       gSmearHandler.reset(
@@ -428,7 +434,7 @@ void QuarkHandler::disconnectGluonSmearingHandler() {
 }
 
 void QuarkHandler::connectQuarkSmearingHandler(
-    const string &smeared_quark_filestub) {
+    const std::string &smeared_quark_filestub) {
   if ((qSmearCounter == 0) && (qSmearHandler.get() == 0)) {
     try {
       qSmearHandler.reset(new QuarkSmearingHandler(
@@ -498,7 +504,7 @@ void QuarkHandler::setGamma5HermiticityMode() {
   normal_mode = false;
 }
 
-map<int, QuarkHandler::FileKey> QuarkHandler::getSuffixMap() const {
+std::map<int, QuarkHandler::FileKey> QuarkHandler::getSuffixMap() const {
   check_info_set("getSuffixMap");
   if (compute_mode) {
     return DHputPtr->getSuffixMap();
@@ -509,9 +515,9 @@ map<int, QuarkHandler::FileKey> QuarkHandler::getSuffixMap() const {
 
 void QuarkHandler::outputSuffixMap() {
   check_info_set("getSuffixMap");
-  map<int, QuarkHandler::FileKey> suffixmap = getSuffixMap();
+  std::map<int, QuarkHandler::FileKey> suffixmap = getSuffixMap();
   printLaph("\nSuffix map:");
-  for (map<int, QuarkHandler::FileKey>::const_iterator it = suffixmap.begin();
+  for (std::map<int, QuarkHandler::FileKey>::const_iterator it = suffixmap.begin();
        it != suffixmap.end(); ++it) {
     printLaph(make_strf(
         "suffix  %d:  LaphNoiseInfo seed = %d  time proj index = %d", it->first,
@@ -525,7 +531,7 @@ bool QuarkHandler::isInfoSet() const {
           (dilPtr != 0) && (qactionPtr != 0));
 }
 
-void QuarkHandler::check_info_set(const string &name) const {
+void QuarkHandler::check_info_set(const std::string &name) const {
   if (!isInfoSet()) {
     errorLaph(make_strf("error in QuarkHandler: must setInfo before calling %s",
                         name));
@@ -536,7 +542,7 @@ bool QuarkHandler::isComputeReady() const {
   return ((isInfoSet()) && (compute_mode) && (invertPtr != 0));
 }
 
-void QuarkHandler::check_compute_ready(const string &name) const {
+void QuarkHandler::check_compute_ready(const std::string &name) const {
   if (!isComputeReady()) {
     errorLaph(make_strf("error in QuarkHandler: must setInfo before calling %s",
                         name));
@@ -588,7 +594,7 @@ int QuarkHandler::getTimeDilutionProjectorIndex(const int time_val) const {
   return dilHandler->getTimeProjectorIndex(time_val);
 }
 
-const list<int> &QuarkHandler::getOnTimes(const int time_proj_index) const {
+const std::list<int> &QuarkHandler::getOnTimes(const int time_proj_index) const {
   check_info_set("getOnTimes");
   return dilHandler->getOnTimes(time_proj_index);
 }
@@ -734,7 +740,7 @@ void QuarkHandler::computeSinks(const bool verbose,
   rolex.reset();
   rolex.start();
   const int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
-  vector<void *> evList(nEigs);
+  std::vector<void *> evList(nEigs);
   for (int n = 0; n < nEigs; n++) {
     evList[n] =
         (void *)(qSmearHandler->getLaphEigenvector(n).getDataConstPtr());
@@ -749,7 +755,7 @@ void QuarkHandler::computeSinks(const bool verbose,
   double srctime = 0.0, invtime = 0.0, evprojtime = 0.0, writetime = 0.0;
   int count = 0;
 
-  for (list<SinkComputation>::const_iterator it =
+  for (std::list<SinkComputation>::const_iterator it =
            sinkComps.computations.begin();
        it != sinkComps.computations.end(); count++, it++) {
     printLaph(
@@ -824,15 +830,15 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise,
   Array<cmplx> laph_noise =
       rho.generateLapHQuarkSourceForSink(Textent, Nspin, nEigs);
   // time dilution masks
-  const list<int> &on_times = dilHandler->getOnTimes(time_proj_index);
+  const std::list<int> &on_times = dilHandler->getOnTimes(time_proj_index);
   const double soln_rescale = qactionPtr->getSolutionRescaleFactor();
 
   // allocate space for batched solutions and make pointers suitable for quda
   int iSinkBatch = 0;
-  vector<int> sinkBatchInds(nSinkLaphBatch);
-  vector<LattField> sinkBatchData(nSinkLaphBatch,
+  std::vector<int> sinkBatchInds(nSinkLaphBatch);
+  std::vector<LattField> sinkBatchData(nSinkLaphBatch,
                                   FieldSiteType::ColorSpinVector);
-  vector<void *> sinkList(nSinkLaphBatch);
+  std::vector<void *> sinkList(nSinkLaphBatch);
   for (int iSink = 0; iSink < int(nSinkLaphBatch); iSink++) {
     sinkList[iSink] = (void *)(sinkBatchData[iSink].getDataPtr());
   }
@@ -872,8 +878,8 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise,
 
       bulova.reset();
       bulova.start();
-      const list<int> &on_spins = dilHandler->getOnSpinIndices(dil);
-      const list<int> &on_eigs = dilHandler->getOnEigvecIndices(dil);
+      const std::list<int> &on_spins = dilHandler->getOnSpinIndices(dil);
+      const std::list<int> &on_eigs = dilHandler->getOnEigvecIndices(dil);
 
       //  initialize source (include gamma_4) in Dirac-Pauli basis, allocate
       //  sink
@@ -962,7 +968,7 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise,
       for (int iSink = 0; iSink < nSinks; ++iSink) {
         for (int t = minTime; t <= maxTime; t++) {
           for (int iSpin = 0; iSpin < Nspin; ++iSpin) {
-            vector<dcmplx> quark_sink(nEigs);
+	    std::vector<dcmplx> quark_sink(nEigs);
             for (int iEv = 0; iEv < nEigs; ++iEv) {
               quark_sink[iEv] = soln_rescale * qudaRes(iSpin, t, iEv, iSink);
             }
@@ -1002,9 +1008,9 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise,
 void QuarkHandler::make_source(LattField &ferm_src,
                                const Array<cmplx> &laph_noise,
                                const std::vector<void *> &evList,
-                               const list<int> &on_times,
-                               const list<int> &on_spins,
-                               const list<int> &on_eigs) {
+                               const std::list<int> &on_times,
+                               const std::list<int> &on_spins,
+                               const std::list<int> &on_eigs) {
   printLaph(" Making source for this inversion...");
   if (evList.size() == 0) {
     errorLaph(
@@ -1043,7 +1049,7 @@ void QuarkHandler::make_source(LattField &ferm_src,
   const int incx = FieldNcolor;
   const int incy = FieldNcolor * FieldNspin;
 
-  for (list<int>::const_iterator it0 = on_times.begin(); it0 != on_times.end();
+  for (std::list<int>::const_iterator it0 = on_times.begin(); it0 != on_times.end();
        it0++) {
     if (((*it0) >= mytmin) && ((*it0) <= mytmax)) {
 
@@ -1062,17 +1068,17 @@ void QuarkHandler::make_source(LattField &ferm_src,
       char *ystart1 = ferm_src.getDataPtr() + start1 * incy * cbytes;
       char *ystart2 = ferm_src.getDataPtr() + start2 * incy * cbytes;
 
-      for (list<int>::const_iterator vmask = on_eigs.begin();
+      for (std::list<int>::const_iterator vmask = on_eigs.begin();
            vmask != on_eigs.end(); vmask++) {
         char *x0 = reinterpret_cast<char *>(evList[*vmask]);
-        for (list<int>::const_iterator smask = on_spins.begin();
+        for (std::list<int>::const_iterator smask = on_spins.begin();
              smask != on_spins.end(); smask++) {
           zrhodp = laph_noise(*it0, *smask, *vmask);
           if (*smask > 1) {
             zrhodp = -zrhodp;
           } // multiply by gamma_4
           if (!dp) {
-            zrhosp = complex<float>(real(zrhodp), imag(zrhodp));
+            zrhosp = std::complex<float>(real(zrhodp), imag(zrhodp));
           }
           char *x1 = x0 + xstart1;
           char *x2 = x0 + xstart2;
@@ -1106,13 +1112,13 @@ void QuarkHandler::make_source(LattField &ferm_src,
 void QuarkHandler::clearData() {
   if (compute_mode)
     return;
-  for (map<StorageKey, LattField *>::iterator it = store_sources.begin();
+  for (std::map<StorageKey, LattField *>::iterator it = store_sources.begin();
        it != store_sources.end(); ++it) {
     if (it->second != 0)
       delete it->second;
   }
   store_sources.clear();
-  for (map<StorageKey, LattField *>::iterator it = store_sinks.begin();
+  for (std::map<StorageKey, LattField *>::iterator it = store_sinks.begin();
        it != store_sinks.end(); ++it) {
     delete it->second;
   }
@@ -1121,9 +1127,9 @@ void QuarkHandler::clearData() {
 }
 
 //  static pointers (set to null in default constructor)
-unique_ptr<GluonSmearingHandler> QuarkHandler::gSmearHandler;
-unique_ptr<QuarkSmearingHandler> QuarkHandler::qSmearHandler;
-unique_ptr<GaugeConfigurationHandler> QuarkHandler::gaugeHandler;
+std::unique_ptr<GluonSmearingHandler> QuarkHandler::gSmearHandler;
+std::unique_ptr<QuarkSmearingHandler> QuarkHandler::qSmearHandler;
+std::unique_ptr<GaugeConfigurationHandler> QuarkHandler::gaugeHandler;
 
 int QuarkHandler::gSmearCounter = 0;
 int QuarkHandler::qSmearCounter = 0;

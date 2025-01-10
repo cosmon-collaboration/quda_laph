@@ -3,8 +3,6 @@
 #include "quda_info.h"
 #include <cstring>
 
-using namespace std;
-
 namespace LaphEnv {
 
 // XmlReader constructor
@@ -61,7 +59,7 @@ void LaphEigenSolverInfo::extract_info_from_reader(XMLHandler &xmlr) {
 
   startVector = "equal_components";
   if (xml_tag_count(xmlr, "StartingVectorType") == 1) {
-    string svread;
+    std::string svread;
     xmlread(xmlr, "StartingVectorType", svread, "LaphEigenSolverInfo");
     svread = tidyString(svread);
     if (svread == "random")
@@ -118,7 +116,7 @@ LaphEigenSolverInfo::operator=(const LaphEigenSolverInfo &in) {
   return *this;
 }
 
-string LaphEigenSolverInfo::output(int indent) const {
+std::string LaphEigenSolverInfo::output(int indent) const {
   XMLHandler xmlout;
   output(xmlout);
   return xmlout.output(indent);

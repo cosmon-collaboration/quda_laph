@@ -1,8 +1,6 @@
 #include "quark_action_info.h"
 #include "quda_info.h"
 
-using namespace std;
-
 namespace LaphEnv {
 
 // For all fermion actions, we must have
@@ -17,7 +15,7 @@ namespace LaphEnv {
 
 QuarkActionInfo::QuarkActionInfo(const XMLHandler &xml_in) {
   XMLHandler xmlr(xml_in, "QuarkActionInfo");
-  string name;
+  std::string name;
   xmlread(xmlr, "Name", name, "QuarkActionInfo");
   if (name == "WILSON_CLOVER") {
     set_info_wilson_clover(xmlr);
@@ -63,7 +61,7 @@ bool QuarkActionInfo::operator==(const QuarkActionInfo &rhs) const {
   return true;
 }
 
-string QuarkActionInfo::output(const int indent) const {
+std::string QuarkActionInfo::output(const int indent) const {
   XMLHandler xmlh;
   output(xmlh);
   return xmlh.output(indent);
@@ -133,7 +131,7 @@ void QuarkActionInfo::set_info_wilson_clover(XMLHandler &xmlr) {
   }
   rvalues[6] = 1.0;
   xmlreadif(xmlr, "Tadpole", rvalues[6], "QuarkActionInfo");
-  string flavor;
+  std::string flavor;
   xmlread(xmlr, "Flavor", flavor, "QuarkActionInfo");
   if ((flavor == "light") || (flavor == "ud") || (flavor == "u") ||
       (flavor == "d") || (flavor == "l")) {
@@ -144,7 +142,7 @@ void QuarkActionInfo::set_info_wilson_clover(XMLHandler &xmlr) {
     xmlreadfail(xmlr, "QuarkActionInfo", "Invalid flavor");
   }
   ivalues[1] = 0;
-  string timebc;
+  std::string timebc;
   if (xmlreadif(xmlr, "TimeBC", timebc, "QuarkActionInfo")) {
     if (timebc == "periodic") {
       ivalues[1] = 1;
@@ -159,7 +157,7 @@ void QuarkActionInfo::set_info_wilson_clover(XMLHandler &xmlr) {
 
 void QuarkActionInfo::output_wilson_clover(XMLHandler &xmlout) const {
   xmlout.set_root("QuarkActionInfo");
-  string flavor = (ivalues[0] == 0) ? "ud" : "s";
+  std::string flavor = (ivalues[0] == 0) ? "ud" : "s";
   xmlout.put_child("Name", "WILSON_CLOVER");
   xmlout.put_child("Flavor", flavor);
   xmlout.put_child("Mass", make_string(rvalues[1]));
@@ -172,7 +170,7 @@ void QuarkActionInfo::output_wilson_clover(XMLHandler &xmlout) const {
     xmlout.put_child("clovCoeffST", make_string(rvalues[5]));
   }
   xmlout.put_child("Tadpole", make_string(rvalues[6]));
-  string timebc = (ivalues[1] == 0) ? "antiperiodic" : "periodic";
+  std::string timebc = (ivalues[1] == 0) ? "antiperiodic" : "periodic";
   xmlout.put_child("TimeBC", timebc);
 }
 

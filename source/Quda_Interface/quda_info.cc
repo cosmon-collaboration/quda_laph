@@ -3,8 +3,6 @@
 #include "laph_stdio.h"
 #include "latt_field.h"
 
-using namespace std;
-
 namespace LaphEnv {
 
 //   Expects the following XML:
@@ -16,7 +14,7 @@ namespace LaphEnv {
 
 void QudaInfo::init(const XMLHandler &xml_in, const bool echo) {
   XMLHandler xmlr(xml_in, "QudaInfo");
-  string response;
+  std::string response;
   if (xmlreadif(xmlr, "CPUPrecision", response, "QudaInfo")) {
     if (response == "single") {
       cpu_prec = QUDA_SINGLE_PRECISION;

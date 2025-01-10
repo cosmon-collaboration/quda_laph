@@ -4,15 +4,12 @@
 #include "quda_info.h"
 #include "util_quda.h"
 #include "utils.h"
-#include <map>
-
-using namespace std;
 
 namespace LaphEnv {
 
 InverterInfo::InverterInfo(const XMLHandler &xml_in) {
   XMLHandler xmlr(xml_in, "InverterInfo");
-  string name;
+  std::string name;
   xmlread(xmlr, "Name", name, "InverterInfo");
   if (name == "CGNR") {
     set_info_cgnr(xmlr);
@@ -66,7 +63,7 @@ bool InverterInfo::operator==(const InverterInfo &rhs) const {
   return true;
 }
 
-string InverterInfo::output(int indent) const {
+std::string InverterInfo::output(const int indent) const {
   XMLHandler xmlh;
   output(xmlh);
   return xmlh.output(indent);
@@ -308,7 +305,7 @@ void InverterInfo::set_info_gcr_multigrid(XMLHandler &xmlr) {
   xmlsetQLInt(xmlr, "MaxIterations", ivalues, ivalindex, true, 200);
   xmlsetQLInt(xmlr, "NKrylov", ivalues, ivalindex, true, 24);
   XMLHandler xmlmg(getXML_nofail(xmlr, "MGPreconditioner"));
-  vector<int> localextents = LayoutInfo::getRankLattExtents();
+  std::vector<int> localextents = LayoutInfo::getRankLattExtents();
   // set default value of nlevels
   int nlevels = 2;
   // read nlevels if given and reset nlevels
@@ -323,9 +320,9 @@ void InverterInfo::set_info_gcr_multigrid(XMLHandler &xmlr) {
 
   // loop over levels, except for coarsest last level
   for (int level = 0; level < (nlevels - 1); ++level) {
-    const string tag = "Level" + make_string(level);
+    const std::string tag = "Level" + make_string(level);
     XMLHandler xmllevel(getXML_nofail(xmlmg, tag));
-    vector<int> block_extents(LayoutInfo::Ndim);
+    std::vector<int> block_extents(LayoutInfo::Ndim);
     do_blocking(localextents, block_extents); // set default blocking extents
     xmlsetQLIntVector(xmllevel, "XYZTBlockExtents", ivalues, ivalindex,
                       LayoutInfo::Ndim, true, block_extents);
@@ -333,10 +330,10 @@ void InverterInfo::set_info_gcr_multigrid(XMLHandler &xmlr) {
       block_extents[d] = ivalues[ivalindex - LayoutInfo::Ndim + d];
     }
     // check if blocking values are valid
-    string errmsg;
+    std::string errmsg;
     if (!check_blocking(block_extents, localextents, errmsg)) {
-      string errmessage =
-          string("Invalid level ") + make_string(level) + " block extents";
+      std::string errmessage =
+          std::string("Invalid level ") + make_string(level) + " block extents";
       for (int d = 0; d < LayoutInfo::Ndim; ++d) {
         errmessage += " " + make_string(block_extents[d]);
       }
@@ -360,7 +357,7 @@ void InverterInfo::set_info_gcr_multigrid(XMLHandler &xmlr) {
 
   // now probe coarsest last level
   const int level = nlevels - 1;
-  string tag = "Level" + make_string(level);
+  std::string tag = "Level" + make_string(level);
   XMLHandler xmllevel(getXML_nofail(xmlmg, tag));
   xmlsetQLReal(xmllevel, "CoarseSolverTolerance", rvalues, rvalindex, true,
                0.25);
@@ -402,7 +399,7 @@ void InverterInfo::output_gcr_multigrid(XMLHandler &xmlout) const {
   xmlmg.put_child(xmloutputQLInt("NumLevels", ivalues, ivalindex));
   int nlevels = ivalues[ivalindex - 1];
   for (int level = 0; level < (nlevels - 1); ++level) {
-    string tag = "Level";
+    std::string tag = "Level";
     tag += make_string(level);
     XMLHandler xmllevel(tag);
     xmllevel.put_child(xmloutputQLIntVector("XYZTBlockExtents", ivalues,
@@ -420,7 +417,7 @@ void InverterInfo::output_gcr_multigrid(XMLHandler &xmlout) const {
     xmlmg.put_child(xmllevel);
   }
   const int level = nlevels - 1;
-  string tag = "Level";
+  std::string tag = "Level";
   tag += make_string(level);
   XMLHandler xmllevel(tag);
   xmllevel.put_child(
@@ -461,13 +458,13 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
   const int nlevels = ivalues[ivalindex];
   ++ivalindex;
 
-  vector<vector<int>> blockextents(nlevels, vector<int>(LayoutInfo::Ndim));
-  vector<int> nullspacedim(nlevels, 24);
-  vector<int> setup_solver_numsteps(nlevels, 100);
-  vector<double> coarse_solver_tol(nlevels, 0.25);
-  vector<int> coarse_solver_maxiter(nlevels, 100);
-  vector<int> presmooth_num(nlevels, 0);
-  vector<int> postsmooth_num(nlevels, 4);
+  std::vector<std::vector<int>> blockextents(nlevels, std::vector<int>(LayoutInfo::Ndim));
+  std::vector<int> nullspacedim(nlevels, 24);
+  std::vector<int> setup_solver_numsteps(nlevels, 100);
+  std::vector<double> coarse_solver_tol(nlevels, 0.25);
+  std::vector<int> coarse_solver_maxiter(nlevels, 100);
+  std::vector<int> presmooth_num(nlevels, 0);
+  std::vector<int> postsmooth_num(nlevels, 4);
   for (int level = 0; level < (nlevels - 1); ++level) {
     for (int d = 0; d < LayoutInfo::Ndim; ++d) {
       blockextents[level][d] = ivalues[ivalindex];
@@ -704,11 +701,11 @@ void InverterInfo::initDeflationParam_gcr_multigrid() const {
 // returned in increasing order in "factors".  "ivalue"
 // cannot exceed 1024.
 
-void InverterInfo::factorize(const uint ivalue, list<uint> &factors) const {
+  void InverterInfo::factorize(const uint ivalue, std::list<uint> &factors) const {
   if (ivalue > 1024) {
     throw(std::invalid_argument("Cannot factorize for value > 1024"));
   }
-  const vector<uint> primes({2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37});
+  const std::vector<uint> primes({2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37});
   factors.clear();
   uint n = ivalue, k = 0, f = primes[k];
   while (f * f <= n) {
@@ -730,14 +727,14 @@ void InverterInfo::factorize(const uint ivalue, list<uint> &factors) const {
 // and the product of block extents cannot exceed the quda limit of 1024.
 // Typically, one wants the largest blocking that is possible.
 
-void InverterInfo::do_blocking(const vector<int> &extents,
-                               vector<int> &block_extents) const {
+void InverterInfo::do_blocking(const std::vector<int> &extents,
+				 std::vector<int> &block_extents) const {
   const uint Nd = LayoutInfo::Ndim;
   const uint max_block_val = 864;
   block_extents.resize(Nd);
   for (uint d = 0; d < Nd; ++d)
     block_extents[d] = 1;
-  vector<list<uint>> factors(Nd);
+  std::vector<std::list<uint>> factors(Nd);
   for (uint d = 0; d < Nd; ++d) {
     factorize(extents[d], factors[d]);
   }

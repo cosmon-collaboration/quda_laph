@@ -5,10 +5,6 @@
 #include "gauge_configuration_info.h"
 #include "laph_stdio.h"
 #include "layout_info.h"
-#include "util_quda.h"
-
-using namespace std;
-using namespace quda;
 
 namespace LaphEnv {
 
@@ -58,8 +54,7 @@ void GaugeCERNConfigReader::cern_to_qdp_lexico(
   // this could be collapsed but we would have to watch out for cindex increment
 #pragma omp parallel for private(t)
   for (t = 0; t < NT; ++t) {
-    int cindex =
-        t * tstride; // calculate these so each loop independent for threading
+    int cindex = t * tstride; // calculate these so each loop independent for threading
     const double *cptr = cern + 4 * t * tstride * su3dble;
     const int td = (t > 0) ? (t - 1) : (NT - 1);
     const int tshift = (td - t) * NX * NY * NZ;
@@ -99,9 +94,9 @@ void GaugeCERNConfigReader::cern_to_qdp_lexico(
   }
 }
 
-bool GaugeCERNConfigReader::read(vector<LattField> &u,
+bool GaugeCERNConfigReader::read(std::vector<LattField> &u,
                                  const std::string &in_cfg_file) {
-  string cfg_file = tidyString(in_cfg_file);
+  std::string cfg_file = tidyString(in_cfg_file);
   if (cfg_file.empty()) {
     errorLaph("Empty file name in GaugeCERNConfigReader::read");
   }
@@ -171,7 +166,7 @@ bool GaugeCERNConfigReader::read(vector<LattField> &u,
   const size_t ndir = LayoutInfo::Ndim;
   const size_t nelemsite = ndir * linkdbles;
   const size_t nelem = NX * NY * NZ * NT * nelemsite;
-  vector<double> buffer(nelem);
+  std::vector<double> buffer(nelem);
   iotimer.start();
   fin.read(reinterpret_cast<char *>(buffer.data()), sizeof(double) * nelem);
   iotimer.stop();
@@ -421,16 +416,18 @@ void GaugeCERNConfigReader::local_cern_to_qdp_lexico_edge(
 //  these two arrays are all in terms of CERN sites.  A CERN site is a
 //  quantity having 8 su3 matrices in double precision complex.
 
-void GaugeCERNConfigReader::get_file_view(const vector<int> &global_sizes,
-                                          const vector<int> &local_sizes,
-                                          const vector<int> &rank_coords,
-                                          vector<int> &displacements,
-                                          vector<int> &lengths,
+void GaugeCERNConfigReader::get_file_view(const std::vector<int> &global_sizes,
+					  const std::vector<int> &local_sizes,
+					  const std::vector<int> &rank_coords,
+					  std::vector<int> &displacements,
+					  std::vector<int> &lengths,
                                           int &start_parity) {
   const int ndisp = local_sizes[1] * local_sizes[2] * local_sizes[3];
   displacements.resize(ndisp);
   lengths.resize(ndisp);
-  vector<int> start_indices(4);
+
+  // should be an array
+  std::vector<int> start_indices(4);
   for (int dir = 0; dir < 4; ++dir) {
     start_indices[dir] = rank_coords[dir] * local_sizes[dir];
   }
@@ -488,9 +485,9 @@ void GaugeCERNConfigReader::get_file_view(const vector<int> &global_sizes,
 //  (x,y,z,t) with x fastest varying.  At each site is an SU3 matrix in row
 //  major format.
 
-bool GaugeCERNConfigReader::read(vector<LattField> &u,
+bool GaugeCERNConfigReader::read(std::vector<LattField> &u,
                                  const std::string &in_cfg_file) {
-  string cfg_file = tidyString(in_cfg_file);
+  std::string cfg_file = tidyString(in_cfg_file);
   if (cfg_file.empty()) {
     errorLaph("Empty file name in GaugeCERNConfigReader::read");
   }
@@ -580,16 +577,16 @@ bool GaugeCERNConfigReader::read(vector<LattField> &u,
   const int su3dble = 2 * FieldNcolor * FieldNcolor;
   const int ndblesite = ndir * su3dble;
   const int ndble = LayoutInfo::getRankLatticeNumSites() * ndblesite;
-  vector<double> buffer(ndble);
+  std::vector<double> buffer(ndble);
   const int nbytes_per_site =
       2 * ndblesite * sizeof(double); // only odd sites, but 8 directions
   const int locNT = LayoutInfo::getRankLattExtents()[3];
   const int locNZ = LayoutInfo::getRankLattExtents()[2];
   const int locNY = LayoutInfo::getRankLattExtents()[1];
   const int locNX = LayoutInfo::getRankLattExtents()[0];
-  vector<int> global_sizes(LayoutInfo::Ndim);
-  vector<int> local_sizes(LayoutInfo::Ndim);
-  vector<int> rank_coords(LayoutInfo::Ndim);
+  std::vector<int> global_sizes(LayoutInfo::Ndim);
+  std::vector<int> local_sizes(LayoutInfo::Ndim);
+  std::vector<int> rank_coords(LayoutInfo::Ndim);
   for (int k = 0; k < LayoutInfo::Ndim; ++k) {
     global_sizes[k] = LayoutInfo::getLattExtents()[(LayoutInfo::Ndim + 2 - k) %
                                                    LayoutInfo::Ndim];
@@ -600,8 +597,8 @@ bool GaugeCERNConfigReader::read(vector<LattField> &u,
                                                    LayoutInfo::Ndim];
   }
   int start_parity;
-  vector<int> viewblockdisps;
-  vector<int> viewblocklengths;
+  std::vector<int> viewblockdisps;
+  std::vector<int> viewblocklengths;
   get_file_view(global_sizes, local_sizes, rank_coords, viewblockdisps,
                 viewblocklengths, start_parity);
 
@@ -669,14 +666,8 @@ bool GaugeCERNConfigReader::read(vector<LattField> &u,
   const int xsdim = locNT * ((locNY * locNZ + 1) / 2) * su3dble;
   const int ysdim = locNT * ((locNX * locNZ + 1) / 2) * su3dble;
   const int zsdim = locNT * ((locNY * locNX + 1) / 2) * su3dble;
-  vector<double> xsend;
-  vector<double> ysend;
-  vector<double> zsend;
-  vector<double> tsend;
-  double *xs = 0;
-  double *ys = 0;
-  double *zs = 0;
-  double *ts = 0;
+  std::vector<double> xsend, ysend, zsend, tsend;
+  double *xs = 0, *ys = 0, *zs = 0, *ts = 0;
   if (locNT < NT) {
     tsend.resize(tsdim);
     ts = tsend.data();
@@ -699,17 +690,14 @@ bool GaugeCERNConfigReader::read(vector<LattField> &u,
                            su3dble);
 
   // now send edge links to the appropriate MPI processes
-  double *xr = 0;
-  double *yr = 0;
-  double *zr = 0;
-  double *tr = 0;
+  double *xr = 0, *yr = 0 , *zr = 0, *tr = 0;
   buffer.clear();
-  vector<double> trecv, xrecv, yrecv, zrecv;
+  std::vector<double> trecv, xrecv, yrecv, zrecv;
   // send/recv edge case time links
   if (ts != 0) {
     trecv.resize(tsdim);
     tr = trecv.data();
-    vector<int> rank_coord(
+    std::vector<int> rank_coord(
         LayoutInfo::getMyCommCoords()); // rank coords of this node
     const int ntproc = NT / locNT;
     const int tproc = rank_coord[3];
@@ -735,7 +723,7 @@ bool GaugeCERNConfigReader::read(vector<LattField> &u,
   if (xs != 0) {
     xrecv.resize(xsdim);
     xr = xrecv.data();
-    vector<int> rank_coord(
+    std::vector<int> rank_coord(
         LayoutInfo::getMyCommCoords()); // rank coords of this node
     const int nxproc = NX / locNX;
     const int xproc = rank_coord[0];
@@ -761,8 +749,8 @@ bool GaugeCERNConfigReader::read(vector<LattField> &u,
   if (ys != 0) {
     yrecv.resize(ysdim);
     yr = yrecv.data();
-    vector<int> rank_coord(
-        LayoutInfo::getMyCommCoords()); // rank coords of this node
+    std::vector<int> rank_coord(
+				LayoutInfo::getMyCommCoords()); // rank coords of this node
     const int nyproc = NY / locNY;
     const int yproc = rank_coord[1];
     // get mpi rank where to send
@@ -787,7 +775,7 @@ bool GaugeCERNConfigReader::read(vector<LattField> &u,
   if (zs != 0) {
     zrecv.resize(zsdim);
     zr = zrecv.data();
-    vector<int> rank_coord(
+    std::vector<int> rank_coord(
         LayoutInfo::getMyCommCoords()); // rank coords of this node
     const int nzproc = NZ / locNZ;
     const int zproc = rank_coord[2];
@@ -831,7 +819,7 @@ bool GaugeCERNConfigReader::read(vector<LattField> &u,
 // convert from lexicographic site order to even-odd checkerboard as needed by
 // quda
 
-void GaugeCERNConfigReader::lexico_to_evenodd(vector<LattField> &u) {
+void GaugeCERNConfigReader::lexico_to_evenodd(std::vector<LattField> &u) {
   const int su3bytes = u[0].bytesPerSite();
   for (int dir = 0; dir < LayoutInfo::Ndim; ++dir) {
     char *links = (char *)(u[dir].getDataPtr());

@@ -3,11 +3,7 @@
 #include "utils.h"
 #include <cstring>
 #include <fstream>
-#include <sstream>
-#include <stdlib.h>
-#include <unistd.h>
 
-using namespace std;
 using namespace LaphEnv;
 
 //  Constructor from a string.  First extract the XML
@@ -15,7 +11,7 @@ using namespace LaphEnv;
 //  then check that there is just one top or root node.
 //  Throw exception if anything in the string is invalid.
 
-XMLDoc::XMLDoc(const string &xmlstr) {
+XMLDoc::XMLDoc(const std::string &xmlstr) {
   root = 0;
   size_t start = get_declaration(xmlstr);
   try {
@@ -28,7 +24,7 @@ XMLDoc::XMLDoc(const string &xmlstr) {
 
 //  Constructor as a single simple element.
 
-XMLDoc::XMLDoc(const string &tagname, const string &text_content) {
+XMLDoc::XMLDoc(const std::string &tagname, const std::string &text_content) {
   root = 0;
   try {
     root = create_simple_tag(tagname, text_content, 0);
@@ -41,7 +37,7 @@ XMLDoc::XMLDoc(const string &tagname, const string &text_content) {
 //  Copy constructor.  Copies only those nodes that
 //  are descendents from "top".
 
-XMLDoc::XMLDoc(XMLNode *top, const string &indecl) : declaration(indecl) {
+XMLDoc::XMLDoc(XMLNode *top, const std::string &indecl) : declaration(indecl) {
   root = 0;
   if (top == 0)
     throw(std::invalid_argument("Subtree is not valid XML doc on its own"));
@@ -52,12 +48,13 @@ XMLDoc::XMLDoc(XMLNode *top, const string &indecl) : declaration(indecl) {
 
 //  Actual routines that do the memory allocation
 
-XMLDoc::XMLNode *XMLDoc::create_by_parsing(const string &xmlstr, size_t start,
-                                           size_t stop) {
+XMLDoc::XMLNode *XMLDoc::create_by_parsing(const std::string &xmlstr,
+					   size_t start,
+                                           const size_t stop) {
   XMLNode *top = 0;
   try {
-    stack<XMLDoc::XMLNode *> ancestors;
-    stack<XMLDoc::XMLNode *> lastchildren;
+    std::stack<XMLDoc::XMLNode *> ancestors;
+    std::stack<XMLDoc::XMLNode *> lastchildren;
     XMLEvent lastevent;
     size_t curr;
     top = parse_root_tag(xmlstr, start, stop, lastevent, curr, ancestors,
@@ -76,13 +73,13 @@ XMLDoc::XMLNode *XMLDoc::create_by_parsing(const string &xmlstr, size_t start,
 
 // exception thrown if "tagname" is invalid
 
-XMLDoc::XMLNode *XMLDoc::create_simple_tag(const string &tagname,
+XMLDoc::XMLNode *XMLDoc::create_simple_tag(const std::string &tagname,
                                            const std::string &in_text,
                                            XMLDoc::XMLNode *parent) {
   XMLNode *top = 0;
-  string tag(get_tag_name(tagname, 0, tagname.length()));
+  std::string tag(get_tag_name(tagname, 0, tagname.length()));
   top = new XMLNode(tag, parent);
-  string text(trim(in_text));
+  std::string text(trim(in_text));
   if (!text.empty())
     top->firstchild = new XMLNode(text, top, true);
   return top;
@@ -90,9 +87,9 @@ XMLDoc::XMLNode *XMLDoc::create_simple_tag(const string &tagname,
 
 // returns pointer to text node; null pointer if text is empty
 
-XMLDoc::XMLNode *XMLDoc::create_text_node(const string &in_text,
+XMLDoc::XMLNode *XMLDoc::create_text_node(const std::string &in_text,
                                           XMLDoc::XMLNode *parent) {
-  string text(trim(in_text));
+  std::string text(trim(in_text));
   XMLNode *top = 0;
   if (!text.empty())
     top = new XMLNode(text, parent, true);
@@ -173,9 +170,9 @@ void XMLDoc::delete_node(XMLNode *&node) {
   // document, nullify all "current" pointers that point to this node.
   // If the root pointer of an XMLHander points to this node, then
   // that entire XMLHandler must be nullified and removed from "refset".
-  set<XMLHandler *>
+  std::set<XMLHandler *>
       eraseset; // keeps track of XMLHandler to remove from "refset"
-  for (set<XMLHandler *>::iterator it = refset.begin(); it != refset.end();
+  for (std::set<XMLHandler *>::iterator it = refset.begin(); it != refset.end();
        ++it) {
     if ((*it)->current == node) {
       (*it)->current = 0;
@@ -187,7 +184,7 @@ void XMLDoc::delete_node(XMLNode *&node) {
     }
   }
   // now remove elements from "refset"
-  for (set<XMLHandler *>::iterator it = eraseset.begin(); it != eraseset.end();
+  for (std::set<XMLHandler *>::iterator it = eraseset.begin(); it != eraseset.end();
        ++it)
     refset.erase(*it);
   // finally it is safe to delete the node
@@ -253,11 +250,12 @@ void XMLDoc::disconnect(XMLNode *top) {
 // can be NO leading blanks, but trailing blanks are allowed,
 // but removed.
 
-string XMLDoc::get_tag_name(const string &instr, size_t charstart,
-                            const size_t charstop) {
+std::string XMLDoc::get_tag_name(const std::string &instr,
+				 const size_t charstart,
+				 const size_t charstop) {
   if (charstart >= charstop)
     throw(std::invalid_argument("Invalid XML tag name"));
-  string tagName(instr, charstart, charstop - charstart);
+  std::string tagName(instr, charstart, charstop - charstart);
   // remove any trailing blanks
   size_t pos = tagName.find_last_not_of(" ");
   if (pos < (tagName.length() - 1))
@@ -265,22 +263,22 @@ string XMLDoc::get_tag_name(const string &instr, size_t charstart,
   // check valid XML tag name
   // no other blanks allowed
   pos = tagName.find_first_of(" ");
-  if (pos != string::npos)
+  if (pos != std::string::npos)
     throw(std::invalid_argument(std::string("Invalid XML tag name: <") +
-                                tagName + string(">")));
+                                tagName + std::string(">")));
   // first 3 characters cannot be xml (case insensitive)
   if (tagName.length() >= 3) {
     if (((tagName[0] == 'x') || (tagName[0] == 'X')) &&
         ((tagName[1] == 'm') || (tagName[1] == 'M')) &&
         ((tagName[2] == 'l') || (tagName[2] == 'L')))
-      throw(std::invalid_argument(string("Invalid XML tag name: <") + tagName +
-                                  string(">")));
+      throw(std::invalid_argument(std::string("Invalid XML tag name: <") + tagName +
+                                  std::string(">")));
   }
   // first character must be letter or underscore
   char c = tagName[0];
   if (!(((c >= 'a') && (c <= 'z')) || ((c >= 'A') && (c <= 'Z')) || (c == '_')))
-    throw(std::invalid_argument(string("Invalid XML tag name: <") + tagName +
-                                string(">")));
+    throw(std::invalid_argument(std::string("Invalid XML tag name: <") + tagName +
+                                std::string(">")));
   // all other characters must be letter, numerical digit,
   // underscore, period, hyphen, exclamation mark
   for (unsigned int k = 1; k < tagName.length(); k++) {
@@ -288,8 +286,8 @@ string XMLDoc::get_tag_name(const string &instr, size_t charstart,
     if (!(((c >= 'a') && (c <= 'z')) || ((c >= 'A') && (c <= 'Z')) ||
           ((c >= '0') && (c <= '9')) || (c == '_') || (c == '-') ||
           (c == '.') || (c == '!')))
-      throw(std::invalid_argument(string("Invalid XML tag name: <") + tagName +
-                                  string(">")));
+      throw(std::invalid_argument(std::string("Invalid XML tag name: <") + tagName +
+                                  std::string(">")));
   }
   return tagName;
 }
@@ -297,15 +295,15 @@ string XMLDoc::get_tag_name(const string &instr, size_t charstart,
 // removes tabs, newline, linefeed characters, then trims
 // leading and trailing blanks.
 
-string XMLDoc::trim(const string &str) {
-  string tmp;
+std::string XMLDoc::trim(const std::string &str) {
+  std::string tmp;
   for (size_t i = 0; i < str.length(); i++)
     if ((str[i] != '\n') && (str[i] != '\t') && (str[i] != '\r'))
       tmp.push_back(str[i]);
-  size_t start = tmp.find_first_not_of(" ");
-  if (start == string::npos)
+  const size_t start = tmp.find_first_not_of(" ");
+  if (start == std::string::npos)
     return "";
-  size_t len = tmp.find_last_not_of(" ") - start + 1;
+  const size_t len = tmp.find_last_not_of(" ") - start + 1;
   return tmp.substr(start, len);
 }
 
@@ -314,10 +312,11 @@ string XMLDoc::trim(const string &str) {
 // "true" if any of them are NOT "white space" (blanks, line feeds,
 // tabs, new line, etc.)
 
-bool XMLDoc::nonwhitespace(const string &instr, size_t charstart,
+bool XMLDoc::nonwhitespace(const std::string &instr,
+			   const size_t charstart,
                            const size_t charstop) {
   bool nonwhite = false;
-  size_t stop = (charstop < instr.length()) ? charstop : instr.length();
+  const size_t stop = (charstop < instr.length()) ? charstop : instr.length();
   for (size_t k = charstart; k < stop; ++k) {
     char c = instr[k];
     if ((c != ' ') && (c != '\n') && (c != '\t') && (c != '\r') &&
@@ -338,10 +337,13 @@ bool XMLDoc::nonwhitespace(const string &instr, size_t charstart,
 // set to "in_stop".  Note that if invalid XML is encountered, a string
 // exception will be thrown.
 
-void XMLDoc::find_next_xml_event(const string &xmlstr, const size_t start,
-                                 const size_t in_stop, XMLDoc::XMLEvent &type,
-                                 size_t &pos, const bool incomment) {
-  const size_t stop = min(in_stop, xmlstr.length());
+void XMLDoc::find_next_xml_event(const std::string &xmlstr,
+				 const size_t start,
+                                 const size_t in_stop,
+				 XMLDoc::XMLEvent &type,
+                                 size_t &pos,
+				 const bool incomment) {
+  const size_t stop = std::min(in_stop, xmlstr.length());
   type = none;
   pos = stop;
   if (start >= stop)
@@ -349,7 +351,7 @@ void XMLDoc::find_next_xml_event(const string &xmlstr, const size_t start,
 
   if (incomment) {
     pos = xmlstr.find("--", start);
-    if ((pos == string::npos) || (pos > (in_stop - 3)))
+    if ((pos == std::string::npos) || (pos > (in_stop - 3)))
       throw(std::invalid_argument("Invalid XML"));
     pos += 2;
     if (xmlstr[pos] != '>')
@@ -407,10 +409,12 @@ void XMLDoc::find_next_xml_event(const string &xmlstr, const size_t start,
 // will be set to "in_stop".  Throws an exception if a start declaration
 // or end declaration is encountered, or if invalid comment events are found.
 
-void XMLDoc::find_next_xml_tag_event(const string &xmlstr, const size_t start,
+void XMLDoc::find_next_xml_tag_event(const std::string &xmlstr,
+				     const size_t start,
                                      const size_t in_stop,
-                                     XMLDoc::XMLEvent &type, size_t &pos,
-                                     string &textpassed) {
+                                     XMLDoc::XMLEvent &type,
+				     size_t &pos,
+                                     std::string &textpassed) {
   textpassed.clear();
   size_t curr = start;
   bool incomment = false;
@@ -445,8 +449,10 @@ void XMLDoc::find_next_xml_tag_event(const string &xmlstr, const size_t start,
 // is encountered, if invalid comment events are found, or any event other
 // than comments or a start tag are found.
 
-void XMLDoc::find_root_start_tag(const string &xmlstr, const size_t start,
-                                 const size_t in_stop, size_t &pos) {
+void XMLDoc::find_root_start_tag(const std::string &xmlstr,
+				 const size_t start,
+                                 const size_t in_stop,
+				 size_t &pos) {
   size_t curr = start;
   bool incomment = false;
   bool notdone = true;
@@ -477,14 +483,16 @@ void XMLDoc::find_root_start_tag(const string &xmlstr, const size_t start,
 //  "ancestors" stack if the root tag is not an empty tag.
 
 XMLDoc::XMLNode *
-XMLDoc::parse_root_tag(const string &xmlstr, size_t &start, const size_t stop,
+XMLDoc::parse_root_tag(const std::string &xmlstr,
+		       size_t &start,
+		       const size_t stop,
                        XMLDoc::XMLEvent &type, size_t &pos,
                        std::stack<XMLDoc::XMLNode *> &ancestors,
                        std::stack<XMLDoc::XMLNode *> &lastchildren) {
   size_t pos1;
   find_root_start_tag(xmlstr, start, stop, pos1);
   find_next_xml_event(xmlstr, pos1 + 1, stop, type, pos, false);
-  string roottag;
+  std::string roottag;
   if (type == endtag) {
     roottag = get_tag_name(xmlstr, pos1 + 1, pos);
   } else if (type == endempty) {
@@ -511,13 +519,15 @@ XMLDoc::parse_root_tag(const string &xmlstr, size_t &start, const size_t stop,
 //  The routine updates "curr", "lastevent", and "ancestors" while building
 //  up the XMLDoc nodes.
 
-void XMLDoc::parse_to_next_event(const string &xmlstr, size_t &curr,
-                                 const size_t stop, XMLEvent &lastevent,
-                                 stack<XMLNode *> &ancestors,
-                                 stack<XMLNode *> &lastchildren) {
+void XMLDoc::parse_to_next_event(const std::string &xmlstr,
+				 size_t &curr,
+                                 const size_t stop,
+				 XMLEvent &lastevent,
+                                 std::stack<XMLNode *> &ancestors,
+                                 std::stack<XMLNode *> &lastchildren) {
   XMLEvent nextevent;
   size_t pos;
-  string textpassed;
+  std::string textpassed;
   find_next_xml_tag_event(xmlstr, curr, stop, nextevent, pos, textpassed);
 
   if (ancestors.empty()) {
@@ -529,7 +539,7 @@ void XMLDoc::parse_to_next_event(const string &xmlstr, size_t &curr,
 
   if (lastevent == starttag) {
     if (nextevent == endempty) {
-      string tagname = get_tag_name(xmlstr, curr, pos - 1);
+      std::string tagname = get_tag_name(xmlstr, curr, pos - 1);
       XMLNode *newtag = new XMLNode(tagname, ancestors.top(), false);
       if (lastchildren.top() == 0)
         ancestors.top()->firstchild = newtag;
@@ -540,7 +550,7 @@ void XMLDoc::parse_to_next_event(const string &xmlstr, size_t &curr,
       curr = pos + 1;
       return;
     } else if (nextevent == endtag) {
-      string tagname = get_tag_name(xmlstr, curr, pos);
+      std::string tagname = get_tag_name(xmlstr, curr, pos);
       XMLNode *newtag = new XMLNode(tagname, ancestors.top(), false);
       if (lastchildren.top() == 0)
         ancestors.top()->firstchild = newtag;
@@ -557,7 +567,7 @@ void XMLDoc::parse_to_next_event(const string &xmlstr, size_t &curr,
   }
   if (lastevent == startclose) {
     if (nextevent == endtag) {
-      string tagname = get_tag_name(xmlstr, curr, pos);
+      std::string tagname = get_tag_name(xmlstr, curr, pos);
       if (tagname != ancestors.top()->name)
         throw(std::invalid_argument("Invalid XML"));
       ancestors.pop();
@@ -599,10 +609,13 @@ void XMLDoc::parse_to_next_event(const string &xmlstr, size_t &curr,
 //  of the element) and "stop" (first character after the element).
 //  Return true if found, false otherwise.
 
-bool XMLDoc::get_attribute(const string &instr, const string &attrkey,
-                           string &attrvalue, size_t &start, size_t &stop) {
-  start = instr.find(string(" ") + attrkey);
-  if (start == string::npos)
+bool XMLDoc::get_attribute(const std::string &instr,
+			   const std::string &attrkey,
+                           std::string &attrvalue,
+			   size_t &start,
+			   size_t &stop) {
+  start = instr.find(std::string(" ") + attrkey);
+  if (start == std::string::npos)
     return false;
   size_t curr = start + attrkey.length() + 1;
   if ((instr.length() < (curr + 2)) || (instr[curr] != '=') ||
@@ -610,7 +623,7 @@ bool XMLDoc::get_attribute(const string &instr, const string &attrkey,
     return false;
   curr = curr + 2;
   stop = instr.find("\"", curr);
-  if (stop == string::npos)
+  if (stop == std::string::npos)
     return false;
   attrvalue.assign(instr, curr, stop - curr);
   stop++;
@@ -622,7 +635,7 @@ bool XMLDoc::get_attribute(const string &instr, const string &attrkey,
 //  in the class member "declaration".  Returns the
 //  character location one past the end of the declaration tag.
 
-size_t XMLDoc::get_declaration(const string &instr) {
+size_t XMLDoc::get_declaration(const std::string &instr) {
   XMLEvent type;
   size_t pos;
   find_next_xml_event(instr, 0, instr.length(), type, pos);
@@ -641,7 +654,7 @@ size_t XMLDoc::get_declaration(const string &instr) {
   declaration.assign(instr, 0, pos + 1);
   // check the validity of the XML declaration
   size_t verA, verB, encA, encB, stdA, stdB;
-  string ver, enc, std;
+  std::string ver, enc, std;
   bool flag;
   flag = get_attribute(declaration, "version", ver, verA, verB);
   if ((!flag) || (ver != "1.0"))
@@ -670,12 +683,12 @@ size_t XMLDoc::get_declaration(const string &instr) {
 //  "initial_indent" negative means "no indenting, no newlines"
 //  which is useful for file headers
 
-ostream &XMLDoc::output(ostream &os, XMLNode *top, int initial_indent) const {
+std::ostream &XMLDoc::output(std::ostream &os, XMLNode *top, const int initial_indent) const {
   if (top == 0)
     return os;
-  string tab("   ");
+  std::string tab("   ");
   int indent = (initial_indent > 0) ? initial_indent : 0;
-  bool indflag = (initial_indent >= 0) ? true : false;
+  const bool indflag = (initial_indent >= 0) ? true : false;
   XMLNode *curr = top;
   bool ascending = false;
   bool newline = indflag;
@@ -684,7 +697,7 @@ ostream &XMLDoc::output(ostream &os, XMLNode *top, int initial_indent) const {
     os << declaration;
   while (!done) {
     if (newline) {
-      os << endl;
+      os << std::endl;
       for (int k = 0; k < indent; k++)
         os << tab;
     }
@@ -733,14 +746,14 @@ ostream &XMLDoc::output(ostream &os, XMLNode *top, int initial_indent) const {
     }
   }
   if (newline) {
-    os << endl;
+    os << std::endl;
     for (int k = 0; k < indent; k++)
       os << tab;
   }
   if (ascending)
-    os << "</" << top->name << ">" << endl;
+    os << "</" << top->name << ">" << std::endl;
   else
-    os << "<" << top->name << "/>" << endl;
+    os << "<" << top->name << "/>" << std::endl;
   return os;
 }
 
@@ -756,19 +769,19 @@ bool XMLDoc::remove_reference(XMLHandler *ref) {
 
 // *********************************************************
 
-XMLHandler::XMLHandler(const string &roottagname, const string &rootcontent)
+XMLHandler::XMLHandler(const std::string &roottagname, const std::string &rootcontent)
     : content(0), root(0), current(0), exceptions(false) {
   do_set(roottagname, rootcontent);
 }
 
 XMLHandler::XMLHandler(const char *roottagname, const char *rootcontent)
     : content(0), root(0), current(0), exceptions(false) {
-  do_set(string(roottagname), string(rootcontent));
+  do_set(std::string(roottagname), std::string(rootcontent));
 }
 
 XMLHandler::XMLHandler(const char *roottagname)
     : content(0), root(0), current(0), exceptions(false) {
-  do_set(string(roottagname), string());
+  do_set(std::string(roottagname), std::string());
 }
 
 // Copy constructor. If "mode" has value "subtree_pointer" or
@@ -782,8 +795,8 @@ XMLHandler::XMLHandler(const char *roottagname)
 
 XMLHandler::XMLHandler(const XMLHandler &xmlin, XMLHandler::copymode mode)
     : content(0), root(0), current(0), exceptions(xmlin.exceptions) {
-  bool subtree = (mode == subtree_pointer) || (mode == subtree_copy);
-  bool makecopy = (mode == subtree_copy) || (mode == copy);
+  const bool subtree = (mode == subtree_pointer) || (mode == subtree_copy);
+  const bool makecopy = (mode == subtree_copy) || (mode == copy);
   do_set(xmlin, subtree, makecopy);
 }
 
@@ -838,27 +851,28 @@ XMLHandler &XMLHandler::operator=(const XMLHandler &xmlin) {
   return *this;
 }
 
-XMLHandler &XMLHandler::set(const string &roottagname,
-                            const string &rootcontent) {
+XMLHandler &XMLHandler::set(const std::string &roottagname,
+                            const std::string &rootcontent) {
   clear();
   do_set(roottagname, rootcontent);
   return *this;
 }
 
-XMLHandler &XMLHandler::set(const char *roottagname, const char *rootcontent) {
+XMLHandler &XMLHandler::set(const char *roottagname,
+			    const char *rootcontent) {
   clear();
-  do_set(string(roottagname), string(rootcontent));
+  do_set(std::string(roottagname), std::string(rootcontent));
   return *this;
 }
 
 XMLHandler &XMLHandler::set(const char *roottagname) {
   clear();
-  do_set(string(roottagname), string());
+  do_set(std::string(roottagname), std::string());
   return *this;
 }
 
-XMLHandler &XMLHandler::set_root(const string &roottagname,
-                                 const string &rootcontent) {
+XMLHandler &XMLHandler::set_root(const std::string &roottagname,
+                                 const std::string &rootcontent) {
   clear();
   do_set(roottagname, rootcontent);
   return *this;
@@ -867,13 +881,13 @@ XMLHandler &XMLHandler::set_root(const string &roottagname,
 XMLHandler &XMLHandler::set_root(const char *roottagname,
                                  const char *rootcontent) {
   clear();
-  do_set(string(roottagname), string(rootcontent));
+  do_set(std::string(roottagname), std::string(rootcontent));
   return *this;
 }
 
 XMLHandler &XMLHandler::set_root(const char *roottagname) {
   clear();
-  do_set(string(roottagname), string());
+  do_set(std::string(roottagname), std::string());
   return *this;
 }
 
@@ -885,27 +899,27 @@ XMLHandler &XMLHandler::set_from_string(const std::string &xmlin) {
 
 XMLHandler &XMLHandler::set_from_file(const std::string &filename) {
   clear();
-  string xmlstr;
+  std::string xmlstr;
   bool flag = false;
   if (isPrimaryRank()) {
     try {
-      ifstream fin(filename.c_str());
+      std::ifstream fin(filename.c_str());
       if (!fin)
-        throw(std::invalid_argument(string("Could not open file ") + filename));
-      string line;
+        throw(std::invalid_argument(std::string("Could not open file ") + filename));
+      std::string line;
       while ((!fin.eof()) && (fin.good())) {
         getline(fin, line);
         xmlstr += line;
       }
       if (!fin.eof())
         throw(std::invalid_argument(
-            string("Problem occurred while reading file ") + filename));
+				    std::string("Problem occurred while reading file ") + filename));
       fin.close();
       flag = true;
     } catch (const std::exception &err) {
       clear();
       flag = false;
-      cout << "XML document file error: " << err.what() << endl;
+      std::cout << "XML document file error: " << err.what() << std::endl;
       current = 0;
     }
   }
@@ -924,13 +938,14 @@ XMLHandler &XMLHandler::set_from_file(const std::string &filename) {
 XMLHandler &XMLHandler::set(const XMLHandler &xmlin,
                             XMLHandler::copymode mode) {
   clear();
-  bool subtree = (mode == subtree_pointer) || (mode == subtree_copy);
-  bool makecopy = (mode == subtree_copy) || (mode == copy);
+  const bool subtree = (mode == subtree_pointer) || (mode == subtree_copy);
+  const bool makecopy = (mode == subtree_copy) || (mode == copy);
   do_set(xmlin, subtree, makecopy);
   return *this;
 }
 
-void XMLHandler::do_set(const string &roottagname, const string &rootcontent) {
+void XMLHandler::do_set(const std::string &roottagname,
+			const std::string &rootcontent) {
   try {
     content = new XMLDoc(roottagname, rootcontent);
     content->add_reference(this);
@@ -942,7 +957,7 @@ void XMLHandler::do_set(const string &roottagname, const string &rootcontent) {
   }
 }
 
-void XMLHandler::do_set(const XMLHandler &xmlin, bool subtree, bool makecopy) {
+void XMLHandler::do_set(const XMLHandler &xmlin, const bool subtree, const bool makecopy) {
   XMLDoc::XMLNode *newroot = (subtree ? xmlin.current : xmlin.root);
   if ((makecopy) && (newroot != 0)) {
     try {
@@ -994,26 +1009,26 @@ XMLHandler &XMLHandler::clear() {
   return *this;
 }
 
-string XMLHandler::output(int indent) const {
+std::string XMLHandler::output(const int indent) const {
   if (!content)
-    return string();
-  ostringstream os;
+    return std::string();
+  std::ostringstream os;
   content->output(os, root, indent);
   return os.str();
 }
 
-string XMLHandler::str() const {
+std::string XMLHandler::str() const {
   if (!content)
-    return string();
-  ostringstream os;
+    return std::string();
+  std::ostringstream os;
   content->output(os, root, -1); // no indenting
   return os.str();
 }
 
-string XMLHandler::output_current(int indent) const {
+std::string XMLHandler::output_current(const int indent) const {
   if (!content)
-    return string();
-  ostringstream os;
+    return std::string();
+  std::ostringstream os;
   content->output(os, current, indent);
   return os.str();
 }
@@ -1044,7 +1059,7 @@ void XMLHandler::seek_first_child() {
     throw(std::invalid_argument("Seek first child failed"));
 }
 
-void XMLHandler::seek_child(const string &tagname) {
+void XMLHandler::seek_child(const std::string &tagname) {
   int ncount = 0;
   if (current) {
     XMLHandler tagfinder(*this, XMLHandler::subtree_pointer);
@@ -1062,8 +1077,8 @@ void XMLHandler::seek_child(const string &tagname) {
   if (ncount != 1) {
     current = 0;
     if (exceptions)
-      throw(std::invalid_argument(string("seek child tag ") + tagname +
-                                  string(" failed: none or plural")));
+      throw(std::invalid_argument(std::string("seek child tag ") + tagname +
+                                  std::string(" failed: none or plural")));
   }
 }
 
@@ -1114,11 +1129,11 @@ void XMLHandler::seek_next(const std::string &tagname) {
   while ((current != 0) && ((current->text) || (current->name != tagname)))
     seek_next_node();
   if ((current == 0) && (exceptions))
-    throw(std::invalid_argument(string("Seek next node by tag name ") +
-                                tagname + string(" failed")));
+    throw(std::invalid_argument(std::string("Seek next node by tag name ") +
+                                tagname + std::string(" failed")));
 }
 
-void XMLHandler::seek_unique(const string &tagname) {
+void XMLHandler::seek_unique(const std::string &tagname) {
   int ncount = 0;
   XMLHandler tagfinder(*this, XMLHandler::pointer);
   tagfinder.seek_root();
@@ -1133,13 +1148,13 @@ void XMLHandler::seek_unique(const string &tagname) {
   if (ncount != 1) {
     current = 0;
     if (exceptions)
-      throw(std::invalid_argument(string("seek unique of tag ") + tagname +
-                                  string(" failed: none or plural")));
+      throw(std::invalid_argument(std::string("seek unique of tag ") + tagname +
+                                  std::string(" failed: none or plural")));
   }
 }
 
-list<XMLHandler> XMLHandler::find(const string &tagname) const {
-  list<XMLHandler> found;
+std::list<XMLHandler> XMLHandler::find(const std::string &tagname) const {
+  std::list<XMLHandler> found;
   XMLHandler tagfinder(*this, XMLHandler::pointer);
   tagfinder.seek_root();
   tagfinder.set_exceptions_off();
@@ -1153,7 +1168,7 @@ list<XMLHandler> XMLHandler::find(const string &tagname) const {
   return found;
 }
 
-int XMLHandler::count(const string &tagname) const {
+int XMLHandler::count(const std::string &tagname) const {
   int ncount = 0;
   XMLHandler tagfinder(*this, XMLHandler::pointer);
   tagfinder.seek_root();
@@ -1168,7 +1183,7 @@ int XMLHandler::count(const string &tagname) const {
 }
 
 std::string XMLHandler::get_node_name() const {
-  return (current) ? ((current->text) ? string("#text") : current->name)
+  return (current) ? ((current->text) ? std::string("#text") : current->name)
                    : empty_string();
 }
 
@@ -1180,12 +1195,12 @@ bool XMLHandler::is_text_valued() const {
   return (current) ? current->text : false;
 }
 
-string XMLHandler::get_tag_name() const // returns empty string if invalid
+std::string XMLHandler::get_tag_name() const // returns empty string if invalid
 {
   return ((current) && (!(current->text))) ? current->name : empty_string();
 }
 
-string XMLHandler::get_text_content() const // returns empty string if invalid
+std::string XMLHandler::get_text_content() const // returns empty string if invalid
 {
   return is_simple_element() ? current->firstchild->name : empty_string();
 }
@@ -1201,10 +1216,10 @@ bool XMLHandler::is_empty_tag() const {
   return (current) && (!(current->text)) && (current->firstchild == 0);
 }
 
-string XMLHandler::empty_string() const {
+std::string XMLHandler::empty_string() const {
   if (exceptions)
     throw(std::invalid_argument("err"));
-  return string();
+  return std::string();
 }
 
 // Insertion. "put_sibling" inserts as the
@@ -1227,11 +1242,11 @@ void XMLHandler::put_sibling(const XMLHandler &xmlin) {
   }
 }
 
-void XMLHandler::put_sibling(const string &tagname) {
+void XMLHandler::put_sibling(const std::string &tagname) {
   try {
     if ((fail()) || (current == root))
       throw(std::invalid_argument("err"));
-    XMLDoc::XMLNode *branch = content->create_simple_tag(tagname, string(), 0);
+    XMLDoc::XMLNode *branch = content->create_simple_tag(tagname, std::string(), 0);
     content->connect_as_nextsibling(current, branch);
     seek_next_sibling();
   } catch (const std::exception &msg) {
@@ -1240,8 +1255,8 @@ void XMLHandler::put_sibling(const string &tagname) {
   }
 }
 
-void XMLHandler::put_sibling(const string &tagname,
-                             const string &text_content) {
+void XMLHandler::put_sibling(const std::string &tagname,
+                             const std::string &text_content) {
   try {
     if ((fail()) || (current == root))
       throw(std::invalid_argument("err"));
@@ -1255,7 +1270,7 @@ void XMLHandler::put_sibling(const string &tagname,
   }
 }
 
-void XMLHandler::put_sibling_text_node(const string &text) {
+void XMLHandler::put_sibling_text_node(const std::string &text) {
   try {
     if ((fail()) || (current == root))
       throw(std::invalid_argument("err"));
@@ -1287,11 +1302,11 @@ void XMLHandler::put_child(const XMLHandler &xmlin) {
   }
 }
 
-void XMLHandler::put_child(const string &tagname) {
+void XMLHandler::put_child(const std::string &tagname) {
   try {
     if ((fail()) || (current->text))
       throw(std::invalid_argument("err"));
-    XMLDoc::XMLNode *branch = content->create_simple_tag(tagname, string(), 0);
+    XMLDoc::XMLNode *branch = content->create_simple_tag(tagname, std::string(), 0);
     content->connect_as_lastchild(current, branch);
   } catch (const std::exception &msg) {
     clear();
@@ -1299,7 +1314,8 @@ void XMLHandler::put_child(const string &tagname) {
   }
 }
 
-void XMLHandler::put_child(const string &tagname, const string &text_content) {
+void XMLHandler::put_child(const std::string &tagname,
+			   const std::string &text_content) {
   try {
     if ((fail()) || (current->text))
       throw(std::invalid_argument("err"));
@@ -1312,7 +1328,7 @@ void XMLHandler::put_child(const string &tagname, const string &text_content) {
   }
 }
 
-void XMLHandler::put_child_text_node(const string &text) {
+void XMLHandler::put_child_text_node(const std::string &text) {
   try {
     if ((fail()) || (current->text))
       throw(std::invalid_argument("err"));
@@ -1329,9 +1345,9 @@ void XMLHandler::put_child_text_node(const string &text) {
 // Inserts or changes the textual content
 // of the current node (if a text node).
 
-void XMLHandler::set_text_content(const string &in_text_content) {
+void XMLHandler::set_text_content(const std::string &in_text_content) {
   if (good()) {
-    string text_content(content->trim(in_text_content));
+    std::string text_content(content->trim(in_text_content));
     if ((current->text) && (!text_content.empty())) {
       current->name = text_content;
       return;
@@ -1345,8 +1361,8 @@ void XMLHandler::set_text_content(const string &in_text_content) {
 // Exception throw if failure occurs.  All XMLHanders
 // pointing to the same content are changed.
 
-void XMLHandler::rename_tag(const string &newtagname) {
-  string tag(content->get_tag_name(newtagname, 0, newtagname.length()));
+void XMLHandler::rename_tag(const std::string &newtagname) {
+  std::string tag(content->get_tag_name(newtagname, 0, newtagname.length()));
   try {
     if ((fail()) || (current->text))
       throw(std::invalid_argument("err"));
@@ -1391,7 +1407,8 @@ void XMLHandler::erase_text_node() {
   }
 }
 
-bool XMLHandler::IsEqualContent(XMLHandler &xmlh_cmp, float float_rel_tol) {
+bool XMLHandler::IsEqualContent(XMLHandler &xmlh_cmp,
+				const float float_rel_tol) {
   XMLContentComparer temp(float_rel_tol);
   return temp.IsEqual(*this, xmlh_cmp);
 }
@@ -1428,18 +1445,20 @@ void XMLContentComparer::get_next_token(const char *&start, int &nchar) {
 //  string in "b".  Negative return if a-string precedes b-string,
 //  and >0 return if a-string comes after b-string.
 
-int XMLContentComparer::token_strcmp(const char *a, int na, const char *b,
-                                     int nb) {
+int XMLContentComparer::token_strcmp(const char *a,
+				     const int na,
+				     const char *b,
+                                     const int nb) {
   if (na == nb)
     return strncmp(a, b, na);
   else if (na > nb) {
-    int k = strncmp(a, b, nb);
+    const int k = strncmp(a, b, nb);
     if (k != 0)
       return k;
     else
       return 1;
   } else {
-    int k = strncmp(a, b, na);
+    const int k = strncmp(a, b, na);
     if (k != 0)
       return k;
     else
@@ -1451,7 +1470,8 @@ int XMLContentComparer::token_strcmp(const char *a, int na, const char *b,
 // is a valid integer; if so, return integer value in "ivalue".
 // We assume the token has no blank characters.
 
-bool XMLContentComparer::is_integer_token(const char *const a, int nchar,
+bool XMLContentComparer::is_integer_token(const char *const a,
+					  const int nchar,
                                           int &ivalue) {
   if (nchar == 0)
     return false;
@@ -1469,7 +1489,7 @@ bool XMLContentComparer::is_integer_token(const char *const a, int nchar,
     ap++;
     k++;
   }
-  stringstream oss;
+  std::stringstream oss;
   oss << "%" << nchar << "d";
   return sscanf(a, oss.str().c_str(), &ivalue);
 }
@@ -1478,7 +1498,8 @@ bool XMLContentComparer::is_integer_token(const char *const a, int nchar,
 // is a valid floating-point number; if so, return value in "fvalue".
 // We assume the token has no blank characters.
 
-bool XMLContentComparer::is_float_token(const char *const a, int nchar,
+bool XMLContentComparer::is_float_token(const char *const a,
+					const int nchar,
                                         float &fvalue) {
   if (nchar == 0)
     return false;
@@ -1516,7 +1537,7 @@ bool XMLContentComparer::is_float_token(const char *const a, int nchar,
   if (!((isdigit(*ap)) || ((*ap == '.') && (!dotflag))))
     return false;
   // last character must be digit or . (if not dots yet)
-  stringstream oss;
+  std::stringstream oss;
   oss << "%" << nchar << "g";
   return sscanf(a, oss.str().c_str(), &fvalue);
 }
@@ -1527,8 +1548,10 @@ bool XMLContentComparer::is_float_token(const char *const a, int nchar,
 // then finally as strings.  A zero value is returned if they are
 // equal, a number > 0 if a>b and a number <0 is a<b.
 
-int XMLContentComparer::token_content_cmp(const char *a, int na, const char *b,
-                                          int nb) {
+int XMLContentComparer::token_content_cmp(const char *a,
+					  const int na,
+					  const char *b,
+                                          const int nb) {
   int ia, ib;
   float fa, fb;
   if (is_integer_token(a, na, ia) && is_integer_token(b, nb, ib)) {
@@ -1602,25 +1625,25 @@ int XMLContentComparer::node_cmp(xmlNodePtr a_node, xmlNodePtr b_node) {
 int XMLContentComparer::sibling_node_cmp(xmlNodePtr a_node, xmlNodePtr b_node) {
   xmlNodePtr cur_node;
 
-  list<xmlNodePtr> alist;
+  std::list<xmlNodePtr> alist;
   for (cur_node = a_node; cur_node; cur_node = cur_node->nextsibling)
     alist.push_back(cur_node);
   alist.sort(*this);
 
-  list<xmlNodePtr> blist;
+  std::list<xmlNodePtr> blist;
   for (cur_node = b_node; cur_node; cur_node = cur_node->nextsibling)
     blist.push_back(cur_node);
   blist.sort(*this);
 
-  int na = alist.size();
-  int nb = blist.size();
-  int n = (na >= nb) ? nb : na;
+  const int na = alist.size();
+  const int nb = blist.size();
+  const int n = (na >= nb) ? nb : na;
 
-  list<xmlNodePtr>::const_iterator at = alist.begin();
-  list<xmlNodePtr>::const_iterator bt = blist.begin();
+  std::list<xmlNodePtr>::const_iterator at = alist.begin();
+  std::list<xmlNodePtr>::const_iterator bt = blist.begin();
 
   for (int k = 0; k < n; k++) {
-    int result = node_cmp(*at, *bt);
+    const int result = node_cmp(*at, *bt);
     if (result != 0)
       return result;
     at++;
@@ -1642,35 +1665,34 @@ bool XMLContentComparer::IsEqual(XMLHandler &xmlh1, XMLHandler &xmlh2) {
   // Get the root element nodes
   if ((xmlh1.fail()) || (xmlh2.fail()))
     throw(std::invalid_argument("Comparison of invalid XMLHandler"));
-
-  int result = sibling_node_cmp(xmlh1.root, xmlh2.root);
+  const int result = sibling_node_cmp(xmlh1.root, xmlh2.root);
   return (result == 0);
 }
 
 // removes tabs, newline, linefeed characters, then trims
 // leading and trailing blanks.
 
-string tidyString(const string &str) {
+std::string tidyString(const std::string &str) {
   if (str.length() == 0)
     return "";
-  string tmp;
+  std::string tmp;
   for (size_t i = 0; i < str.length(); i++)
     if ((str[i] != '\n') && (str[i] != '\t') && (str[i] != '\r'))
       tmp.push_back(str[i]);
-  size_t start = tmp.find_first_not_of(" ");
-  if (start == string::npos)
+  const size_t start = tmp.find_first_not_of(" ");
+  if (start == std::string::npos)
     return "";
-  size_t len = tmp.find_last_not_of(" ") - start + 1;
+  const size_t len = tmp.find_last_not_of(" ") - start + 1;
   return tmp.substr(start, len);
 }
 
 // first tidies the string in "str", then removes any
 // leading path/subdirectory information in the file name
 
-string tidyFileName(const string &str) {
-  string tmp(tidyString(str));
-  size_t pos = tmp.rfind('/');
-  if (pos == string::npos)
+std::string tidyFileName(const std::string &str) {
+  std::string tmp(tidyString(str));
+  const size_t pos = tmp.rfind('/');
+  if (pos == std::string::npos)
     return tmp;
   else
     return tmp.substr(pos + 1, tmp.length() - pos);
@@ -1678,7 +1700,7 @@ string tidyFileName(const string &str) {
 
 // Converts an integer to a string
 
-string int_to_string(int intval) {
+std::string int_to_string(const int intval) {
   std::ostringstream oss;
   oss << intval;
   return oss.str();
@@ -1688,38 +1710,41 @@ string int_to_string(int intval) {
 // is found in the XML document "xmlh".
 // A **tag name** should be input.
 
-int xml_tag_count(XMLHandler &xmlh, const string &tagname) {
+int xml_tag_count(XMLHandler &xmlh, const std::string &tagname) {
   return xmlh.count(tagname);
 }
 
 // Check for existence of a unique tag "tagname" and if not
 // present, throws exception.
 
-void xml_tag_assert(XMLHandler &xmlh, const std::string &tagname) {
+void xml_tag_assert(XMLHandler &xmlh,
+		    const std::string &tagname) {
   if (xml_tag_count(xmlh, tagname) != 1) {
-    string initmsg("Bad XML input: Expected one <");
+    std::string initmsg("Bad XML input: Expected one <");
     initmsg += tagname + "> tag \n";
     xmlreadfail(xmlh, tagname, initmsg);
   }
   xmlh.seek_unique(tagname);
 }
 
-void xml_tag_assert(XMLHandler &xmlh, const std::string &tagname,
+void xml_tag_assert(XMLHandler &xmlh,
+		    const std::string &tagname,
                     const std::string &infoname) {
   if (xml_tag_count(xmlh, tagname) != 1) {
-    string initmsg("Bad XML input to ");
+    std::string initmsg("Bad XML input to ");
     initmsg += infoname + "\nExpected one <" + tagname + "> tag \n";
     xmlreadfail(xmlh, infoname, initmsg);
   }
   xmlh.seek_unique(tagname);
 }
 
-void xml_child_assert(XMLHandler &xmlh, const std::string &tagname,
+void xml_child_assert(XMLHandler &xmlh,
+		      const std::string &tagname,
                       const std::string &infoname) {
   try {
     xmlh.seek_child(tagname);
   } catch (const std::exception &msg) {
-    string initmsg("Bad XML input to ");
+    std::string initmsg("Bad XML input to ");
     initmsg += infoname + "\nExpected one <" + tagname + "> tag \n";
     xmlreadfail(xmlh, infoname, initmsg);
   }
@@ -1728,29 +1753,34 @@ void xml_child_assert(XMLHandler &xmlh, const std::string &tagname,
 // outputs the current context for a failed xml read
 // (typically in an Info constructor) then throws exception.
 
-void xmlreadfail(XMLHandler &xmlh, const std::string &infoname,
-                 const string &message) {
-  string errormsg(message);
+void xmlreadfail(XMLHandler &xmlh,
+		 const std::string &infoname,
+                 const std::string &message) {
+  std::string errormsg(message);
   errormsg +=
       "\n*****ERROR**** " + infoname + " constructor failed on XML content: ";
   errormsg += xmlh.output_current() + "\n\n";
   throw(std::invalid_argument(errormsg));
 }
 
-bool xmlContentIsEqual(const string &doc1, const string &doc2,
-                       float float_rel_tol) {
+bool xmlContentIsEqual(const std::string &doc1,
+		       const std::string &doc2,
+                       const float float_rel_tol) {
   XMLHandler xmlh1, xmlh2;
   xmlh1.set_from_string(doc1);
   xmlh2.set_from_string(doc2);
   return xmlh1.IsEqualContent(xmlh2, float_rel_tol);
 }
 
-bool xmlContentIsEqual(XMLHandler &xmlh1, XMLHandler &xmlh2,
-                       float float_rel_tol) {
+bool xmlContentIsEqual(XMLHandler &xmlh1,
+		       XMLHandler &xmlh2,
+                       const float float_rel_tol) {
   return xmlh1.IsEqualContent(xmlh2, float_rel_tol);
 }
 
-bool headerMatch(const string &doc1, const string &doc2, float float_rel_tol) {
+bool headerMatch(const std::string &doc1,
+		 const std::string &doc2,
+		 const float float_rel_tol) {
   if (doc1 == doc2)
     return true;
   return xmlContentIsEqual(doc1, doc2, float_rel_tol);
@@ -1760,8 +1790,8 @@ std::vector<std::string> string_split(const std::string &astr, char delimiter) {
   std::vector<std::string> tokens;
   size_t lastpos = astr.find_first_not_of(delimiter);
   size_t pos = (lastpos == std::string::npos)
-                   ? std::string::npos
-                   : astr.find_first_of(delimiter, lastpos + 1);
+    ? std::string::npos
+    : astr.find_first_of(delimiter, lastpos + 1);
   while (lastpos != std::string::npos) {
     if (pos == std::string::npos)
       pos = astr.length();
@@ -1774,7 +1804,7 @@ std::vector<std::string> string_split(const std::string &astr, char delimiter) {
   return tokens;
 }
 
-std::string string_extract(const std::string &astr, char left, char right) {
+std::string string_extract(const std::string &astr, const char left, const char right) {
   size_t lpos = astr.find_first_of(left);
   size_t rpos = (lpos == std::string::npos)
                     ? std::string::npos
@@ -1785,7 +1815,7 @@ std::string string_extract(const std::string &astr, char left, char right) {
   return std::string("");
 }
 
-int char_count(const std::string &astr, char delimiter) {
+int char_count(const std::string &astr, const char delimiter) {
   int cnt = 0;
   size_t pos = astr.find(delimiter);
   while (pos != std::string::npos) {

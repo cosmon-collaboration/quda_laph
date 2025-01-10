@@ -6,11 +6,10 @@
 //#define PRINT_EVECS
 //#define ALL_CONSTANT
 
-using namespace std ;
 using namespace LaphEnv ;
 
 void
-old_code( vector<LattField> &laph_evecs )
+old_code( std::vector<LattField> &laph_evecs )
 {
  int nev=laph_evecs.size();
  if (nev==0){
@@ -29,11 +28,11 @@ old_code( vector<LattField> &laph_evecs )
  int incx=FieldNcolor;
  int cbytes=(dp)?sizeof(std::complex<double>):sizeof(std::complex<float>);
  int bps=laph_evecs[0].bytesPerSite();
- complex<double> rephasedp;
- complex<float> rephasesp;
+ std::complex<double> rephasedp;
+ std::complex<float> rephasesp;
 
         //  get the rephase factors for each eigvec and local time slice
- vector<char> rephase(nev*nloctime*cbytes);
+ std::vector<char> rephase(nev*nloctime*cbytes);
  if ((LayoutInfo::getMyCommCoords()[0]==0)
    &&(LayoutInfo::getMyCommCoords()[1]==0)
    &&(LayoutInfo::getMyCommCoords()[2]==0)){
@@ -45,8 +44,8 @@ old_code( vector<LattField> &laph_evecs )
           int start1=((tstride*tloc)/2) + parshift;
           char* x1=fp+bps*start1;         // location of (0,0,0,t)
           if (dp){
-             complex<double>* zptr=reinterpret_cast<complex<double>*>(x1);
-             complex<double> z(std::conj(*zptr));
+	    std::complex<double>* zptr=reinterpret_cast<std::complex<double>*>(x1);
+	    std::complex<double> z(std::conj(*zptr));
              double r=std::abs(z);
              if (r<1e-12){
                 errorLaph(make_str("problem applying phase convention: 0-th color component at site",
@@ -54,8 +53,8 @@ old_code( vector<LattField> &laph_evecs )
              rephasedp=z/r;
              std::memcpy(rp,&rephasedp,cbytes);}
           else{
-             complex<float>* zptr=reinterpret_cast<complex<float>*>(x1);
-             complex<float> z(std::conj(*zptr));
+	    std::complex<float>* zptr=reinterpret_cast<std::complex<float>*>(x1);
+	    std::complex<float> z(std::conj(*zptr));
              float r=std::abs(z);
              if (r<1e-8){
                 errorLaph(make_str("problem applying phase convention: 0-th color component at site",
@@ -65,12 +64,12 @@ old_code( vector<LattField> &laph_evecs )
 
 #ifdef ARCH_PARALLEL
     // now broadcast these rephase factors to the ranks that need them
- vector<int> comm_coords(LayoutInfo::Ndim-1);
+ std::vector<int> comm_coords(LayoutInfo::Ndim-1);
  comm_coords[LayoutInfo::Ndim-1]=LayoutInfo::getMyCommCoords()[LayoutInfo::Ndim-1];
  comm_coords[0]=0; comm_coords[1]=0; comm_coords[2]=0;
  int orig_sender_rank=LayoutInfo::getRankFromCommCoords(comm_coords);
  int sender_rank=0;
- vector<int> broadcast_ranks;
+ std::vector<int> broadcast_ranks;
  int count=0;
  for (comm_coords[0]=0;comm_coords[0]<LayoutInfo::getCommNumPartitions()[0];++comm_coords[0])
  for (comm_coords[1]=0;comm_coords[1]<LayoutInfo::getCommNumPartitions()[1];++comm_coords[1])
@@ -129,7 +128,7 @@ old_code( vector<LattField> &laph_evecs )
 }
 
 static void
-printevecs( vector<LattField> laphEigvecs , const int rank )
+printevecs( std::vector<LattField> laphEigvecs , const int rank )
 {
 #ifdef PRINT_EVECS
   int myrank = rank ;
@@ -139,7 +138,7 @@ printevecs( vector<LattField> laphEigvecs , const int rank )
   for( size_t n = 0 ; n < laphEigvecs.size() ; n++ ) {
     if( myrank == rank ) {
       std::cout<<"Ev "<<n<<" | rank "<<rank<<std::endl ;
-      complex<double> *pt = (complex<double>*)laphEigvecs[n].getDataPtr() ;
+      std::complex<double> *pt = (std::complex<double>*)laphEigvecs[n].getDataPtr() ;
       for( size_t i = 0 ; i < (size_t)LayoutInfo::getRankLatticeNumSites() ; i++ ) {
 	for( size_t c = 0 ; c < (size_t)FieldNcolor ; c++ ) {
 	  std::cout<<i<<"/"<<c<<" "<<pt[c+FieldNcolor*i]<<std::endl ;
@@ -153,7 +152,7 @@ printevecs( vector<LattField> laphEigvecs , const int rank )
 }
 
 static void
-set_constant( vector<LattField> &laphEigvecs )
+set_constant( std::vector<LattField> &laphEigvecs )
 {
   int myrank = 0 ;
 #ifdef ARCH_PARALLEL
@@ -162,15 +161,15 @@ set_constant( vector<LattField> &laphEigvecs )
   // give them some bullshit values
   for( size_t n = 0 ; n < laphEigvecs.size() ; n++ ) {
     #ifdef ALL_CONSTANT
-    complex<double> z( (n+1) , (n+1) ) ;
+    std::complex<double> z( (n+1) , (n+1) ) ;
     setConstantField( laphEigvecs[n], z );
     #else
-    complex<double> *ptr = (complex<double>*)laphEigvecs[n].getDataPtr() ;
+    std::complex<double> *ptr = (std::complex<double>*)laphEigvecs[n].getDataPtr() ;
     const size_t V = (size_t)LayoutInfo::getRankLatticeNumSites() ;
     for( size_t i = 0 ; i < V ; i++ ) {
       for( size_t c = 0 ; c < (size_t)FieldNcolor ; c++ ) {
-	const complex<double> z( n+laphEigvecs.size()*(c+FieldNcolor*(i+V*myrank))+1 ,
-				 n+laphEigvecs.size()*(c+FieldNcolor*(i+V*myrank))+1 ) ;
+	const std::complex<double> z( n+laphEigvecs.size()*(c+FieldNcolor*(i+V*myrank))+1 ,
+				      n+laphEigvecs.size()*(c+FieldNcolor*(i+V*myrank))+1 ) ;
 	*ptr = z ;
 	ptr++ ;
       }
@@ -193,9 +192,9 @@ int main(int argc, char *argv[]) {
   
   // call rephase here
   const int Nev = 8 ;
-  vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
+  std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
 
-  cout<<"Constant Eigvecs"<<std::endl ;
+  std::cout<<"Constant Eigvecs"<<std::endl ;
   set_constant( laphEigvecs ) ;
   for( int i = 0 ; i < global ; i++ ) {
     printevecs( laphEigvecs , i ) ;
@@ -211,13 +210,13 @@ int main(int argc, char *argv[]) {
                       timer.getTimeInSeconds()));
   
   
-  cout<<"Rephased Eigvecs"<<std::endl ;
+  std::cout<<"Rephased Eigvecs"<<std::endl ;
   for( int i = 0 ; i < global ; i++ ) {
     printevecs( laphEigvecs , i ) ;
   }
 
-  cout<<"Old code"<<std::endl ;
-  vector<LattField> laphEigvecsComp( Nev, FieldSiteType::ColorVector);
+  std::cout<<"Old code"<<std::endl ;
+  std::vector<LattField> laphEigvecsComp( Nev, FieldSiteType::ColorVector);
   set_constant( laphEigvecsComp ) ;
   timer.reset() ;
   timer.start() ;
@@ -233,8 +232,8 @@ int main(int argc, char *argv[]) {
   // compute the difference between them
   for( size_t n = 0 ; n < laphEigvecs.size() ; n++ ) {
     double loc_dev = 0 ;
-    complex<double> *pt1 = (complex<double>*)laphEigvecs[n].getDataPtr() ;
-    complex<double> *pt2 = (complex<double>*)laphEigvecsComp[n].getDataPtr() ;
+    std::complex<double> *pt1 = (std::complex<double>*)laphEigvecs[n].getDataPtr() ;
+    std::complex<double> *pt2 = (std::complex<double>*)laphEigvecsComp[n].getDataPtr() ;
     for( size_t i = 0 ; i < (size_t)LayoutInfo::getRankLatticeNumSites() ; i++ ) {
       for( size_t c = 0 ; c < (size_t)FieldNcolor ; c++ ) {
 	loc_dev += abs( *pt1 - *pt2 ) ;
@@ -252,7 +251,7 @@ int main(int argc, char *argv[]) {
     MPI_Comm_rank( MPI_COMM_WORLD, &my_rank ) ;
     #endif
     if( my_rank == 0 ) {
-      std::cout<<n<<" Deviation New vs Old "<<scientific<<deviation<<std::endl ;
+      std::cout<<n<<" Deviation New vs Old "<<std::scientific<<deviation<<std::endl ;
     }
   }
   

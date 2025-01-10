@@ -2,7 +2,8 @@
 #include "laph_stdio.h"
 #include <cstdlib>
 #include <ctime>
-using namespace std;
+
+//using namespace std;
 
 namespace LaphEnv {
 
@@ -10,7 +11,7 @@ UniformDeviate32::UniformDeviate32() {
   Reseed(0); // choose seed based on clock time
 }
 
-UniformDeviate32::UniformDeviate32(uint32 seed) { Reseed(seed); }
+UniformDeviate32::UniformDeviate32(const uint32 seed) { Reseed(seed); }
 
 // Set initial "state" using "seed".  If seed==0, then
 // initialization is done using the system clock.
@@ -21,7 +22,7 @@ UniformDeviate32::UniformDeviate32(uint32 seed) { Reseed(seed); }
 // indicates it is unsigned, and an "L" indicates it is
 // a long integer.
 
-void UniformDeviate32::Reseed(uint32 seed) {
+void UniformDeviate32::Reseed(const uint32 seed) {
   uint32 s = seed;
   int j;
   if (seed == 0) {
@@ -39,19 +40,16 @@ void UniformDeviate32::Reseed(uint32 seed) {
   left = 0;
 }
 
-LaphZnNoise::LaphZnNoise(int zn, const uint32 &seed) : rng(seed), values(zn) {
+LaphZnNoise::LaphZnNoise(const int zn, const uint32 &seed) : rng(seed), values(zn) {
+  const double one = 1.0, zero = 0.0;
   if (zn == 4) {
-    double one = 1.0;
-    double zero = 0.0;
     values[0] = cmplx(one, zero);
     values[1] = cmplx(zero, one);
     values[2] = cmplx(-one, zero);
     values[3] = cmplx(zero, -one);
     genptr = &LaphZnNoise::z4_generate;
   } else if (zn == 8) {
-    double one = 1.0;
-    double zero = 0.0;
-    double sqrthalf = 0.70710678118654752440;
+    const double sqrthalf = 0.70710678118654752440;
     values[0] = cmplx(one, zero);
     values[1] = cmplx(sqrthalf, sqrthalf);
     values[2] = cmplx(zero, one);
@@ -62,15 +60,13 @@ LaphZnNoise::LaphZnNoise(int zn, const uint32 &seed) : rng(seed), values(zn) {
     values[7] = cmplx(sqrthalf, -sqrthalf);
     genptr = &LaphZnNoise::z8_generate;
   } else if (zn == 32) {
-    double one = 1.0;
-    double zero = 0.0;
-    double c0 = 0.98078528040323044912; // cos(Pi/16)
-    double c1 = 0.92387953251128675613; // cos(Pi/8)
-    double c2 = 0.83146961230254523707; // cos(3*Pi/16)
-    double c3 = 0.70710678118654752440; // sqrt(1/2);
-    double c4 = 0.55557023301960222475; // cos(5*Pi/16)
-    double c5 = 0.38268343236508977173; // cos(3*Pi/8)
-    double c6 = 0.19509032201612826785; // cos(7*Pi/16)
+    const double c0 = 0.98078528040323044912; // cos(Pi/16)
+    const double c1 = 0.92387953251128675613; // cos(Pi/8)
+    const double c2 = 0.83146961230254523707; // cos(3*Pi/16)
+    const double c3 = 0.70710678118654752440; // sqrt(1/2);
+    const double c4 = 0.55557023301960222475; // cos(5*Pi/16)
+    const double c5 = 0.38268343236508977173; // cos(3*Pi/8)
+    const double c6 = 0.19509032201612826785; // cos(7*Pi/16)
     values[0] = cmplx(one, zero);
     values[1] = cmplx(c0, c6);
     values[2] = cmplx(c1, c5);
@@ -106,8 +102,6 @@ LaphZnNoise::LaphZnNoise(int zn, const uint32 &seed) : rng(seed), values(zn) {
     genptr = &LaphZnNoise::z32_generate;
   } else if (zn == 1) {
     printLaph("Warning: ZN group set to N=1 for debugging ONLY");
-    double one = 1.0;
-    double zero = 0.0;
     values[0] = cmplx(one, zero);
     genptr = &LaphZnNoise::z1_generate;
   } else {
@@ -127,18 +121,14 @@ LaphZnNoise::LaphZnNoise(int zn, const uint32 &seed) : rng(seed), values(zn) {
 // sequence.  This routine generates the full source, which will be used
 // to compute a quark sink.
 
-Array<cmplx> LaphZnNoise::generateLapHQuarkSourceForSink(int Textent, int Nspin,
-                                                         int nEigs) {
+Array<cmplx> LaphZnNoise::generateLapHQuarkSourceForSink(const int Textent,
+							 const int Nspin,
+                                                         const int nEigs) {
   Array<cmplx> laph_noise(Textent, Nspin, nEigs);
   for (int t = 0; t < Textent; t++)
     for (int s = 0; s < Nspin; s++)
       for (int v = 0; v < nEigs; v++)
         laph_noise(t, s, v) = generate(); // same on all compute nodes
-  /* if (tbc==QuarkActionInfo::ZeroDirichlet){
-      for (int s=0;s<Nspin;s++)
-         for (int v=0;v<nEigs;v++){
-            laph_noise(0,s,v) = zero;
-            laph_noise(Textent-1,s,v)=zero;}}*/
   return laph_noise;
 }
 
@@ -148,8 +138,10 @@ Array<cmplx> LaphZnNoise::generateLapHQuarkSourceForSink(int Textent, int Nspin,
 // temporal loops hits timeValue since only noise(timeValue,spin,v)
 // will be needed.
 
-Array<cmplx> LaphZnNoise::generateLapHQuarkSource(int timeValue, int Textent,
-                                                  int Nspin, int nEigs) {
+Array<cmplx> LaphZnNoise::generateLapHQuarkSource(const int timeValue,
+						  const int Textent,
+                                                  const int Nspin,
+						  const int nEigs) {
   Array<cmplx> laph_noise(timeValue + 1, Nspin, nEigs);
   for (int t = 0; t <= timeValue; t++)
     for (int s = 0; s < Nspin; s++)

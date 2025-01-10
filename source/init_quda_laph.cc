@@ -7,10 +7,9 @@
 #include "utils.h"
 #include "xml_handler.h"
 
-using namespace std;
 using namespace LaphEnv;
 
-map<string, NamedObjBase *> NamedObjMap::the_map;
+std::map<std::string, NamedObjBase *> NamedObjMap::the_map;
 
 static StopWatch rolex;
 
@@ -23,11 +22,11 @@ static void parse_args(int *argc, char ***argv, std::vector<int> &npartitions,
                        std::string &inputxmlfile) {
   npartitions.clear();
   inputxmlfile.clear();
-  int nargs = *argc;
+  const int nargs = *argc;
   const int Nd = 4; // four dimensions required
 
   for (int i = 0; i < nargs; ++i) {
-    string argv_i((*argv)[i]);
+    std::string argv_i((*argv)[i]);
     //  get the input xml file name
     if ((argv_i == std::string("-i")) && ((i + 1) < nargs)) {
       inputxmlfile = std::string((*argv)[i + 1]);
@@ -62,12 +61,12 @@ static void output_datetime() {
 
 class Tasker {
   typedef void (*task_ptr)(XMLHandler &);
-  std::map<string, task_ptr> TaskMap;
+  std::map<std::string, task_ptr> TaskMap;
 
 public:
   Tasker();
   ~Tasker() {}
-  void do_task(XMLHandler &xml_in, bool echo);
+  void do_task(XMLHandler &xml_in, const bool echo);
 };
 
 // set up the known tasks
@@ -78,7 +77,7 @@ Tasker::Tasker() {
   TaskMap["LAPH_QUARK_PERAMBULATORS"] = &doLaphQuarkPerambulators;
 };
 
-void Tasker::do_task(XMLHandler &xml_task, bool echo) {
+void Tasker::do_task(XMLHandler &xml_task, const bool echo) {
 #ifdef ARCH_PARALLEL
   comm_barrier();
 #endif
@@ -91,10 +90,10 @@ void Tasker::do_task(XMLHandler &xml_task, bool echo) {
   if (!xmlt.is_simple_element()) {
     throw(std::runtime_error("<Name> tag absent or is not simple XML element"));
   }
-  string task_name = xmlt.get_text_content();
+  std::string task_name = xmlt.get_text_content();
   printLaph(make_strf("  Task name = %s\n", task_name));
 
-  map<string, task_ptr>::iterator taskit = TaskMap.find(task_name);
+  std::map<std::string, task_ptr>::iterator taskit = TaskMap.find(task_name);
   if (taskit != TaskMap.end()) {
     (*(taskit->second))(xml_task);
   } // do the task!!
@@ -112,7 +111,7 @@ static void initRand() {
 }
 
 static void readVerbosity(XMLHandler &xmlin, QudaVerbosity_s &verbosity) {
-  string tagvalue;
+  std::string tagvalue;
   xmlread(xmlin, "Verbosity", tagvalue, "QudaLaph");
   if (tagvalue == "none") {
     verbosity = QUDA_SILENT;
@@ -132,8 +131,8 @@ static void readVerbosity(XMLHandler &xmlin, QudaVerbosity_s &verbosity) {
 // inits MPI and Quda, returns an XMLHandler object
 int init_quda_laph(int argc, char *argv[], XMLHandler &xml_in) {
   // parse the command line options -i and -npartitions
-  vector<int> npartitions;
-  string inputxmlfile;
+  std::vector<int> npartitions;
+  std::string inputxmlfile;
   parse_args(&argc, &argv, npartitions, inputxmlfile);
 
   // init MPI
@@ -143,11 +142,11 @@ int init_quda_laph(int argc, char *argv[], XMLHandler &xml_in) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     if (rank == 0) {
-      std::cout << endl
-                << endl
+      std::cout << std::endl
+                << std::endl
                 << "Invalid command line options: should be "
-                << "-i <inputxmlfile> -npartitions <nx> <ny> <nz> <nt>" << endl
-                << endl;
+                << "-i <inputxmlfile> -npartitions <nx> <ny> <nz> <nt>" << std::endl
+                << std::endl;
     }
     MPI_Barrier(MPI_COMM_WORLD);
     MPI_Abort(MPI_COMM_WORLD, 1);
@@ -156,11 +155,11 @@ int init_quda_laph(int argc, char *argv[], XMLHandler &xml_in) {
   comm_barrier();
 #else
   if (inputxmlfile.empty()) {
-    std::cout << endl
-              << endl
+    std::cout << std::endl
+              << std::endl
               << "Invalid command line options: should be "
-              << "-i <inputxmlfile> -npartitions <nx> <ny> <nz> <nt>" << endl
-              << endl;
+              << "-i <inputxmlfile> -npartitions <nx> <ny> <nz> <nt>" << std::endl
+              << std::endl;
     std::exit(1);
   }
 #endif

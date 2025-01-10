@@ -5,8 +5,6 @@
 #include "utils.h"
 #include <cstring>
 
-using namespace std;
-
 namespace LaphEnv {
 
 // **************************************************************************
@@ -24,7 +22,7 @@ namespace LaphEnv {
 //  inner product is taken over the time slices.  The ntime inner
 //  products are returned.
 
-std::vector<complex<double>>
+std::vector<std::complex<double>>
 getTimeSlicedInnerProducts(const LattField &leftfield,
                            const LattField &rightfield) {
   if ((leftfield.getFieldSiteType() != FieldSiteType::ColorVector) ||
@@ -47,8 +45,8 @@ getTimeSlicedInnerProducts(const LattField &leftfield,
       (dp) ? sizeof(std::complex<double>) : sizeof(std::complex<float>);
   const int bps = leftfield.bytesPerSite();
 
-  vector<char> iprods1(nloctime * cbytes);
-  vector<char> iprods2(nloctime * cbytes);
+  std::vector<char> iprods1(nloctime * cbytes);
+  std::vector<char> iprods2(nloctime * cbytes);
   const char *lp = reinterpret_cast<const char *>(leftfield.getDataConstPtr());
   const char *rp = reinterpret_cast<const char *>(rightfield.getDataConstPtr());
 
@@ -79,15 +77,15 @@ getTimeSlicedInnerProducts(const LattField &leftfield,
   }
 
   const int ntime = LayoutInfo::getLattExtents()[3];
-  vector<complex<double>> iprods(ntime);
+  std::vector<std::complex<double>> iprods(ntime);
   for (int t = 0; t < ntime; ++t) {
-    iprods[t] = complex<double>(0.0, 0.0);
+    iprods[t] = std::complex<double>(0.0, 0.0);
   }
   const int mytmin =
       LayoutInfo::getMyCommCoords()[3] * LayoutInfo::getRankLattExtents()[3];
   if (dp) {
-    complex<double> *z1 = reinterpret_cast<complex<double> *>(iprods1.data());
-    complex<double> *z2 = reinterpret_cast<complex<double> *>(iprods2.data());
+    std::complex<double> *z1 = reinterpret_cast<std::complex<double> *>(iprods1.data());
+    std::complex<double> *z2 = reinterpret_cast<std::complex<double> *>(iprods2.data());
     for (int tloc = 0; tloc < nloctime; ++tloc, ++z1, ++z2) {
       iprods[tloc + mytmin] += (*z1) + (*z2);
     }
@@ -99,12 +97,12 @@ getTimeSlicedInnerProducts(const LattField &leftfield,
       ++f1;
       ++f2;
       double zi = (*f1) + (*f2);
-      iprods[tloc + mytmin] += complex<double>(zr, zi);
+      iprods[tloc + mytmin] += std::complex<double>(zr, zi);
     }
   }
 
 #ifdef ARCH_PARALLEL
-  vector<complex<double>> results(ntime);
+  std::vector<std::complex<double>> results(ntime);
   const int status = MPI_Allreduce(iprods.data(), results.data(), 2 * ntime,
                                    MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
   if (status != MPI_SUCCESS) {
@@ -117,17 +115,18 @@ getTimeSlicedInnerProducts(const LattField &leftfield,
 }
 
 void setConstantField(LattField &field, const std::complex<double> &zconst) {
-  const bool dp = (field.bytesPerWord() == sizeof(complex<double>));
+  const bool dp = (field.bytesPerWord() == sizeof(std::complex<double>));
   const int n = field.elemsPerSite() * LayoutInfo::getRankLatticeNumSites();
+  // should just be a memset
   if (dp) {
-    complex<double> *z =
-        reinterpret_cast<complex<double> *>(field.getDataPtr());
+    std::complex<double> *z =
+      reinterpret_cast<std::complex<double> *>(field.getDataPtr());
     for (int k = 0; k < n; ++k, ++z) {
       *z = zconst;
     }
   } else {
-    complex<float> zfconst(float(real(zconst)), float(imag(zconst)));
-    complex<float> *z = reinterpret_cast<complex<float> *>(field.getDataPtr());
+    std::complex<float> zfconst(float(real(zconst)), float(imag(zconst)));
+    std::complex<float> *z = reinterpret_cast<std::complex<float> *>(field.getDataPtr());
     for (int k = 0; k < n; ++k, ++z) {
       *z = zfconst;
     }
@@ -135,11 +134,11 @@ void setConstantField(LattField &field, const std::complex<double> &zconst) {
 }
 
 void setUnitField(LattField &field) {
-  setConstantField(field, complex<double>(1.0, 0.0));
+  setConstantField(field, std::complex<double>(1.0, 0.0));
 }
 
 void setZeroField(LattField &field) {
-  setConstantField(field, complex<double>(0.0, 0.0));
+  setConstantField(field, std::complex<double>(0.0, 0.0));
 }
 
 void compare_latt_fields(const LattField &src1, const LattField &src2) {
@@ -152,13 +151,13 @@ void compare_latt_fields(const LattField &src1, const LattField &src2) {
     if (s1 != s2) {
       flag = false;
     } else {
-      if (s1 == sizeof(complex<double>)) {
-        double eps = 1e-9;
-        const complex<double> *z1 =
-            reinterpret_cast<const complex<double> *>(src1.getDataConstPtr());
-        const complex<double> *z2 =
-            reinterpret_cast<const complex<double> *>(src2.getDataConstPtr());
-        int ncomp = n1 * LayoutInfo::getRankLatticeNumSites();
+      if (s1 == sizeof(std::complex<double>)) {
+        const double eps = 1e-9;
+        const std::complex<double> *z1 =
+	  reinterpret_cast<const std::complex<double> *>(src1.getDataConstPtr());
+        const std::complex<double> *z2 =
+	  reinterpret_cast<const std::complex<double> *>(src2.getDataConstPtr());
+        const int ncomp = n1 * LayoutInfo::getRankLatticeNumSites();
         for (int k = 0; k < ncomp; ++k, ++z1, ++z2) {
           if (std::abs((*z1) - (*z2)) > eps) {
             flag = false;
@@ -166,12 +165,12 @@ void compare_latt_fields(const LattField &src1, const LattField &src2) {
           }
         }
       } else {
-        float eps = 1e-5;
-        const complex<float> *z1 =
-            reinterpret_cast<const complex<float> *>(src1.getDataConstPtr());
-        const complex<float> *z2 =
-            reinterpret_cast<const complex<float> *>(src2.getDataConstPtr());
-        int ncomp = n1 * LayoutInfo::getRankLatticeNumSites();
+        const float eps = 1e-5;
+        const std::complex<float> *z1 =
+	  reinterpret_cast<const std::complex<float> *>(src1.getDataConstPtr());
+        const std::complex<float> *z2 =
+	  reinterpret_cast<const std::complex<float> *>(src2.getDataConstPtr());
+        const int ncomp = n1 * LayoutInfo::getRankLatticeNumSites();
         for (int k = 0; k < ncomp; ++k, ++z1, ++z2) {
           if (std::abs((*z1) - (*z2)) > eps) {
             flag = false;
@@ -188,12 +187,12 @@ void compare_latt_fields(const LattField &src1, const LattField &src2) {
 }
 
 template <typename T>
-void su3color_mult(complex<T> *prod, const complex<T> *cdata1,
-                   const complex<T> *cdata2, const int krange,
+void su3color_mult(std::complex<T> *prod, const std::complex<T> *cdata1,
+                   const std::complex<T> *cdata2, const int krange,
                    const int kstride, const int istride, const int jstride) {
   for (int k = 0; k < krange; ++k)
     for (int i = 0; i < FieldNcolor; ++i) {
-      complex<T> z(0.0, 0.0);
+      std::complex<T> z(0.0, 0.0);
       for (int j = 0; j < FieldNcolor; ++j) {
         z += cdata1[FieldNcolor * i + j] * cdata2[jstride * j + kstride * k];
       }
@@ -202,15 +201,14 @@ void su3color_mult(complex<T> *prod, const complex<T> *cdata1,
 }
 
 template <typename T>
-void su3color_adjmult(complex<T> *prod, const complex<T> *cdata1,
-                      const complex<T> *cdata2, const int krange,
+void su3color_adjmult(std::complex<T> *prod, const std::complex<T> *cdata1,
+                      const std::complex<T> *cdata2, const int krange,
                       const int kstride, const int istride, const int jstride) {
   for (int k = 0; k < krange; ++k)
     for (int i = 0; i < FieldNcolor; ++i) {
-      complex<T> z(0.0, 0.0);
+      std::complex<T> z(0.0, 0.0);
       for (int j = 0; j < FieldNcolor; ++j) {
-        z += std::conj(cdata1[FieldNcolor * j + i]) *
-             cdata2[jstride * j + kstride * k];
+        z += std::conj(cdata1[FieldNcolor * j + i]) * cdata2[jstride * j + kstride * k];
       }
       prod[istride * i + kstride * k] = z;
     }
@@ -261,28 +259,28 @@ void su3color_multiplier(LattField &outfield, const LattField &fieldL,
     exit(1);
     break;
   }
-  if (fieldR.bytesPerWord() == sizeof(complex<double>)) {
-    complex<double> *op =
-        reinterpret_cast<complex<double> *>(outfield.getDataPtr());
-    const complex<double> *rp =
-        reinterpret_cast<const complex<double> *>(fieldR.getDataConstPtr());
-    const complex<double> *lp =
-        reinterpret_cast<const complex<double> *>(fieldL.getDataConstPtr());
-    void (*multfunc)(complex<double> *, const complex<double> *,
-                     const complex<double> *, int, int, int, int) =
+  if (fieldR.bytesPerWord() == sizeof(std::complex<double>)) {
+    std::complex<double> *op =
+      reinterpret_cast<std::complex<double> *>(outfield.getDataPtr());
+    const std::complex<double> *rp =
+      reinterpret_cast<const std::complex<double> *>(fieldR.getDataConstPtr());
+    const std::complex<double> *lp =
+      reinterpret_cast<const std::complex<double> *>(fieldL.getDataConstPtr());
+    void (*multfunc)(std::complex<double> *, const std::complex<double> *,
+                     const std::complex<double> *, const int, const int, const int, const int) =
         (Lmat == 'm') ? &su3color_mult<double> : &su3color_adjmult<double>;
     for (int ind = 0; ind < nsites; ++ind, op += oinc, rp += rinc, lp += linc) {
       multfunc(op, lp, rp, kextent, kstride, istride, jstride);
     }
   } else {
-    complex<float> *op =
-        reinterpret_cast<complex<float> *>(outfield.getDataPtr());
-    const complex<float> *rp =
-        reinterpret_cast<const complex<float> *>(fieldR.getDataConstPtr());
-    const complex<float> *lp =
-        reinterpret_cast<const complex<float> *>(fieldL.getDataConstPtr());
-    void (*multfunc)(complex<float> *, const complex<float> *,
-                     const complex<float> *, int, int, int, int) =
+    std::complex<float> *op =
+      reinterpret_cast<std::complex<float> *>(outfield.getDataPtr());
+    const std::complex<float> *rp =
+      reinterpret_cast<const std::complex<float> *>(fieldR.getDataConstPtr());
+    const std::complex<float> *lp =
+      reinterpret_cast<const std::complex<float> *>(fieldL.getDataConstPtr());
+    void (*multfunc)(std::complex<float> *, const std::complex<float> *,
+                     const std::complex<float> *, const int, const int, const int, const int) =
         (Lmat == 'm') ? &su3color_mult<float> : &su3color_adjmult<float>;
     for (int ind = 0; ind < nsites; ++ind, op += oinc, rp += rinc, lp += linc) {
       multfunc(op, lp, rp, kextent, kstride, istride, jstride);
@@ -293,7 +291,8 @@ void su3color_multiplier(LattField &outfield, const LattField &fieldL,
 //  Lattice-site-wise color-matrix multiplies outfield = fieldL * fieldR.
 //  fieldL must be of type color-matrix. Any spin indices go along untouched.
 
-void su3color_mult(LattField &outfield, const LattField &fieldL,
+void su3color_mult(LattField &outfield,
+		   const LattField &fieldL,
                    const LattField &fieldR) {
   su3color_multiplier(outfield, fieldL, fieldR, 'm');
 }
@@ -302,15 +301,19 @@ void su3color_mult(LattField &outfield, const LattField &fieldL,
 //  fieldR. fieldL must be of type color-matrix.  Any spin indices go along
 //  untouched.
 
-void su3color_adjmult(LattField &outfield, const LattField &fieldL,
+void su3color_adjmult(LattField &outfield,
+		      const LattField &fieldL,
                       const LattField &fieldR) {
   su3color_multiplier(outfield, fieldL, fieldR, 'a');
 }
 
 // assigns y[d] from x[d]; if d==dir, y[d]=(x[d]+1) % N[d]
 
-void index_increaser(int dir, int d, vector<int> &y, const vector<int> &x,
-                     const vector<int> &N) {
+void index_increaser(const int dir,
+		     const int d,
+		     std::vector<int> &y,
+		     const std::vector<int> &x,
+		     const std::vector<int> &N) {
   if (dir == d) {
     y[d] = (x[d] == (N[d] - 1)) ? 0 : x[d] + 1;
   } else {
@@ -319,9 +322,11 @@ void index_increaser(int dir, int d, vector<int> &y, const vector<int> &x,
 }
 
 // assigns y[d] from x[d]; if d==dir, y[d]=(x[d]-1+N[d]) % N[d]
-
-void index_decreaser(int dir, int d, vector<int> &y, const vector<int> &x,
-                     const vector<int> &N) {
+void index_decreaser(const int dir,
+		     const int d,
+		     std::vector<int> &y,
+		     const std::vector<int> &x,
+		     const std::vector<int> &N) {
   if (dir == d) {
     y[d] = (x[d] == 0) ? N[d] - 1 : x[d] - 1;
   } else {
@@ -329,16 +334,16 @@ void index_decreaser(int dir, int d, vector<int> &y, const vector<int> &x,
   }
 }
 
-void flipsign(char *sitedata, int bps, bool dp) {
+void flipsign(char *sitedata, const int bps, const bool dp) {
   if (dp) {
-    int nelem = bps / sizeof(complex<double>);
-    complex<double> *op = reinterpret_cast<complex<double> *>(sitedata);
+    const int nelem = bps / sizeof(std::complex<double>);
+    std::complex<double> *op = reinterpret_cast<std::complex<double> *>(sitedata);
     for (int k = 0; k < nelem; ++k, ++op) {
       *op = -(*op);
     }
   } else {
-    int nelem = bps / sizeof(complex<float>);
-    complex<float> *op = reinterpret_cast<complex<float> *>(sitedata);
+    const int nelem = bps / sizeof(std::complex<float>);
+    std::complex<float> *op = reinterpret_cast<std::complex<float> *>(sitedata);
     for (int k = 0; k < nelem; ++k, ++op) {
       *op = -(*op);
     }
@@ -354,16 +359,16 @@ void flipsign(char *sitedata, int bps, bool dp) {
 // linear index for site (x,y,z,t) is
 //      (x+Nx*(y+Ny*(z+Nz*t)))/2 + (nsites/2)*((x+y+z+t)%2);
 
-void latt_shifter(LattField &outfield, const LattField &infield, int dir,
-                  void (*indexfunc)(int, int, vector<int> &,
-                                    const vector<int> &, const vector<int> &),
+void latt_shifter(LattField &outfield, const LattField &infield, const int dir,
+                  void (*indexfunc)(const int, const int, std::vector<int> &,
+                                    const std::vector<int> &, const std::vector<int> &),
                   const char fwd_or_bwd,
                   const bool apply_antiperiodic_fermbc = false) {
   if ((dir < 0) || (dir > 3)) {
     errorLaph("Invalid direction in lattice field shift");
   }
   outfield.reset(infield.getFieldSiteType());
-  const vector<int> &N = LayoutInfo::getLattExtents();
+  const std::vector<int> &N = LayoutInfo::getLattExtents();
   const int nsites = LayoutInfo::getLatticeNumSites();
   const int npsites = nsites / 2;
   const int bps = infield.bytesPerSite();
@@ -376,9 +381,9 @@ void latt_shifter(LattField &outfield, const LattField &infield, int dir,
       (apply_antiperiodic_fermbc) && (dir == 3)) {
     fliptime = (fwd_or_bwd == 'B') ? 0 : N[3] - 1;
   }
-  bool dp = (infield.bytesPerWord() == sizeof(complex<double>));
-  vector<int> x(LayoutInfo::Ndim);
-  vector<int> y(LayoutInfo::Ndim);
+  const bool dp = (infield.bytesPerWord() == sizeof(std::complex<double>));
+  std::vector<int> x(LayoutInfo::Ndim);
+  std::vector<int> y(LayoutInfo::Ndim);
   for (x[3] = 0; x[3] < N[3]; ++x[3]) {
     indexfunc(dir, 3, y, x, N);
     bool signflip = (x[3] == fliptime);
@@ -431,14 +436,14 @@ void lattice_shift(LattField &outfield, const LattField &infield, const int dir,
 
 #else // parallel version now
 
-bool fwd_stay_local(const int dir, const vector<int> &x, const vector<int> &N,
+bool fwd_stay_local(const int dir, const std::vector<int> &x, const std::vector<int> &N,
                     const bool nocomm) {
   if (x[dir] < (N[dir] - 1))
     return true;
   return nocomm;
 }
 
-bool bwd_stay_local(const int dir, const vector<int> &x, const vector<int> &N,
+bool bwd_stay_local(const int dir, const std::vector<int> &x, const std::vector<int> &N,
                     const bool nocomm) {
   if (x[dir] > 0)
     return true;
@@ -446,7 +451,7 @@ bool bwd_stay_local(const int dir, const vector<int> &x, const vector<int> &N,
 }
 
 void get_fwd_comm_to_from(const int dir, int &send_to, int &recv_from) {
-  vector<int> rank_coord(
+  std::vector<int> rank_coord(
       LayoutInfo::getMyCommCoords()); // rank coords of this node
                                       // get mpi rank where to send
   if (rank_coord[dir] > 0)
@@ -463,7 +468,7 @@ void get_fwd_comm_to_from(const int dir, int &send_to, int &recv_from) {
 }
 
 void get_bwd_comm_to_from(const int dir, int &send_to, int &recv_from) {
-  vector<int> rank_coord(
+  std::vector<int> rank_coord(
       LayoutInfo::getMyCommCoords()); // rank coords of this node
                                       // get mpi rank where to receive from
   if (rank_coord[dir] > 0)
@@ -487,18 +492,18 @@ void get_bwd_comm_to_from(const int dir, int &send_to, int &recv_from) {
 //      (x+Nx*(y+Ny*(z+Nz*t)))/2 + (nsites/2)*((x+y+z+t)%2);
 
 void latt_shifter(LattField &outfield, const LattField &infield, const int dir,
-                  void (*indexfunc)(int, int, vector<int> &,
-                                    const vector<int> &, const vector<int> &),
-                  bool (*staylocal)(int, const vector<int> &,
-                                    const vector<int> &, bool),
-                  void (*neighbors)(int, int &, int &), const char fwd_or_bwd,
+                  void (*indexfunc)(const int, const int, std::vector<int> &,
+                                    const std::vector<int> &, const std::vector<int> &),
+                  bool (*staylocal)(const int, const std::vector<int> &,
+                                    const std::vector<int> &, const bool),
+                  void (*neighbors)(const int, int &, int &), const char fwd_or_bwd,
                   const bool apply_antiperiodic_fermbc = false) {
   int start_parity = LayoutInfo::getMyStartParity();
   if ((dir < 0) || (dir > 3)) {
     errorLaph("Invalid direction in lattice field shift");
   }
   outfield.reset(infield.getFieldSiteType());
-  const vector<int> &N = LayoutInfo::getRankLattExtents();
+  const std::vector<int> &N = LayoutInfo::getRankLattExtents();
   const int nsites = LayoutInfo::getRankLatticeNumSites();
   const int npsites = nsites / 2;
   const int bps = infield.bytesPerSite();
@@ -506,11 +511,11 @@ void latt_shifter(LattField &outfield, const LattField &infield, const int dir,
   char *outo = oute + npsites * bps;
   const char *ine = infield.getDataConstPtr();
   const char *ino = ine + npsites * bps;
-  vector<int> x(LayoutInfo::Ndim);
-  vector<int> y(LayoutInfo::Ndim);
+  std::vector<int> x(LayoutInfo::Ndim);
+  std::vector<int> y(LayoutInfo::Ndim);
   bool needcomm = (LayoutInfo::getCommNumPartitions()[dir] > 1);
   bool nocm = !needcomm;
-  vector<char> sendbuffer, recvbuffer;
+  std::vector<char> sendbuffer, recvbuffer;
   char *snde = 0;
   char *sndo = 0;
   int nbuf = 0;
@@ -537,7 +542,7 @@ void latt_shifter(LattField &outfield, const LattField &infield, const int dir,
       fliptime = N[3] - 1;
     }
   }
-  bool dp = (infield.bytesPerWord() == sizeof(complex<double>));
+  const bool dp = (infield.bytesPerWord() == sizeof(std::complex<double>));
   // make local changes and put data in send buffer
   for (x[3] = 0; x[3] < N[3]; ++x[3]) {
     indexfunc(dir, 3, y, x, N);
@@ -661,7 +666,7 @@ void lattice_shift(LattField &outfield, const LattField &infield, const int dir,
 //   for 'B', shift(  su3mult( adj(U[dir]), infield ), mu, 'B')
 
 void lattice_cov_shift(LattField &outfield, const LattField &infield,
-                       const vector<LattField> &gauge_field, const int dir,
+                       const std::vector<LattField> &gauge_field, const int dir,
                        const char fwd_or_bwd,
                        const bool apply_antiperiodic_fermbc = false) {
   if (int(gauge_field.size()) != LayoutInfo::Ndim) {
@@ -692,8 +697,8 @@ void lattice_cov_shift(LattField &outfield, const LattField &infield,
 //  where 1 means x, 2 means y, 3 means z, and 4 means t
 
 void lattice_cov_shift(LattField &outfield, const LattField &infield,
-                       const vector<LattField> &gauge_field,
-                       vector<int> &path) {
+                       const std::vector<LattField> &gauge_field,
+                       std::vector<int> &path) {
   LattField tmp;
   LattField *p1 = 0, *p2 = 0, *sw = 0;
   const LattField *pc;
@@ -722,7 +727,7 @@ void lattice_cov_shift(LattField &outfield, const LattField &infield,
 }
 
 template <typename T>
-void su3color_adjcopy(complex<T> *out, const complex<T> *in) {
+void su3color_adjcopy(std::complex<T> *out, const std::complex<T> *in) {
   for (int i = 0; i < FieldNcolor; ++i)
     for (int j = 0; j < FieldNcolor; ++j) {
       out[FieldNcolor * i + j] = std::conj(in[FieldNcolor * j + i]);
@@ -736,35 +741,36 @@ void su3color_adjcopy(LattField &outfield, const LattField &infield) {
   outfield.reset(FieldSiteType::ColorMatrix);
   int inc = infield.elemsPerSite();
   int nsites = LayoutInfo::getRankLatticeNumSites();
-  if (infield.bytesPerWord() == sizeof(complex<double>)) {
-    complex<double> *op =
-        reinterpret_cast<complex<double> *>(outfield.getDataPtr());
-    const complex<double> *ip =
-        reinterpret_cast<const complex<double> *>(infield.getDataConstPtr());
+  if (infield.bytesPerWord() == sizeof(std::complex<double>)) {
+    std::complex<double> *op =
+      reinterpret_cast<std::complex<double> *>(outfield.getDataPtr());
+    const std::complex<double> *ip =
+      reinterpret_cast<const std::complex<double> *>(infield.getDataConstPtr());
     for (int ind = 0; ind < nsites; ++ind, op += inc, ip += inc) {
       su3color_adjcopy(op, ip);
     }
   } else {
-    complex<float> *op =
-        reinterpret_cast<complex<float> *>(outfield.getDataPtr());
-    const complex<float> *ip =
-        reinterpret_cast<const complex<float> *>(infield.getDataConstPtr());
+    std::complex<float> *op =
+      reinterpret_cast<std::complex<float> *>(outfield.getDataPtr());
+    const std::complex<float> *ip =
+      reinterpret_cast<const std::complex<float> *>(infield.getDataConstPtr());
     for (int ind = 0; ind < nsites; ++ind, op += inc, ip += inc) {
       su3color_adjcopy(op, ip);
     }
   }
 }
 
-void lattice_link_path(LattField &outfield, const vector<LattField> &gaugefield,
-                       vector<int> &dir_path) {
+void lattice_link_path(LattField &outfield,
+		       const std::vector<LattField> &gaugefield,
+		       const std::vector<int> dir_path) {
   uint nshifts = dir_path.size();
   if (nshifts == 0) {
     errorLaph("lattice_link_path requires a non-trivial path");
   }
   LattField temp;
-  vector<int>::const_reverse_iterator seg = dir_path.rbegin();
+  std::vector<int>::const_reverse_iterator seg = dir_path.rbegin();
   bool doprod = false;
-  for (uint k = 0; k < dir_path.size(); ++k) {
+  for (size_t k = 0; k < dir_path.size(); ++k) {
     int dir = *seg;
     if (dir > 0) {
       if (doprod) {
@@ -788,7 +794,7 @@ void lattice_link_path(LattField &outfield, const vector<LattField> &gaugefield,
 }
 
 void lattice_addto(LattField &outfield, const LattField &infield,
-                   const complex<double> &zcoef = complex<double>(1.0, 0.0)) {
+                   const std::complex<double> &zcoef = std::complex<double>(1.0, 0.0)) {
   if (outfield.getFieldSiteType() != infield.getFieldSiteType()) {
     errorLaph("fields must be of same type to add");
   }
@@ -796,20 +802,20 @@ void lattice_addto(LattField &outfield, const LattField &infield,
     errorLaph("addition requires same precision of fields");
   }
   int nelem = LayoutInfo::getRankLatticeNumSites() * infield.elemsPerSite();
-  if (infield.bytesPerWord() == sizeof(complex<double>)) {
-    complex<double> *op =
-        reinterpret_cast<complex<double> *>(outfield.getDataPtr());
-    const complex<double> *ip =
-        reinterpret_cast<const complex<double> *>(infield.getDataConstPtr());
+  if (infield.bytesPerWord() == sizeof(std::complex<double>)) {
+    std::complex<double> *op =
+      reinterpret_cast<std::complex<double> *>(outfield.getDataPtr());
+    const std::complex<double> *ip =
+      reinterpret_cast<const std::complex<double> *>(infield.getDataConstPtr());
     for (int k = 0; k < nelem; ++k, ++op, ++ip) {
       *op += zcoef * (*ip);
     }
   } else {
-    complex<float> *op =
-        reinterpret_cast<complex<float> *>(outfield.getDataPtr());
-    const complex<float> *ip =
-        reinterpret_cast<const complex<float> *>(infield.getDataConstPtr());
-    complex<float> zf(float(zcoef.real()), float(zcoef.imag()));
+    std::complex<float> *op =
+      reinterpret_cast<std::complex<float> *>(outfield.getDataPtr());
+    const std::complex<float> *ip =
+      reinterpret_cast<const std::complex<float> *>(infield.getDataConstPtr());
+    std::complex<float> zf(float(zcoef.real()), float(zcoef.imag()));
     for (int k = 0; k < nelem; ++k, ++op, ++ip) {
       *op += zf * (*ip);
     }
@@ -828,87 +834,100 @@ void lattice_addto(LattField &outfield, const LattField &infield,
 //              11              sigma[3,4]
 
 template <typename T>
-void spin_mult(complex<T> *op, const complex<T> *ip,
-               const vector<pair<int, complex<T>>> &spinmat) {
+void spin_mult(std::complex<T> *op,
+	       const std::complex<T> *ip,
+               const std::vector<std::pair<int, std::complex<T>>> &spinmat) {
   int spinstride = FieldNcolor;
-  complex<T> *opp = op;
-  const complex<T> *ipp = ip;
+  std::complex<T> *opp = op;
+  const std::complex<T> *ipp = ip;
   for (int color = 0; color < FieldNcolor; ++color, ++opp, ++ipp) {
     for (int outspin = 0; outspin < FieldNspin; ++outspin) {
       *(opp + outspin * spinstride) =
-          *(ipp + spinmat[outspin].first * spinstride) *
-          spinmat[outspin].second;
+          *(ipp + spinmat[outspin].first * spinstride) * spinmat[outspin].second;
     }
   }
 }
 
 template <typename T>
-void assign_spin_matrix(int spin_matrix_index,
-                        vector<pair<int, complex<T>>> &spin_mat) {
+void assign_spin_matrix(const int spin_matrix_index,
+                        std::vector<std::pair<int, std::complex<T>>> &spin_mat) {
   spin_mat.resize(4);
-  complex<T> I(0.0, 1.0);
-  complex<T> one(1.0, 0.0);
-  if (spin_matrix_index == 1) {
-    spin_mat[0] = pair<int, complex<T>>(3, I);
-    spin_mat[1] = pair<int, complex<T>>(2, I);
-    spin_mat[2] = pair<int, complex<T>>(1, -I);
-    spin_mat[3] = pair<int, complex<T>>(0, -I);
-  } else if (spin_matrix_index == 2) {
-    spin_mat[0] = pair<int, complex<T>>(3, -one);
-    spin_mat[1] = pair<int, complex<T>>(2, one);
-    spin_mat[2] = pair<int, complex<T>>(1, one);
-    spin_mat[3] = pair<int, complex<T>>(0, -one);
-  } else if (spin_matrix_index == 3) {
-    spin_mat[0] = pair<int, complex<T>>(2, I);
-    spin_mat[1] = pair<int, complex<T>>(3, -I);
-    spin_mat[2] = pair<int, complex<T>>(0, -I);
-    spin_mat[3] = pair<int, complex<T>>(1, I);
-  } else if (spin_matrix_index == 4) {
-    spin_mat[0] = pair<int, complex<T>>(2, one);
-    spin_mat[1] = pair<int, complex<T>>(3, one);
-    spin_mat[2] = pair<int, complex<T>>(0, one);
-    spin_mat[3] = pair<int, complex<T>>(1, one);
-  } else if (spin_matrix_index == 5) {
-    spin_mat[0] = pair<int, complex<T>>(0, -one);
-    spin_mat[1] = pair<int, complex<T>>(1, -one);
-    spin_mat[2] = pair<int, complex<T>>(2, one);
-    spin_mat[3] = pair<int, complex<T>>(3, one);
-  } else if (spin_matrix_index == 6) {
-    spin_mat[0] = pair<int, complex<T>>(0, one);
-    spin_mat[1] = pair<int, complex<T>>(1, -one);
-    spin_mat[2] = pair<int, complex<T>>(2, one);
-    spin_mat[3] = pair<int, complex<T>>(3, -one);
-  } else if (spin_matrix_index == 7) {
-    spin_mat[0] = pair<int, complex<T>>(1, -I);
-    spin_mat[1] = pair<int, complex<T>>(0, I);
-    spin_mat[2] = pair<int, complex<T>>(3, -I);
-    spin_mat[3] = pair<int, complex<T>>(2, I);
-  } else if (spin_matrix_index == 8) {
-    spin_mat[0] = pair<int, complex<T>>(1, -one);
-    spin_mat[1] = pair<int, complex<T>>(0, -one);
-    spin_mat[2] = pair<int, complex<T>>(3, one);
-    spin_mat[3] = pair<int, complex<T>>(2, one);
-  } else if (spin_matrix_index == 9) {
-    spin_mat[0] = pair<int, complex<T>>(1, one);
-    spin_mat[1] = pair<int, complex<T>>(0, one);
-    spin_mat[2] = pair<int, complex<T>>(3, one);
-    spin_mat[3] = pair<int, complex<T>>(2, one);
-  } else if (spin_matrix_index == 10) {
-    spin_mat[0] = pair<int, complex<T>>(1, -I);
-    spin_mat[1] = pair<int, complex<T>>(0, I);
-    spin_mat[2] = pair<int, complex<T>>(3, I);
-    spin_mat[3] = pair<int, complex<T>>(2, -I);
-  } else if (spin_matrix_index == 11) {
-    spin_mat[0] = pair<int, complex<T>>(0, -one);
-    spin_mat[1] = pair<int, complex<T>>(1, one);
-    spin_mat[2] = pair<int, complex<T>>(2, one);
-    spin_mat[3] = pair<int, complex<T>>(3, -one);
-  } else {
+  const std::complex<T> I(0.0, 1.0), one(1.0, 0.0);
+  switch( spin_matrix_index ) {
+  case 1 :
+    spin_mat[0] = std::pair<int, std::complex<T>>(3, I);
+    spin_mat[1] = std::pair<int, std::complex<T>>(2, I);
+    spin_mat[2] = std::pair<int, std::complex<T>>(1, -I);
+    spin_mat[3] = std::pair<int, std::complex<T>>(0, -I);
+    break ;
+  case 2 :
+    spin_mat[0] = std::pair<int, std::complex<T>>(3, -one);
+    spin_mat[1] = std::pair<int, std::complex<T>>(2, one);
+    spin_mat[2] = std::pair<int, std::complex<T>>(1, one);
+    spin_mat[3] = std::pair<int, std::complex<T>>(0, -one);
+    break ;
+  case 3 :
+    spin_mat[0] = std::pair<int, std::complex<T>>(2, I);
+    spin_mat[1] = std::pair<int, std::complex<T>>(3, -I);
+    spin_mat[2] = std::pair<int, std::complex<T>>(0, -I);
+    spin_mat[3] = std::pair<int, std::complex<T>>(1, I);
+    break ;
+  case 4 :
+    spin_mat[0] = std::pair<int, std::complex<T>>(2, one);
+    spin_mat[1] = std::pair<int, std::complex<T>>(3, one);
+    spin_mat[2] = std::pair<int, std::complex<T>>(0, one);
+    spin_mat[3] = std::pair<int, std::complex<T>>(1, one);
+    break ;
+  case 5 :
+    spin_mat[0] = std::pair<int, std::complex<T>>(0, -one);
+    spin_mat[1] = std::pair<int, std::complex<T>>(1, -one);
+    spin_mat[2] = std::pair<int, std::complex<T>>(2, one);
+    spin_mat[3] = std::pair<int, std::complex<T>>(3, one);
+    break ;
+  case 6 :
+    spin_mat[0] = std::pair<int, std::complex<T>>(0, one);
+    spin_mat[1] = std::pair<int, std::complex<T>>(1, -one);
+    spin_mat[2] = std::pair<int, std::complex<T>>(2, one);
+    spin_mat[3] = std::pair<int, std::complex<T>>(3, -one);
+    break ;
+  case 7 :
+    spin_mat[0] = std::pair<int, std::complex<T>>(1, -I);
+    spin_mat[1] = std::pair<int, std::complex<T>>(0, I);
+    spin_mat[2] = std::pair<int, std::complex<T>>(3, -I);
+    spin_mat[3] = std::pair<int, std::complex<T>>(2, I);
+    break ;
+  case 8 :
+    spin_mat[0] = std::pair<int, std::complex<T>>(1, -one);
+    spin_mat[1] = std::pair<int, std::complex<T>>(0, -one);
+    spin_mat[2] = std::pair<int, std::complex<T>>(3, one);
+    spin_mat[3] = std::pair<int, std::complex<T>>(2, one);
+    break ;
+  case 9 :
+    spin_mat[0] = std::pair<int, std::complex<T>>(1, one);
+    spin_mat[1] = std::pair<int, std::complex<T>>(0, one);
+    spin_mat[2] = std::pair<int, std::complex<T>>(3, one);
+    spin_mat[3] = std::pair<int, std::complex<T>>(2, one);
+    break ;
+  case 10 :
+    spin_mat[0] = std::pair<int, std::complex<T>>(1, -I);
+    spin_mat[1] = std::pair<int, std::complex<T>>(0, I);
+    spin_mat[2] = std::pair<int, std::complex<T>>(3, I);
+    spin_mat[3] = std::pair<int, std::complex<T>>(2, -I);
+    break ;
+  case 11 :
+    spin_mat[0] = std::pair<int, std::complex<T>>(0, -one);
+    spin_mat[1] = std::pair<int, std::complex<T>>(1, one);
+    spin_mat[2] = std::pair<int, std::complex<T>>(2, one);
+    spin_mat[3] = std::pair<int, std::complex<T>>(3, -one);
+    break ;
+  default :
     errorLaph("Unsupported Dirac gamma spin index");
+    break ;
   }
 }
 
-void lattice_spin_multiply(LattField &outfield, const LattField &infield,
+void lattice_spin_multiply(LattField &outfield,
+			   const LattField &infield,
                            const int spin_matrix_index) {
   if (infield.getFieldSiteType() != FieldSiteType::ColorSpinVector) {
     errorLaph("spin_multiply can only be done on a ColorSpinVector");
@@ -916,23 +935,23 @@ void lattice_spin_multiply(LattField &outfield, const LattField &infield,
   outfield.reset(FieldSiteType::ColorSpinVector);
   const int nsites = LayoutInfo::getRankLatticeNumSites();
   const int nelem = infield.elemsPerSite();
-  if (infield.bytesPerWord() == sizeof(complex<double>)) {
-    vector<pair<int, complex<double>>> spin_mat(4);
+  if (infield.bytesPerWord() == sizeof(std::complex<double>)) {
+    std::vector<std::pair<int, std::complex<double>>> spin_mat(4);
     assign_spin_matrix<double>(spin_matrix_index, spin_mat);
-    complex<double> *op =
-        reinterpret_cast<complex<double> *>(outfield.getDataPtr());
-    const complex<double> *ip =
-        reinterpret_cast<const complex<double> *>(infield.getDataConstPtr());
+    std::complex<double> *op =
+      reinterpret_cast<std::complex<double> *>(outfield.getDataPtr());
+    const std::complex<double> *ip =
+      reinterpret_cast<const std::complex<double> *>(infield.getDataConstPtr());
     for (int k = 0; k < nsites; ++k, op += nelem, ip += nelem) {
       spin_mult<double>(op, ip, spin_mat);
     }
   } else {
-    vector<pair<int, complex<float>>> spin_mat(4);
+    std::vector<std::pair<int, std::complex<float>>> spin_mat(4);
     assign_spin_matrix<float>(spin_matrix_index, spin_mat);
-    complex<float> *op =
-        reinterpret_cast<complex<float> *>(outfield.getDataPtr());
-    const complex<float> *ip =
-        reinterpret_cast<const complex<float> *>(infield.getDataConstPtr());
+    std::complex<float> *op =
+      reinterpret_cast<std::complex<float> *>(outfield.getDataPtr());
+    const std::complex<float> *ip =
+      reinterpret_cast<const std::complex<float> *>(infield.getDataConstPtr());
     for (int k = 0; k < nsites; ++k, op += nelem, ip += nelem) {
       spin_mult<float>(op, ip, spin_mat);
     }
@@ -940,37 +959,33 @@ void lattice_spin_multiply(LattField &outfield, const LattField &infield,
 }
 
 void calcCloverLeaves(LattField &cloverleaf,
-                      const vector<LattField> &gaugefield, const int dir1,
+                      const std::vector<LattField> &gaugefield,
+		      const int dir1,
                       const int dir2) {
   LattField Utmp;
-  vector<int> path(4);
   // upper right leaf
-  path[0] = dir1;
-  path[1] = dir2;
-  path[2] = -dir1;
-  path[3] = -dir2;
-  lattice_link_path(cloverleaf, gaugefield, path);
+  {
+    const std::vector<int> path1 = { dir1 , dir2 , -dir1, -dir2 } ;
+    lattice_link_path(cloverleaf, gaugefield, path1);
+  }
   // upper left leaf
-  path[0] = dir2;
-  path[1] = -dir1;
-  path[2] = -dir2;
-  path[3] = dir1;
-  lattice_link_path(Utmp, gaugefield, path);
-  lattice_addto(cloverleaf, Utmp);
+  {
+    const std::vector<int> path2 = { dir2 , -dir1 , -dir2, dir1 } ;
+    lattice_link_path(Utmp, gaugefield, path2);
+    lattice_addto(cloverleaf, Utmp);
+  }
   // lower left leaf
-  path[0] = -dir1;
-  path[1] = -dir2;
-  path[2] = dir1;
-  path[3] = dir2;
-  lattice_link_path(Utmp, gaugefield, path);
-  lattice_addto(cloverleaf, Utmp);
+  {
+    const std::vector<int> path3 = { -dir1 , -dir2 , dir1, dir2 } ;
+    lattice_link_path(Utmp, gaugefield, path3);
+    lattice_addto(cloverleaf, Utmp);
+  }
   // lower right leaf
-  path[0] = -dir2;
-  path[1] = dir1;
-  path[2] = dir2;
-  path[3] = -dir1;
-  lattice_link_path(Utmp, gaugefield, path);
-  lattice_addto(cloverleaf, Utmp);
+  {
+    const std::vector<int> path4 = { -dir2 , dir1 , dir2, -dir1 } ;
+    lattice_link_path(Utmp, gaugefield, path4);
+    lattice_addto(cloverleaf, Utmp);
+  }
 }
 
 //   Applies the clover Dirac operation to "infield", returning
@@ -994,8 +1009,9 @@ void calcCloverLeaves(LattField &cloverleaf,
 //   Lattice shifts must take the fermion temporal boundary
 //   conditions into account.
 
-void applyCloverDirac(LattField &outfield, const LattField &infield,
-                      const vector<LattField> &gauge_field,
+void applyCloverDirac(LattField &outfield,
+		      const LattField &infield,
+                      const std::vector<LattField> &gauge_field,
                       const GaugeConfigurationInfo &gaction,
                       const QuarkActionInfo &qaction) {
   if (int(gauge_field.size()) != LayoutInfo::Ndim) {
@@ -1010,8 +1026,8 @@ void applyCloverDirac(LattField &outfield, const LattField &infield,
     errorLaph(
         "can apply clover Dirac operator only to a color-spin vector field");
   }
-  bool tbc1 = qaction.isFermionTimeBCAntiPeriodic();
-  bool tbc2 = gaction.isFermionTimeBCAntiPeriodic();
+  const bool tbc1 = qaction.isFermionTimeBCAntiPeriodic();
+  const bool tbc2 = gaction.isFermionTimeBCAntiPeriodic();
   if (tbc1 != tbc2) {
     errorLaph("Inconsistent fermion time boundary conditions in "
               "QuarkActionInfo and GaugeConfigurationInfo",
@@ -1022,10 +1038,10 @@ void applyCloverDirac(LattField &outfield, const LattField &infield,
   if (qaction.getName() != "WILSON_CLOVER") {
     errorLaph("Can only applyCloverDirac if action name is WILSON_CLOVER");
   }
-  bool timebc_antiperiodic = qaction.isFermionTimeBCAntiPeriodic();
-  double kappa = qaction.getRValues()[2];
-  double csw = qaction.getRValues()[4];
-  double anisotropy = qaction.getRValues()[3];
+  const bool timebc_antiperiodic = qaction.isFermionTimeBCAntiPeriodic();
+  const double kappa = qaction.getRValues()[2];
+  const double csw = qaction.getRValues()[4];
+  const double anisotropy = qaction.getRValues()[3];
   if (std::abs(anisotropy - 1.0) > 1e-12) {
     errorLaph("Current applyCloverDirac only applies for isotropic actions");
   }
@@ -1040,12 +1056,12 @@ void applyCloverDirac(LattField &outfield, const LattField &infield,
   setZeroField(CFterm);
   setZeroField(Dterm);
   int spin_index = 6;
-  complex<double> cfclover(0.0, csw / 16.0);
+  std::complex<double> cfclover(0.0, csw / 16.0);
   for (int dir1 = 1; dir1 <= LayoutInfo::Ndim; ++dir1)
     for (int dir2 = dir1 + 1; dir2 <= LayoutInfo::Ndim; ++dir2, ++spin_index) {
       calcCloverLeaves(cloverleaf, gauge_field, dir1, dir2);
       calcCloverLeaves(cloverleaf2, gauge_field, dir2, dir1);
-      lattice_addto(cloverleaf, cloverleaf2, complex<double>(-1.0, 0.0));
+      lattice_addto(cloverleaf, cloverleaf2, std::complex<double>(-1.0, 0.0));
       su3color_mult(phi, cloverleaf, infield);
       lattice_spin_multiply(phi2, phi, spin_index);
       lattice_addto(CFterm, phi2, cfclover);
@@ -1057,7 +1073,7 @@ void applyCloverDirac(LattField &outfield, const LattField &infield,
                       timebc_antiperiodic);
     lattice_addto(Dterm, phi);
     lattice_spin_multiply(phi2, phi, dir);
-    lattice_addto(Dterm, phi2, complex<double>(-1.0, 0.0));
+    lattice_addto(Dterm, phi2, std::complex<double>(-1.0, 0.0));
     lattice_cov_shift(phi, infield, gauge_field, dir - 1, 'B',
                       timebc_antiperiodic);
     lattice_addto(Dterm, phi);
@@ -1066,24 +1082,18 @@ void applyCloverDirac(LattField &outfield, const LattField &infield,
   }
 
   setZeroField(outfield);
-  lattice_addto(outfield, infield, complex<double>(1.0 / (2.0 * kappa), 0.0));
-  lattice_addto(outfield, Dterm, complex<double>(-0.5, 0.0));
-
-  // vector<vector<int>> sites;
-  // sites.push_back(vector<int>{4,7,3,12});
-  // sites.push_back(vector<int>{11,15,7,19});
-  // printField(outfield,"Dirac term",sites);
-
+  lattice_addto(outfield, infield, std::complex<double>(1.0 / (2.0 * kappa), 0.0));
+  lattice_addto(outfield, Dterm, std::complex<double>(-0.5, 0.0));
   lattice_addto(outfield, CFterm);
-  // printField(CFterm,"clover term",sites);
 }
 
 //  Applies the 3d spatial Laplacian with a smeared gauge field
 //  onto "infield", returning result in "outfield".  These fields
 //  must be color vectors
 
-void applyMinusSpatialLaplacian(LattField &outfield, const LattField &infield,
-                                const vector<LattField> &smeared_gauge_field) {
+void applyMinusSpatialLaplacian(LattField &outfield,
+				const LattField &infield,
+                                const std::vector<LattField> &smeared_gauge_field) {
   if (int(smeared_gauge_field.size()) != LayoutInfo::Ndim) {
     errorLaph("invalid number of components in smeared gauge field in "
               "applySpatialLaplacian");
@@ -1103,15 +1113,15 @@ void applyMinusSpatialLaplacian(LattField &outfield, const LattField &infield,
   outfield.reset(FieldSiteType::ColorVector);
 
   setZeroField(outfield);
-  lattice_addto(outfield, infield, complex<double>(6.0, 0.0));
+  lattice_addto(outfield, infield, std::complex<double>(6.0, 0.0));
   LattField phi(FieldSiteType::ColorVector);
 
   //  Apply the spatial covariant shifts
   for (int dir = 1; dir <= 3; ++dir) {
     lattice_cov_shift(phi, infield, smeared_gauge_field, dir - 1, 'F');
-    lattice_addto(outfield, phi, complex<double>(-1.0, 0.0));
+    lattice_addto(outfield, phi, std::complex<double>(-1.0, 0.0));
     lattice_cov_shift(phi, infield, smeared_gauge_field, dir - 1, 'B');
-    lattice_addto(outfield, phi, complex<double>(-1.0, 0.0));
+    lattice_addto(outfield, phi, std::complex<double>(-1.0, 0.0));
   }
 }
 } // namespace LaphEnv

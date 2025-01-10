@@ -100,4 +100,8 @@ endif()
 ## compile and link
 target_link_libraries(quda_laph PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
 
-add_subdirectory(tests)
+## option for building the tests
+option(BUILD_TESTS "Build the test binaries" ON )
+if(BUILD_TESTS)
+  add_subdirectory(tests)
+endif()

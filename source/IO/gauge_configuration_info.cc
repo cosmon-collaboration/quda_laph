@@ -4,8 +4,6 @@
 #include "quda_info.h"
 #include <sstream>
 
-using namespace std;
-
 namespace LaphEnv {
 
 GaugeConfigurationInfo::GaugeConfigurationInfo(const XMLHandler &xmlin) {
@@ -32,16 +30,17 @@ void GaugeConfigurationInfo::set_info(XMLHandler &xml_in) {
   gluon_anisotropy = 1.0;
   xmlreadif(xmlg, "GluonAnisotropy", gluon_anisotropy,
             "GaugeConfigurationInfo");
-  string response = "antiperiodic";
+  std::string response = "antiperiodic";
   xmlreadif(xmlg, "FermionTimeBC", response, "GaugeConfigurationInfo");
   check_valid(response, "FermionTimeBC", {"antiperiodic", "periodic"});
   fermion_time_bc = (response == "antiperiodic") ? 'A' : 'P';
 }
 
-void GaugeConfigurationInfo::check_valid(const string &sdata, const string &tag,
-                                         const vector<string> &allowed) {
+void GaugeConfigurationInfo::check_valid(const std::string &sdata,
+					 const std::string &tag,
+                                         const std::vector<std::string> &allowed) {
   bool ok = false;
-  for (vector<string>::const_iterator it = allowed.begin(); it != allowed.end();
+  for (std::vector<std::string>::const_iterator it = allowed.begin(); it != allowed.end();
        ++it) {
     if (sdata == (*it)) {
       ok = true;
@@ -49,7 +48,7 @@ void GaugeConfigurationInfo::check_valid(const string &sdata, const string &tag,
     }
   }
   if (!ok) {
-    string mesg("Invalid <");
+    std::string mesg("Invalid <");
     mesg += tag;
     mesg += "> ";
     mesg += sdata;
@@ -100,7 +99,7 @@ bool GaugeConfigurationInfo::operator==(
           (fermion_time_bc == rhs.fermion_time_bc));
 }
 
-string GaugeConfigurationInfo::output(int indent) const {
+std::string GaugeConfigurationInfo::output(const int indent) const {
   XMLHandler xmlout;
   output(xmlout);
   return xmlout.output(indent);
@@ -116,7 +115,7 @@ void GaugeConfigurationInfo::output(XMLHandler &xmlout) const {
   xmlout.put_child("MarkovChainNumber", make_string(mc_chain_num));
   xmlout.put_child("NOMId", nom_id);
   xmlout.put_child("GluonAnisotropy", make_string(gluon_anisotropy));
-  string fermtimebc((fermion_time_bc == 'A') ? "antiperiodic" : "periodic");
+  std::string fermtimebc((fermion_time_bc == 'A') ? "antiperiodic" : "periodic");
   xmlout.put_child("FermionTimeBC", fermtimebc);
 }
 
@@ -165,10 +164,10 @@ void GaugeConfigurationInfo::setQudaGaugeParam(
   int pad_size = 0;
   // For multi-GPU, ga_pad must be large enough to store a time-slice
 #ifdef ARCH_PARALLEL
-  int x_face_size = gauge_param.X[1] * gauge_param.X[2] * gauge_param.X[3] / 2;
-  int y_face_size = gauge_param.X[0] * gauge_param.X[2] * gauge_param.X[3] / 2;
-  int z_face_size = gauge_param.X[0] * gauge_param.X[1] * gauge_param.X[3] / 2;
-  int t_face_size = gauge_param.X[0] * gauge_param.X[1] * gauge_param.X[2] / 2;
+  const int x_face_size = gauge_param.X[1] * gauge_param.X[2] * gauge_param.X[3] / 2;
+  const int y_face_size = gauge_param.X[0] * gauge_param.X[2] * gauge_param.X[3] / 2;
+  const int z_face_size = gauge_param.X[0] * gauge_param.X[1] * gauge_param.X[3] / 2;
+  const int t_face_size = gauge_param.X[0] * gauge_param.X[1] * gauge_param.X[2] / 2;
   pad_size = std::max(std::max(x_face_size, y_face_size),
                       std::max(z_face_size, t_face_size));
 #endif

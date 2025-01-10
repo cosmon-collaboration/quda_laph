@@ -3,7 +3,7 @@
 #include "named_obj_map.h"
 #include "utils.h"
 
-using namespace std;
+//using namespace std;
 
 namespace LaphEnv {
 
@@ -12,14 +12,16 @@ FileListInfo::FileListInfo(const XMLHandler &xml_in) {
   set_info(xmlr);
 }
 
-FileListInfo::FileListInfo(const XMLHandler &xml_in, const string &outertag) {
+FileListInfo::FileListInfo(const XMLHandler &xml_in, const std::string &outertag) {
   XMLHandler xmlq(xml_in, outertag);
   XMLHandler xmlr(xmlq, "FileListInfo");
   set_info(xmlr);
 }
 
-FileListInfo::FileListInfo(const std::string &stub, int min_suffix,
-                           int max_suffix, bool over_write) {
+FileListInfo::FileListInfo(const std::string &stub,
+			   const int min_suffix,
+                           const int max_suffix,
+			   const bool over_write) {
   try {
     set_info(stub, min_suffix, max_suffix, over_write);
   } catch (const std::exception &msg) {
@@ -29,7 +31,7 @@ FileListInfo::FileListInfo(const std::string &stub, int min_suffix,
 
 void FileListInfo::set_info(const XMLHandler &xmlin) {
   XMLHandler xmlr(xmlin);
-  string stub;
+  std::string stub;
   xmlread(xmlr, "FileNameStub", stub, "FileListInfo");
   int min_suffix = 0;
   if (xml_tag_count(xmlr, "MinFileNumber") == 1)
@@ -39,7 +41,7 @@ void FileListInfo::set_info(const XMLHandler &xmlin) {
     xmlread(xmlr, "MaxFileNumber", max_suffix, "FileListInfo");
   bool overwrite = false; // protect mode
   if (xml_tag_count(xmlr, "FileMode") == 1) {
-    string fmode;
+    std::string fmode;
     xmlread(xmlr, "FileMode", fmode, "FileListInfo");
     fmode = tidyString(fmode);
     if (fmode == "overwrite")
@@ -52,8 +54,10 @@ void FileListInfo::set_info(const XMLHandler &xmlin) {
   }
 }
 
-void FileListInfo::set_info(const std::string &stub, int min_suffix,
-                            int max_suffix, bool over_write) {
+void FileListInfo::set_info(const std::string &stub,
+			    const int min_suffix,
+                            const int max_suffix,
+			    const bool over_write) {
   m_file_stub = tidyString(stub);
   if (m_file_stub.empty()) {
     throw(std::invalid_argument("Blank file name in FileListInfo"));
@@ -83,15 +87,15 @@ FileListInfo &FileListInfo::operator=(const FileListInfo &fin) {
   return *this;
 }
 
-std::string FileListInfo::getFileName(int suffix) const {
-  stringstream fs;
+std::string FileListInfo::getFileName(const int suffix) const {
+  std::stringstream fs;
   fs << m_file_stub << "." << suffix;
   return fs.str();
 }
 
-int FileListInfo::getFirstAvailableSuffix(bool global_mode) const {
+int FileListInfo::getFirstAvailableSuffix(const bool global_mode) const {
   for (int suffix = m_min_file_number; suffix <= m_max_file_number; suffix++) {
-    string filename = getFileName(suffix);
+    std::string filename = getFileName(suffix);
     if (!fileExists(filename))
       return suffix;
   }
@@ -102,7 +106,7 @@ int FileListInfo::getFirstAvailableSuffix(bool global_mode) const {
 
 int FileListInfo::getFirstAvailableSuffixNOM() const {
   for (int suffix = m_min_file_number; suffix <= m_max_file_number; suffix++) {
-    string filename = getFileName(suffix);
+    std::string filename = getFileName(suffix);
     if (!NamedObjMap::query(filename))
       return suffix;
   }
@@ -129,7 +133,7 @@ void FileListInfo::output(XMLHandler &xmlout) const {
     xmlout.put_child("FileMode", "protect");
 }
 
-string FileListInfo::str() const {
+std::string FileListInfo::str() const {
   XMLHandler xmlout;
   output(xmlout);
   return xmlout.str();

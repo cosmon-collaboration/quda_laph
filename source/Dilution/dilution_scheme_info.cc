@@ -1,8 +1,6 @@
 #include "dilution_scheme_info.h"
-#include "laph_stdio.h"
 #include "multi_compare.h"
-
-using namespace std;
+#include "laph_stdio.h"
 
 namespace LaphEnv {
 
@@ -37,7 +35,6 @@ DilutionSchemeInfo::DilutionSchemeInfo() {
 }
 
 // copy constructor
-
 DilutionSchemeInfo::DilutionSchemeInfo(const DilutionSchemeInfo &in)
     : spinDilutionType(in.spinDilutionType),
       eigvecDilutionType(in.eigvecDilutionType),
@@ -104,7 +101,7 @@ bool DilutionSchemeInfo::operator<(const DilutionSchemeInfo &in) const {
                        timeDilutionType, in.timeDilutionType);
 }
 
-string DilutionSchemeInfo::output(int indent) const {
+std::string DilutionSchemeInfo::output(const int indent) const {
   XMLHandler xmlh;
   output(xmlh);
   return xmlh.output(indent);
@@ -134,9 +131,10 @@ bool DilutionSchemeInfo::canUndilute(
           (can_undilute(timeDilutionType, newscheme.timeDilutionType)));
 }
 
-void DilutionSchemeInfo::dil_in(XMLHandler &xml_in, const string &tagname,
-                                int &DilType) {
-  string tmp;
+void DilutionSchemeInfo::dil_in(XMLHandler &xml_in,
+				const std::string &tagname,
+				int &DilType) {
+  std::string tmp;
   DilType = 0;
   try {
     XMLHandler xmlr(xml_in, tagname);
@@ -171,14 +169,14 @@ void DilutionSchemeInfo::dil_in(XMLHandler &xml_in, const string &tagname,
     }
   } catch (const std::exception &errstr) {
     std::cerr << "invalid DilutionSchemeInfo read from XML" << errstr.what()
-              << endl;
+              << std::endl;
     throw(std::runtime_error("error"));
   }
 }
 
 void DilutionSchemeInfo::dil_out(XMLHandler &xmlout, int DilType,
                                  bool out_nproj) const {
-  string dtype;
+  std::string dtype;
   if (DilType == 0)
     dtype = "none";
   else if (DilType == 1)
@@ -198,7 +196,7 @@ void DilutionSchemeInfo::dil_out(XMLHandler &xmlout, int DilType,
   xmlout.put_child(xmld);
 }
 
-bool DilutionSchemeInfo::can_undilute(int dilorig, int dilnew) const {
+bool DilutionSchemeInfo::can_undilute(const int dilorig,const int dilnew) const {
   if (dilorig == 1)
     return true;
   if (dilnew == 1)

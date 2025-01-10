@@ -1,7 +1,6 @@
 #include "laph_noise_info.h"
 #include "laph_stdio.h"
-
-using namespace std;
+#include <cstdint>
 
 namespace LaphEnv {
 
@@ -15,7 +14,7 @@ LaphNoiseInfo::LaphNoiseInfo(const XMLHandler &xml_in) {
   extract_info_from_reader(xmlr);
 }
 
-LaphNoiseInfo::LaphNoiseInfo(int znGroup, int seed) {
+LaphNoiseInfo::LaphNoiseInfo(const int znGroup, const int seed) {
   try {
     check_assignment(znGroup, seed);
     encode(znGroup, seed);
@@ -36,7 +35,7 @@ void LaphNoiseInfo::extract_info_from_reader(XMLHandler &xml_in) {
   }
 }
 
-void LaphNoiseInfo::check_assignment(int znGroup, int seed) {
+void LaphNoiseInfo::check_assignment(const int znGroup, const int seed) {
   if ((znGroup != 4) && (znGroup != 8) && (znGroup != 32) && (znGroup != 1)) {
     printLaph("improper initialization of LaphNoiseInfo");
     printLaph("ZNGroup must have integer value 4, 8, or 32");
@@ -52,7 +51,7 @@ void LaphNoiseInfo::check_assignment(int znGroup, int seed) {
   }
 }
 
-void LaphNoiseInfo::encode(int znGroup, int seed) {
+void LaphNoiseInfo::encode(const int znGroup, const int seed) {
   store = (unsigned int)seed;
   store <<= 6;
   store |= (unsigned int)znGroup;
@@ -84,16 +83,16 @@ bool LaphNoiseInfo::operator<(const LaphNoiseInfo &in) const {
   return (store < in.store);
 }
 
-unsigned long LaphNoiseInfo::getSeed(const GaugeConfigurationInfo &G) const {
-  int traj_num = G.getConfigNumber();
+uint32_t LaphNoiseInfo::getSeed(const GaugeConfigurationInfo &G) const {
+  const int traj_num = G.getConfigNumber();
   if ((traj_num < 0) || (traj_num > 65535)) {
     std::cerr << " Error in LaphNoiseInfo::getSeed; unsupported HMC"
               << " trajectory number...limited range 0..65535" << std::endl;
     throw(std::invalid_argument("error"));
   }
-  unsigned long m_seed = getSeed();
-  unsigned long currTraj = traj_num;
-  unsigned long rngseed = m_seed & 0xFFUL; // 8 least sig bits of m_seed
+  const uint32_t m_seed = getSeed();
+  const uint32_t currTraj = traj_num;
+  uint32_t rngseed = m_seed & 0xFFUL; // 8 least sig bits of m_seed
   rngseed =
       (rngseed << 16) | (currTraj & 0xFF00UL);   // 8 most sig bits of currTraj
   rngseed = (rngseed << 8) | (m_seed & 0xFF00UL) // 8 most sig bits of m_seed
@@ -101,13 +100,13 @@ unsigned long LaphNoiseInfo::getSeed(const GaugeConfigurationInfo &G) const {
   return rngseed;
 }
 
-string LaphNoiseInfo::output(int indent) const {
+std::string LaphNoiseInfo::output(const int indent) const {
   XMLHandler xmlh;
   output(xmlh);
   return xmlh.output(indent);
 }
 
-string LaphNoiseInfo::str() const {
+std::string LaphNoiseInfo::str() const {
   XMLHandler xmlh;
   output(xmlh);
   return xmlh.str();

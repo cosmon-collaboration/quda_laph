@@ -85,11 +85,11 @@ public:
 
   DilutionHandler(const DilutionSchemeInfo &dilScheme,
                   const QuarkSmearingInfo &qSmear,
-                  bool UpperSpinComponentsOnly = false);
+                  const bool UpperSpinComponentsOnly = false);
 
   void setInfo(const DilutionSchemeInfo &dilScheme,
                const QuarkSmearingInfo &qSmear,
-               bool UpperSpinComponentsOnly = false);
+               const bool UpperSpinComponentsOnly = false);
 
   ~DilutionHandler();
 
@@ -109,44 +109,48 @@ public:
 
   int getNumberOfEigvecProjectors() const;
 
-  int getSpinProjectorIndex(int spineigvec_index) const;
+  int getSpinProjectorIndex(const int spineigvec_index) const;
 
-  int getEigvecProjectorIndex(int spineigvec_index) const;
+  int getEigvecProjectorIndex(const int spineigvec_index) const;
 
-  int getTimeProjectorIndex(int time_val) const;
+  int getTimeProjectorIndex(const int time_val) const;
 
-  const std::list<int> &getOnSpinIndices(int spineigvec_index) const;
+  const std::list<int> &getOnSpinIndices(const int spineigvec_index) const;
 
-  const std::list<int> &getOnEigvecIndices(int spineigvec_index) const;
+  const std::list<int> &getOnEigvecIndices(const int spineigvec_index) const;
 
-  const std::list<int> &getSourceOnEigvecIndices(int eigvec_index) const;
+  const std::list<int> &getSourceOnEigvecIndices(const int eigvec_index) const;
 
-  const std::list<int> &getOnTimes(int time_proj_index) const;
+  const std::list<int> &getOnTimes(const int time_proj_index) const;
 
-  bool isOnSpin(int spineigvec_index, int spin_val) const;
+  bool isOnSpin(const int spineigvec_index, const int spin_val) const;
 
-  bool isOnEigvec(int spineigvec_index, int eigvec_index) const;
+  bool isOnEigvec(const int spineigvec_index, const int eigvec_index) const;
 
-  bool isOnTime(int time_proj_index, int time_val) const;
+  bool isOnTime(const int time_proj_index, const int time_val) const;
 
-  bool isValidTimeProjectorIndex(int time_proj_index) const;
+  bool isValidTimeProjectorIndex(const int time_proj_index) const;
 
-  bool isValidSpinEigvecProjectorIndex(int spineigvec_index) const;
+  bool isValidSpinEigvecProjectorIndex(const int spineigvec_index) const;
 
   bool isFullTimeDilution() const;
 
 private:
   void set_info(const DilutionSchemeInfo &dilScheme,
-                const QuarkSmearingInfo &qSmear, bool UpperSpinComponentsOnly);
+                const QuarkSmearingInfo &qSmear,
+		const bool UpperSpinComponentsOnly);
 
-  void setProjectorMasks(std::vector<std::list<int>> &projs, int dil_type,
-                         int nBasis, std::vector<int> &projind, int &nproj);
+  void setProjectorMasks(std::vector<std::list<int>> &projs,
+			 const int dil_type,
+                         const int nBasis,
+			 std::vector<int> &projind,
+			 int &nproj);
 
   void check_info_set(const std::string &name) const;
 
-  void check_valid_spineig(int spineigvec_index) const;
+  void check_valid_spineig(const int spineigvec_index) const;
 
-  void check_valid_timeproj(int timeprojindex) const;
+  void check_valid_timeproj(const int timeprojindex) const;
 };
 
 // **************************************************

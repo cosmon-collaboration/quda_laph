@@ -6,7 +6,6 @@
 #include "timer.h"
 #include "xml_handler.h"
 
-using namespace std;
 using namespace quda;
 
 namespace LaphEnv {
@@ -81,7 +80,7 @@ GaugeConfigurationHandler::getGaugeConfigurationInfo() const {
   return *m_gauge_info;
 }
 
-void GaugeConfigurationHandler::check_info_set(const string &name) const {
+void GaugeConfigurationHandler::check_info_set(const std::string &name) const {
   if (!isInfoSet()) {
     printLaph("error in GaugeConfigurationHandler:");
     errorLaph(make_strf("  must setInfo before calling %s", name));
@@ -95,8 +94,8 @@ void GaugeConfigurationHandler::getXMLInfo(XMLHandler &gauge_xmlinfo) const {
 
 void GaugeConfigurationHandler::initialize_config() {
   try {
-    vector<LattField> &U(
-        NamedObjMap::insert<vector<LattField>>(m_gauge_info->getNOMId()));
+    std::vector<LattField> &U(
+    NamedObjMap::insert<std::vector<LattField>>(m_gauge_info->getNOMId()));
     m_cfg = &U;
     GaugeConfigReader GR;
     XMLHandler gauge_xmlinfo;
@@ -119,8 +118,8 @@ void GaugeConfigurationHandler::applyFermionTemporalAntiPeriodic() {
               "fermion temporal antiperiodic b.c.");
   }
   try {
-    vector<LattField> &U(
-        NamedObjMap::getData<vector<LattField>>(m_gauge_info->getNOMId()));
+    std::vector<LattField> &U(
+    NamedObjMap::getData<std::vector<LattField>>(m_gauge_info->getNOMId()));
     U[Tdir].applyFermionTemporalAntiPeriodic();
   } catch (const std::exception &xp) {
     errorLaph(
@@ -136,13 +135,12 @@ void GaugeConfigurationHandler::copyDataToDevice(bool removeFromHost) {
     return;
 
   // Create the array of pointers, and call the load function
-  vector<const char *> gauge_ptrs(LayoutInfo::Ndim);
+  std::vector<const char *> gauge_ptrs(LayoutInfo::Ndim);
   for (int dir = 0; dir < LayoutInfo::Ndim; ++dir) {
     gauge_ptrs[dir] = (*m_cfg)[dir].getDataConstPtr();
   }
 
   // create the quda gauge params
-
   QudaGaugeParam gauge_param = newQudaGaugeParam();
   m_gauge_info->setQudaGaugeParam(gauge_param);
   gauge_param.location = QUDA_CPU_FIELD_LOCATION;
@@ -173,5 +171,4 @@ void GaugeConfigurationHandler::eraseDataOnDevice() {
   }
   QudaInfo::gauge_config_on_device = false;
 }
-
 } // namespace LaphEnv

@@ -4,8 +4,6 @@
 #include "field_ops.h"
 #include "multi_compare.h"
 
-using namespace std;
-
 typedef std::complex<double> dcmplx;
 typedef std::complex<float> fcmplx;
 
@@ -69,8 +67,8 @@ PerambulatorHandler::PerambulatorHandler(
     const GaugeConfigurationInfo &gaugeinfo,
     const GluonSmearingInfo &gluonsmear, const QuarkSmearingInfo &quarksmear,
     const QuarkActionInfo &quark, const FileListInfo &flist,
-    const string &smeared_quark_filestub, const bool upper_spin_components_only,
-    const Mode in_mode, const string &gauge_str)
+    const std::string &smeared_quark_filestub, const bool upper_spin_components_only,
+    const Mode in_mode, const std::string &gauge_str)
     : invertPtr(0), preconditioner(0), DHputPtr(0), DHgetPtr(0) {
   set_info(gaugeinfo, gluonsmear, quarksmear, quark, flist,
            smeared_quark_filestub, upper_spin_components_only, gauge_str,
@@ -82,9 +80,9 @@ void PerambulatorHandler::setInfo(const GaugeConfigurationInfo &gaugeinfo,
                                   const QuarkSmearingInfo &quarksmear,
                                   const QuarkActionInfo &quark,
                                   const FileListInfo &flist,
-                                  const string &smeared_quark_filestub,
+                                  const std::string &smeared_quark_filestub,
                                   const bool upper_spin_components_only,
-                                  const Mode in_mode, const string &gauge_str) {
+                                  const Mode in_mode, const std::string &gauge_str) {
   clear();
   set_info(gaugeinfo, gluonsmear, quarksmear, quark, flist,
            smeared_quark_filestub, upper_spin_components_only, gauge_str,
@@ -93,10 +91,14 @@ void PerambulatorHandler::setInfo(const GaugeConfigurationInfo &gaugeinfo,
 
 void PerambulatorHandler::set_info(
     const GaugeConfigurationInfo &gaugeinfo,
-    const GluonSmearingInfo &gluonsmear, const QuarkSmearingInfo &quarksmear,
-    const QuarkActionInfo &quark, const FileListInfo &flist,
-    const string &smeared_quark_filestub, const bool upper_spin_components_only,
-    const string &gauge_str, const Mode in_mode) {
+    const GluonSmearingInfo &gluonsmear,
+    const QuarkSmearingInfo &quarksmear,
+    const QuarkActionInfo &quark,
+    const FileListInfo &flist,
+    const std::string &smeared_quark_filestub,
+    const bool upper_spin_components_only,
+    const std::string &gauge_str,
+    const Mode in_mode) {
   try {
     uPtr = new GaugeConfigurationInfo(gaugeinfo);
     gSmearPtr = new GluonSmearingInfo(gluonsmear);
@@ -194,7 +196,7 @@ void PerambulatorHandler::disconnectGaugeConfigurationHandler() {
 }
 
 void PerambulatorHandler::connectQuarkSmearingHandler(
-    const string &smeared_quark_filestub) {
+    const std::string &smeared_quark_filestub) {
   if ((qSmearCounter == 0) && (qSmearHandler.get() == 0)) {
     try {
       qSmearHandler.reset(new QuarkSmearingHandler(
@@ -313,17 +315,17 @@ void PerambulatorHandler::setComputationSet(const XMLHandler &xmlin) {
     perambComps.nSinkQudaBatch = nSinkQudaBatch;
     perambComps.nEigQudaBatch = nEigQudaBatch;
 
-    list<XMLHandler> xmlcs(xmlrd.find("Computation"));
-    for (list<XMLHandler>::iterator it = xmlcs.begin(); it != xmlcs.end();
+    std::list<XMLHandler> xmlcs(xmlrd.find("Computation"));
+    for (std::list<XMLHandler>::iterator it = xmlcs.begin(); it != xmlcs.end();
          ++it) {
       int source_time;
       xmlread(*it, "SourceTime", source_time, "LAPH_PERAMBULATORS");
       if ((source_time < 0) || (source_time >= int(Textent))) {
         errorLaph(make_strf("Invalid source time %d", source_time));
       }
-      set<int> srcev_indices;
+      std::set<int> srcev_indices;
       if (xml_tag_count(*it, "SourceLaphEigvecIndices") == 1) {
-        vector<int> srcev_inds;
+	std::vector<int> srcev_inds;
         xmlread(*it, "SourceLaphEigvecIndices", srcev_inds,
                 "LAPH_PERAMBULATORS");
         for (int k = 0; k < int(srcev_inds.size()); ++k) {
@@ -372,16 +374,15 @@ void PerambulatorHandler::setComputationSet(const XMLHandler &xmlin) {
   printLaph(make_strf(" Number of computations = %d",
                       perambComps.computations.size()));
   int count = 0;
-  for (list<PerambComputation>::const_iterator it =
+  for (std::list<PerambComputation>::const_iterator it =
            perambComps.computations.begin();
        it != perambComps.computations.end(); count++, it++) {
     XMLHandler xmlout("Computation");
     xmlout.put_child("SourceTime", make_string(it->src_time));
-    string srcevindstr;
-    const set<int> &indices(it->src_lapheigvec_indices);
-    set<int>::const_iterator vt = indices.begin();
-    int rangestart = *vt;
-    int rangestop = *vt + 1;
+    std::string srcevindstr;
+    const std::set<int> &indices(it->src_lapheigvec_indices);
+    std::set<int>::const_iterator vt = indices.begin();
+    int rangestart = *vt, rangestop = *vt + 1;
     ++vt;
     bool keep_going = true;
     while (keep_going) {
@@ -414,10 +415,9 @@ void PerambulatorHandler::setComputationSet(const XMLHandler &xmlin) {
 }
 
 void PerambulatorHandler::getFileMap(XMLHandler &xmlout) const {
-  // if (isInfoSet()) DHputPtr->getFileMap(xmlout);
 }
 
-map<int, PerambulatorHandler::FileKey>
+std::map<int, PerambulatorHandler::FileKey>
 PerambulatorHandler::getSuffixMap() const {
   check_info_set("getSuffixMap");
   if (mode != ReadOnly) {
@@ -429,9 +429,9 @@ PerambulatorHandler::getSuffixMap() const {
 
 void PerambulatorHandler::outputSuffixMap() {
   check_info_set("getSuffixMap");
-  map<int, PerambulatorHandler::FileKey> suffixmap = getSuffixMap();
+  std::map<int, PerambulatorHandler::FileKey> suffixmap = getSuffixMap();
   printLaph("\nSuffix map:");
-  for (map<int, PerambulatorHandler::FileKey>::const_iterator it =
+  for (std::map<int, PerambulatorHandler::FileKey>::const_iterator it =
            suffixmap.begin();
        it != suffixmap.end(); ++it) {
     printLaph(make_strf("suffix  %d:  source time = %d  source spin = %d",
@@ -445,7 +445,7 @@ bool PerambulatorHandler::isInfoSet() const {
           (qactionPtr != 0));
 }
 
-void PerambulatorHandler::check_info_set(const string &name) const {
+void PerambulatorHandler::check_info_set(const std::string &name) const {
   if (!isInfoSet()) {
     errorLaph(make_strf(
         "error in PerambulatorHandler: must setInfo before calling %s", name));
@@ -507,7 +507,7 @@ bool PerambulatorHandler::checkHeader(XMLHandler &xmlin, const int suffix) {
           "Perambulator checkEqual failed...NumSpinComponents mismatch"));
     }
     qactionPtr->checkEqual(qaction_check);
-  } catch (const exception &xp) {
+  } catch (const std::exception &xp) {
     return false;
   }
   return true;
@@ -620,7 +620,7 @@ void PerambulatorHandler::computePerambulators(const bool verbose,
   rolex.reset();
   rolex.start();
   const int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
-  vector<void *> evList(nEigs);
+  std::vector<void *> evList(nEigs);
   for (int n = 0; n < nEigs; n++) {
     evList[n] =
         (void *)(qSmearHandler->getLaphEigenvector(n).getDataConstPtr());
@@ -634,7 +634,7 @@ void PerambulatorHandler::computePerambulators(const bool verbose,
   double srctime = 0.0, invtime = 0.0, evprojtime = 0.0, writetime = 0.0;
   int count = 0, ncomp = perambComps.computations.size();
 
-  for (list<PerambComputation>::const_iterator it =
+  for (std::list<PerambComputation>::const_iterator it =
            perambComps.computations.begin();
        it != perambComps.computations.end(); count++, it++) {
     printLaph(
@@ -676,11 +676,15 @@ void PerambulatorHandler::computePerambulators(const bool verbose,
 //  do inversions for one source time, one requested selection
 //  of source laph-eigenvector dilution indices (all source spins)
 
-void PerambulatorHandler::computePerambulators(
-    const int src_time, const set<int> &src_evindices,
-    const std::vector<void *> &evList, const bool verbose,
-    const bool extra_soln_check, double &makesrc_time, double &inv_time,
-    double &evproj_time, double &write_time) {
+void PerambulatorHandler::computePerambulators(const int src_time,
+					       const std::set<int> &src_evindices,
+					       const std::vector<void *> &evList,
+					       const bool verbose,
+					       const bool extra_soln_check,
+					       double &makesrc_time,
+					       double &inv_time,
+					       double &evproj_time,
+					       double &write_time) {
   StopWatch bulova;
   bulova.start();
   printLaph("\nQuark perambulator computation for one source time,");
@@ -698,10 +702,10 @@ void PerambulatorHandler::computePerambulators(
 
   // allocate space for batched solutions and make pointers suitable for quda
   int iSinkBatch = 0;
-  vector<int> sinkBatchInds(nSinkLaphBatch);
-  vector<LattField> sinkBatchData(nSinkLaphBatch,
+  std::vector<int> sinkBatchInds(nSinkLaphBatch);
+  std::vector<LattField> sinkBatchData(nSinkLaphBatch,
                                   FieldSiteType::ColorSpinVector);
-  vector<void *> sinkList(nSinkLaphBatch);
+  std::vector<void *> sinkList(nSinkLaphBatch);
   for (int iSink = 0; iSink < int(nSinkLaphBatch); iSink++) {
     sinkList[iSink] = (void *)(sinkBatchData[iSink].getDataPtr());
   }
@@ -723,7 +727,7 @@ void PerambulatorHandler::computePerambulators(
     DHputPtr->open(fkey);
     int invcount = 0;
 
-    for (set<int>::const_iterator vt = src_evindices.begin();
+    for (std::set<int>::const_iterator vt = src_evindices.begin();
          vt != src_evindices.end(); ++vt, ++invcount) {
 
       int srcev_ind = *vt;
@@ -835,7 +839,7 @@ void PerambulatorHandler::computePerambulators(
         for (int iSink = 0; iSink < nSinks; ++iSink) {
           for (int t = minTime; t <= maxTime; t++) {
             for (int iSpin = 0; iSpin < int(Nspin); ++iSpin) {
-              vector<dcmplx> quark_sink(nEigs);
+	      std::vector<dcmplx> quark_sink(nEigs);
               for (int iEv = 0; iEv < nEigs; ++iEv) {
                 quark_sink[iEv] = soln_rescale * qudaRes(iSpin, t, iEv, iSink);
               }
@@ -876,7 +880,8 @@ void PerambulatorHandler::computePerambulators(
 
 void PerambulatorHandler::make_source(LattField &ferm_src,
                                       const void *ev_src_ptr,
-                                      const int src_time, const int src_spin) {
+                                      const int src_time,
+				      const int src_spin) {
   printLaph(" Making source for this inversion...");
   ferm_src.reset(FieldSiteType::ColorSpinVector);
   const bool dp = (ferm_src.bytesPerWord() == sizeof(std::complex<double>));
@@ -911,6 +916,7 @@ void PerambulatorHandler::make_source(LattField &ferm_src,
   const int incx = FieldNcolor;
   const int incy = FieldNcolor * FieldNspin;
 
+  // could be more efficient
   if ((src_time >= mytmin) && (src_time <= mytmax)) {
     int tloc = src_time - mytmin;
     int parshift = loc_npsites * ((start_parity + tloc) % 2);
@@ -932,7 +938,7 @@ void PerambulatorHandler::make_source(LattField &ferm_src,
       zrhodp = -zrhodp;
     } // multiply by gamma_4
     if (!dp) {
-      zrhosp = complex<float>(real(zrhodp), imag(zrhodp));
+      zrhosp = std::complex<float>(real(zrhodp), imag(zrhodp));
     }
     const char *x1 = x0 + xstart1;
     const char *x2 = x0 + xstart2;
@@ -961,8 +967,8 @@ void PerambulatorHandler::make_source(LattField &ferm_src,
 
 //  static pointers (set to null in default constructor)
 
-unique_ptr<QuarkSmearingHandler> PerambulatorHandler::qSmearHandler;
-unique_ptr<GaugeConfigurationHandler> PerambulatorHandler::gaugeHandler;
+std::unique_ptr<QuarkSmearingHandler> PerambulatorHandler::qSmearHandler;
+std::unique_ptr<GaugeConfigurationHandler> PerambulatorHandler::gaugeHandler;
 
 int PerambulatorHandler::qSmearCounter = 0;
 int PerambulatorHandler::gaugeCounter = 0;

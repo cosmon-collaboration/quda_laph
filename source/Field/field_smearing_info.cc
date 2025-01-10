@@ -1,7 +1,5 @@
 #include "field_smearing_info.h"
 
-using namespace std;
-
 namespace LaphEnv {
 
 // XMLHandler constructor
@@ -51,7 +49,7 @@ bool GluonSmearingInfo::operator==(const GluonSmearingInfo &in) const {
           (abs(linkStapleWeight - in.linkStapleWeight) < 1e-12));
 }
 
-string GluonSmearingInfo::output(int indent) const {
+std::string GluonSmearingInfo::output(const int indent) const {
   XMLHandler xmlout;
   output(xmlout);
   return xmlout.output(indent);
@@ -111,11 +109,11 @@ void QuarkSmearingInfo::increaseUpdate(const QuarkSmearingInfo &in) {
 void QuarkSmearingInfo::checkEqual(const QuarkSmearingInfo &in) const {
   if ((abs(laphSigma - in.laphSigma) > 1e-12) ||
       (laphNumEigvecs != in.laphNumEigvecs)) {
-    std::cerr << "QuarkSmearingInfo checkEqual failed" << endl;
-    std::cerr << "LHS:" << endl
-              << output() << endl
-              << "RHS:" << endl
-              << in.output() << endl;
+    std::cerr << "QuarkSmearingInfo checkEqual failed" << std::endl;
+    std::cerr << "LHS:" << std::endl
+              << output() << std::endl
+              << "RHS:" << std::endl
+              << in.output() << std::endl;
     throw(std::invalid_argument("QuarkSmearingInfo checkEqual failed..."));
   }
 }
@@ -127,16 +125,16 @@ bool QuarkSmearingInfo::operator==(const QuarkSmearingInfo &in) const {
 
 void QuarkSmearingInfo::checkOK(const QuarkSmearingInfo &in) const {
   if (laphNumEigvecs > in.laphNumEigvecs) {
-    std::cerr << "QuarkSmearingInfo checkOK failed" << endl;
-    std::cerr << "LHS:" << endl
-              << output() << endl
-              << "RHS:" << endl
-              << in.output() << endl;
+    std::cerr << "QuarkSmearingInfo checkOK failed" << std::endl;
+    std::cerr << "LHS:" << std::endl
+              << output() << std::endl
+              << "RHS:" << std::endl
+              << in.output() << std::endl;
     throw(std::invalid_argument("QuarkSmearingInfo checkOK failed..."));
   }
 }
 
-string QuarkSmearingInfo::output(int indent) const {
+std::string QuarkSmearingInfo::output(const int indent) const {
   XMLHandler xmlout;
   output(xmlout);
   return xmlout.output(indent);
