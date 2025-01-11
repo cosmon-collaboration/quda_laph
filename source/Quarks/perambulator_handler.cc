@@ -4,6 +4,8 @@
 #include "field_ops.h"
 #include "multi_compare.h"
 
+#include <cassert>
+
 namespace LaphEnv {
 
 void PerambulatorHandler::RecordKey::output(XMLHandler &xmlw) const {
@@ -872,6 +874,60 @@ void PerambulatorHandler::computePerambulators(const int src_time,
   write_time += writetime;
 }
 
+// T is expected to be double or float
+template <class T>
+static void new_make_source(LattField &ferm_src,
+			    const void *ev_src_ptr,
+			    const int src_time,
+			    const int src_spin,
+			    void (*blasfunc)( const int N, const void *alpha, const void *x, const int incX,
+					      void* y, const int incy) ) {
+  printLaph(" Making source for this inversion...");
+  assert(src_spin>0);
+  ferm_src.reset(FieldSiteType::ColorSpinVector);
+
+  // initialize source field to zero
+  const int loc_nsites = LayoutInfo::getRankLatticeNumSites();
+  std::complex<T> zrho = std::complex<T>( src_spin>2?-1:1 , 0 ) ;
+
+  // fill it with zeros
+  T *z0 = reinterpret_cast<T *>(ferm_src.getDataPtr());
+  std::fill(z0, z0 + 2*loc_nsites*ferm_src.elemsPerSite(), 0.0);
+  
+  const int loc_npsites = loc_nsites/2;
+  const int start_parity = LayoutInfo::getMyStartParity();
+  const int mytmin = LayoutInfo::getMyCommCoords()[3] * LayoutInfo::getRankLattExtents()[3];
+  const int mytmax = mytmin + LayoutInfo::getRankLattExtents()[3] - 1;
+  const int tstride = LayoutInfo::getRankLattExtents()[0] *
+                      LayoutInfo::getRankLattExtents()[1] *
+                      LayoutInfo::getRankLattExtents()[2];
+  
+  // could be more efficient
+  if ((src_time >= mytmin) && (src_time <= mytmax)) {
+    const int tloc = src_time - mytmin;
+    int parshift = loc_npsites * ((start_parity + tloc) % 2);
+    const int start1 = ((tstride * tloc) / 2) + parshift;
+    const int stop1 = ((1 + tstride * (tloc + 1)) / 2) + parshift;
+    parshift = loc_npsites * ((start_parity + 1 + tloc) % 2);
+    const int start2 = ((1 + tstride * tloc) / 2) + parshift;
+    const int stop2 = ((tstride * (tloc + 1)) / 2) + parshift;
+
+    const std::complex<T> *x0 = reinterpret_cast<const std::complex<T>*>(ev_src_ptr);
+    const std::complex<T>*x1 = x0 + start1*FieldNcolor ;
+    const std::complex<T>*x2 = x0 + start2*FieldNcolor ;
+
+    std::complex<T> *y0 = reinterpret_cast<std::complex<T>*>(ferm_src.getDataPtr());
+    std::complex<T>* y1 = y0 + FieldNcolor*((src_spin-1) + start1*FieldNspin) ;
+    std::complex<T>* y2 = y0 + FieldNcolor*((src_spin-1) + start2*FieldNspin) ;
+    
+    for (int c = 0; c < FieldNcolor; ++c) {
+      blasfunc( (stop1-start1), &zrho, x1+c, FieldNcolor, y1+c, FieldNcolor*FieldNspin ) ;
+      blasfunc( (stop2-start2), &zrho, x2+c, FieldNcolor, y2+c, FieldNcolor*FieldNspin ) ;
+    }
+  }
+  printLaph("Source for this inversion created");
+}
+  
 // Creates the source (multiplied by gamma_4) in Dirac-Pauli basis
 //   src_spin here is 1,2,3,4
 
@@ -879,87 +935,12 @@ void PerambulatorHandler::make_source(LattField &ferm_src,
                                       const void *ev_src_ptr,
                                       const int src_time,
 				      const int src_spin) {
-  printLaph(" Making source for this inversion...");
-  ferm_src.reset(FieldSiteType::ColorSpinVector);
   const bool dp = (ferm_src.bytesPerWord() == sizeof(std::complex<double>));
-  // initialize source field to zero
-  const int loc_nsites = LayoutInfo::getRankLatticeNumSites();
-  const int ncmplx_per_site = ferm_src.elemsPerSite();
-  const int ncmplx = ncmplx_per_site * loc_nsites;
-  int cbytes;
-  std::complex<double> zrhodp;
-  std::complex<float>  zrhosp;
-  char *zrho;
-  if (dp) {
-    double *z0 = reinterpret_cast<double *>(ferm_src.getDataPtr());
-    std::fill(z0, z0 + 2 * ncmplx, 0.0);
-    cbytes = sizeof(std::complex<double>);
-    zrho = reinterpret_cast<char *>(&zrhodp);
+  if( dp ) {
+    new_make_source<double>(ferm_src, ev_src_ptr, src_time, src_spin, cblas_zaxpy ) ;
   } else {
-    float *z0 = reinterpret_cast<float *>(ferm_src.getDataPtr());
-    std::fill(z0, z0 + 2 * ncmplx, 0.0);
-    cbytes = sizeof(std::complex<float>);
-    zrho = reinterpret_cast<char *>(&zrhosp);
+    new_make_source<float>( ferm_src, ev_src_ptr, src_time, src_spin, cblas_caxpy ) ;
   }
-
-  const int loc_npsites = loc_nsites / 2;
-  const int start_parity = LayoutInfo::getMyStartParity();
-  const int mytmin =
-      LayoutInfo::getMyCommCoords()[3] * LayoutInfo::getRankLattExtents()[3];
-  const int mytmax = mytmin + LayoutInfo::getRankLattExtents()[3] - 1;
-  const int tstride = LayoutInfo::getRankLattExtents()[0] *
-                      LayoutInfo::getRankLattExtents()[1] *
-                      LayoutInfo::getRankLattExtents()[2];
-  const int incx = FieldNcolor;
-  const int incy = FieldNcolor * FieldNspin;
-
-  // TODO :: could be more efficient
-  if ((src_time >= mytmin) && (src_time <= mytmax)) {
-    int tloc = src_time - mytmin;
-    int parshift = loc_npsites * ((start_parity + tloc) % 2);
-    int start1 = ((tstride * tloc) / 2) + parshift;
-    int stop1 = ((1 + tstride * (tloc + 1)) / 2) + parshift;
-    int n1 = stop1 - start1;
-    parshift = loc_npsites * ((start_parity + 1 + tloc) % 2);
-    int start2 = ((1 + tstride * tloc) / 2) + parshift;
-    int stop2 = ((tstride * (tloc + 1)) / 2) + parshift;
-    int n2 = stop2 - start2;
-    int xstart1 = start1 * incx * cbytes;
-    int xstart2 = start2 * incx * cbytes;
-    char *ystart1 = ferm_src.getDataPtr() + start1 * incy * cbytes;
-    char *ystart2 = ferm_src.getDataPtr() + start2 * incy * cbytes;
-
-    const char *x0 = reinterpret_cast<const char *>(ev_src_ptr);
-    zrhodp = std::complex<double>(1.0, 0.0);
-    if (src_spin > 2) {
-      zrhodp = -zrhodp;
-    } // multiply by gamma_4
-    if (!dp) {
-      zrhosp = std::complex<float>(real(zrhodp), imag(zrhodp));
-    }
-    const char *x1 = x0 + xstart1;
-    const char *x2 = x0 + xstart2;
-    char *y1 = ystart1 + (src_spin - 1) * incx * cbytes;
-    char *y2 = ystart2 + (src_spin - 1) * incx * cbytes;
-    for (int c = 0; c < FieldNcolor; ++c) {
-      if (dp) {
-        cblas_zaxpy(n1, (std::complex<double>*)(zrho), (std::complex<double>*)(x1), incx, (std::complex<double>*)(y1),
-                    incy);
-        cblas_zaxpy(n2, (std::complex<double>*)(zrho), (std::complex<double>*)(x2), incx, (std::complex<double>*)(y2),
-                    incy);
-      } else {
-        cblas_caxpy(n1, (std::complex<float>*)(zrho), (std::complex<float>*)(x1), incx, (std::complex<float>*)(y1),
-                    incy);
-        cblas_caxpy(n2, (std::complex<float>*)(zrho), (std::complex<float>*)(x2), incx, (std::complex<float>*)(y2),
-                    incy);
-      }
-      x1 += cbytes;
-      y1 += cbytes;
-      x2 += cbytes;
-      y2 += cbytes;
-    }
-  }
-  printLaph("Source for this inversion created");
 }
 
 //  static pointers (set to null in default constructor)

@@ -3,8 +3,6 @@
 #include "perambulator_handler.h"
 #include "field_ops.h"
 
-#include <cassert>
-
 #define PRINT_EVECS
 //#define ALL_CONSTANT
 
@@ -148,59 +146,6 @@ old_code(LattField &ferm_src,
   printLaph("Source for this inversion created");
 }
 
-// T is expected to be double or float
-template <class T>
-static void new_code(LattField &ferm_src,
-		     const void *ev_src_ptr,
-		     const int src_time,
-		     const int src_spin,
-		     void (*blasfunc)( const int N, const void *alpha, const void *x, const int incX,
-				       void* y, const int incy) ) {
-  printLaph(" Making source for this inversion...");
-  assert(src_spin>0);
-  ferm_src.reset(FieldSiteType::ColorSpinVector);
-
-  // initialize source field to zero
-  const int loc_nsites = LayoutInfo::getRankLatticeNumSites();
-  std::complex<T> zrho = std::complex<T>( src_spin>2?-1:1 , 0 ) ;
-
-  // fill it with zeros
-  T *z0 = reinterpret_cast<T *>(ferm_src.getDataPtr());
-  std::fill(z0, z0 + 2*loc_nsites*ferm_src.elemsPerSite(), 0.0);
-  
-  const int loc_npsites = loc_nsites/2;
-  const int start_parity = LayoutInfo::getMyStartParity();
-  const int mytmin = LayoutInfo::getMyCommCoords()[3] * LayoutInfo::getRankLattExtents()[3];
-  const int mytmax = mytmin + LayoutInfo::getRankLattExtents()[3] - 1;
-  const int tstride = LayoutInfo::getRankLattExtents()[0] *
-                      LayoutInfo::getRankLattExtents()[1] *
-                      LayoutInfo::getRankLattExtents()[2];
-  
-  // could be more efficient
-  if ((src_time >= mytmin) && (src_time <= mytmax)) {
-    const int tloc = src_time - mytmin;
-    int parshift = loc_npsites * ((start_parity + tloc) % 2);
-    const int start1 = ((tstride * tloc) / 2) + parshift;
-    const int stop1 = ((1 + tstride * (tloc + 1)) / 2) + parshift;
-    parshift = loc_npsites * ((start_parity + 1 + tloc) % 2);
-    const int start2 = ((1 + tstride * tloc) / 2) + parshift;
-    const int stop2 = ((tstride * (tloc + 1)) / 2) + parshift;
-
-    const std::complex<T> *x0 = reinterpret_cast<const std::complex<T>*>(ev_src_ptr);
-    const std::complex<T>*x1 = x0 + start1*FieldNcolor ;
-    const std::complex<T>*x2 = x0 + start2*FieldNcolor ;
-
-    std::complex<T> *y0 = reinterpret_cast<std::complex<T>*>(ferm_src.getDataPtr());
-    std::complex<T>* y1 = y0 + FieldNcolor*((src_spin-1) + start1*FieldNspin) ;
-    std::complex<T>* y2 = y0 + FieldNcolor*((src_spin-1) + start2*FieldNspin) ;
-    
-    for (int c = 0; c < FieldNcolor; ++c) {
-      blasfunc( (stop1-start1), &zrho, x1+c, FieldNcolor, y1+c, FieldNcolor*FieldNspin ) ;
-      blasfunc( (stop2-start2), &zrho, x2+c, FieldNcolor, y2+c, FieldNcolor*FieldNspin ) ;
-    }
-  }
-  printLaph("Source for this inversion created");
-}
 
 static void
 set_constant( std::vector<LattField> &laphEigvecs )
@@ -255,45 +200,41 @@ int main(int argc, char *argv[]) {
   std::cout<<"Evlist made"<<std::endl;
   void **evs_ptr = (void**)evList.data() ;
 
-  LattField ferm_src_new( FieldSiteType::ColorSpinVector);
-  new_code<double>( ferm_src_new, evs_ptr[0], 0, 1, cblas_zaxpy) ;
-  printferm( ferm_src_new , 0 ) ;
+  for( int mu = 1 ; mu < 5 ; mu++ ) {
+    
+    LattField ferm_src( FieldSiteType::ColorSpinVector);
+    old_code( ferm_src, evs_ptr[0], 0, mu) ;
+    printferm( ferm_src , 0 ) ;
 
-  LattField ferm_src( FieldSiteType::ColorSpinVector);
-  old_code( ferm_src, evs_ptr[0], 0, 1) ;
-  printferm( ferm_src , 0 ) ;
-
-  /*
-  LattField ferm_src_new( FieldSiteType::ColorSpinVector );
-  PerambulatorHandler peram = PerambulatorHandler() ;
-  peram.make_source( ferm_src_new , evs_ptr[0] , 0, 0) ;
-  printferm( ferm_src_new , 0 ) ;
-  */
+    LattField ferm_src_new( FieldSiteType::ColorSpinVector );
+    PerambulatorHandler peram = PerambulatorHandler() ;
+    peram.make_source( ferm_src_new , evs_ptr[0] , 0, mu) ;
+    printferm( ferm_src_new , 0 ) ;
   
-  // compute the difference between them
-  double loc_dev = 0 ;
-  std::complex<double> *pt1 = (std::complex<double>*)ferm_src.getDataPtr() ;
-  std::complex<double> *pt2 = (std::complex<double>*)ferm_src_new.getDataPtr() ;
-  for( size_t i = 0 ; i < (size_t)LayoutInfo::getRankLatticeNumSites() ; i++ ) {
-    for( size_t c = 0 ; c < (size_t)12 ; c++ ) {
-      std::cout<<*pt1<<" "<<*pt2<<" ->"<<*pt1-*pt2<<std::endl ;
-
-      loc_dev += abs( *pt1 - *pt2 ) ;
-      pt1++ ; pt2++ ;
+    // compute the difference between them
+    double loc_dev = 0 ;
+    std::complex<double> *pt1 = (std::complex<double>*)ferm_src.getDataPtr() ;
+    std::complex<double> *pt2 = (std::complex<double>*)ferm_src_new.getDataPtr() ;
+    for( size_t i = 0 ; i < (size_t)LayoutInfo::getRankLatticeNumSites() ; i++ ) {
+      for( size_t c = 0 ; c < (size_t)12 ; c++ ) {
+	//std::cout<<*pt1<<" "<<*pt2<<" ->"<<*pt1-*pt2<<std::endl ;	
+	loc_dev += abs( *pt1 - *pt2 ) ;
+	pt1++ ; pt2++ ;
+      }
     }
-  }
-  double deviation = 0 ;
+    double deviation = 0 ;
 #ifdef ARCH_PARALLEL
-  MPI_Allreduce(&loc_dev, &deviation, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD) ;
+    MPI_Allreduce(&loc_dev, &deviation, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD) ;
 #else
-  deviation = loc_dev ;
+    deviation = loc_dev ;
 #endif
-  int my_rank = 0 ;
+    int my_rank = 0 ;
 #ifdef ARCH_PARALLEL
-  MPI_Comm_rank( MPI_COMM_WORLD, &my_rank ) ;
+    MPI_Comm_rank( MPI_COMM_WORLD, &my_rank ) ;
 #endif
-  if( my_rank == 0 ) {
-    std::cout<<" Deviation New vs Old "<<std::scientific<<deviation<<std::endl ;
+    if( my_rank == 0 ) {
+      std::cout<<" Deviation New vs Old "<<std::scientific<<deviation<<std::endl ;
+    }
   }
   finalize();
   
