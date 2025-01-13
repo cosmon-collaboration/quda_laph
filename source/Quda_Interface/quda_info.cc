@@ -86,6 +86,13 @@ bool QudaInfo::smeared_gauge_on_device = false;
 
 bool QudaInfo::clover_on_device = false;
 
+#ifdef LAPH_DOMAIN_WALL
+  int QudaInfo::Ls = 8 ;
+  double QudaInfo::M5 = 1.0 ;
+  double QudaInfo::b5 = 1.0 ;
+  double QudaInfo::c5 = 0.0 ;
+#endif
+
 // remove all quantities from memory on the device
 
 void QudaInfo::clearDevice() {

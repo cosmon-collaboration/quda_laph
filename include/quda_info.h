@@ -53,6 +53,12 @@ class QudaInfo {
 
   static QudaReconstructType link_recon_sloppy;
 
+#ifdef LAPH_DOMAIN_WALL
+  static int Ls ;
+  static double M5 ;
+  static double b5 , c5 ;
+#endif
+
 public:
   QudaInfo(const QudaInfo &in) = delete; // no copy constructor
 
@@ -64,6 +70,13 @@ public:
 
   static void init(const XMLHandler &xml_in, bool echo = true);
 
+#ifdef LAPH_DOMAIN_WALL
+  static int get_DWF_Ls() { return Ls ; }
+  static double get_DWF_M5() { return M5 ; }
+  static double get_DWF_b5() { return b5 ; }
+  static double get_DWF_c5() { return c5 ; }
+#endif
+  
   static int getDeviceOrdinal() { return device_ordinal; }
 
   static void clearDevice();

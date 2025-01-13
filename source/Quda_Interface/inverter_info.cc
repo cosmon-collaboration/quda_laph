@@ -98,12 +98,22 @@ void InverterInfo::setQudaInvertParam(
 
 // these are always the same
 void InverterInfo::commonQudaInvertParam(QudaInvertParam &invParam) const {
+  int ivalindex = 0, rvalindex = 0;
+#ifdef LAPH_DOMAIN_WALL
+  invParam.Ls = xmlputQLInt("Ls", ivalues, ivalindex); ;
+  invParam.m5 = xmlputQLReal("M4", rvalues, rvalindex); ;
+  const double b = xmlputQLReal("b5", rvalues, rvalindex); ;
+  const double c = xmlputQLReal("c5", rvalues, rvalindex); ;
+  for( int k = 0 ; k < invParam.Ls ; k++ ) {
+    invParam.b_5[k] = b ;
+    invParam.c_5[k] = c ;
+  }
+#endif
   invParam.cpu_prec = QudaInfo::get_cpu_prec();
   invParam.cuda_prec = QudaInfo::get_cuda_prec();
   invParam.solution_type = QUDA_MAT_SOLUTION;
   invParam.solve_type = QUDA_DIRECT_PC_SOLVE;
   invParam.matpc_type = QUDA_MATPC_EVEN_EVEN;
-  int ivalindex = 0, rvalindex = 0;
   invParam.tol = xmlputQLReal("Tolerance", rvalues, rvalindex);
   invParam.reliable_delta = 0.01;
   invParam.maxiter = xmlputQLInt("MaxIterations", ivalues, ivalindex);

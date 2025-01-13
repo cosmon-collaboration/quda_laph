@@ -789,6 +789,127 @@ void QuarkHandler::computeSinks(const bool verbose,
   printLaph(make_str("          Total file writing time = ", writetime,
                      " seconds\n\n"));
 }
+
+#ifdef LAPH_DOMAIN_WALL
+// code from witnesser sortof
+template <class T>
+static void
+DirtyWilson4D( const int fermsize,
+	       T sol[] )
+{
+  T tmp1[ fermsize ] ;
+  memcpy( tmp1 , sol , fermsize*sizeof(T) ) ;
+  
+  QudaInvertParam Wil = newQudaInvertParam() ;
+  Wil.dslash_type = QUDA_WILSON_DSLASH ;
+  Wil.kappa = 1/(2.*(4.-Wil.m5)) ;
+  Wil.mass = -Wil.m5 ;
+
+  void *in  = (void*)sol ;
+  void *out = (void*)tmp1 ;
+  
+  MatQuda( out , in , &Wil ) ;
+
+  const double cfac1 = 0.5*(Wil.c_5[0])/Wil.kappa ;
+
+  size_t i ;
+#pragma omp parallel for private(i)
+  for( i = 0 ; i < fermsize; i++ ) {
+    sol[i] = cfac1*tmp1[i] - sol[i] ;
+  }
+}
+
+  template <class T>
+  static void
+  chiralProjectPlus( const int fermsize,
+		     const void *in,
+		     T tmp1[] )
+  {
+
+  }
+
+  template <class T>
+  static void
+  chiralProjectMinus( const int fermsize,
+		      const void *in,
+		      T tmp1[] )
+  {
+
+  }
+
+  template <class T>
+static void
+solve_DWF( void *in,
+	   void *out ,
+	   QudaInvertParam inv_param,
+	   const int Ls )
+{
+  const int fullsize = LayoutInfo::rank_latt_nsites ;
+  const int fermsize = fullsize*3*4*2 ;
+  const int half_fermsize = fermsize/2 ;
+  T *spinorIn  = new T[ Ls*fermsize ] ;
+  T *spinorOut = new T[ Ls*fermsize ] ;
+
+  memset(reinterpret_cast<char*>(spinorIn) , 0, fermsize*Ls*sizeof(T));
+  memset(reinterpret_cast<char*>(spinorOut), 0, fermsize*Ls*sizeof(T));
+
+  // vhiral project
+  T tmp1[ fermsize ] ;
+  chiralProjectPlus( fermsize, in , tmp1 ) ;
+  DirtyWilson4D( tmp1 ) ;
+
+  T tmp2[ fermsize ] ;
+  chiralProjectMinus( fermsize, in , tmp2 ) ;
+  DirtyWilson4D( tmp2 ) ;
+
+  // copies for the checkerboarded sources
+  memcpy(reinterpret_cast<char*>(&spinorIn[0]),
+	   reinterpret_cast<char*>(const_cast<T*>(&(tmp1[0]))),
+	   half_fermsize*sizeof(T));
+  memcpy(reinterpret_cast<char*>(&spinorIn[half_fermsize*Ls]),
+	 reinterpret_cast<char*>(const_cast<T*>(&(tmp1[half_fermsize]))),
+	 half_fermsize*sizeof(T));
+  memcpy(reinterpret_cast<char*>(&spinorIn[half_fermsize*(Ls-1)]),
+	 reinterpret_cast<char*>(const_cast<T*>(&(tmp2[0]))),
+	 half_fermsize*sizeof(T));
+  memcpy(reinterpret_cast<char*>(&spinorIn[half_fermsize*(2*Ls-1)]),
+	 reinterpret_cast<char*>(const_cast<T*>(&(tmp2[half_fermsize]))),
+	 half_fermsize*sizeof(T));
+  
+  invertQuda( reinterpret_cast<void*>(spinorOut), reinterpret_cast<void*>(spinorIn), &inv_param ) ;
+  
+  delete [] spinorIn ;
+  
+  // undo the solve
+  memcpy(reinterpret_cast<char*>(const_cast<T*>(&tmp1[0])),
+	 reinterpret_cast<char*>(&spinorOut[0]),
+	 half_fermsize*sizeof(T));
+  memcpy(reinterpret_cast<char*>(const_cast<T*>(&(tmp1[half_fermsize]))),
+	 reinterpret_cast<char*>(&spinorOut[half_fermsize*Ls]),
+	 half_fermsize*sizeof(T));
+  memcpy(reinterpret_cast<char*>(const_cast<T*>(&(tmp2[0]))),
+	 reinterpret_cast<char*>(&spinorOut[half_fermsize*(Ls-1)]),
+	 half_fermsize*sizeof(T));
+  memcpy(reinterpret_cast<char*>(const_cast<T*>(&(tmp2[half_fermsize]))),
+	 reinterpret_cast<char*>(&spinorOut[half_fermsize*(2*Ls-1)]),
+	 half_fermsize*sizeof(T));
+
+  delete [] spinorOut ;
+
+  const T invTwoKappaB = inv_param.b_5[0]*( 4 - inv_param.m5 ) + 1.0;
+  const T twoKappaB = 1.0/invTwoKappaB;
+
+  // chiral projections
+  T *outptr = (T*)out ;
+  int i ;
+#pragma omp parallel for private(i)
+  for( i = 0 ; i < fullsize ; i++ ) {
+    // TODO chiral projections here
+  }
+}
+  
+#endif
+
 //  do inversions for all spin-laph-eigenvector dilution indices
 //  but for one noise, one time projector index
 
@@ -895,8 +1016,15 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise,
       void *spinor_src = (void *)(ferm_src.getDataPtr());
       void *spinor_snk = (void *)(sinkBatchData[iSinkBatch].getDataPtr());
 
-      invertQuda(spinor_snk, spinor_src, &quda_inv_param);
+      #ifdef LAPH_DOMAIN_WALL
 
+
+
+      
+      #else
+      invertQuda(spinor_snk, spinor_src, &quda_inv_param);
+      #endif
+      
       bulova.stop();
       double addinvtime = bulova.getTimeInSeconds();
       invtime += addinvtime;

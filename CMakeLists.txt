@@ -13,6 +13,11 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 option(PARALLEL_BUILD "Compile with mpicc/mpic++" ON )
 
+option(LAPH_DOMAIN_WALL "Compile the domain wall version" OFF )
+if(LAPH_DOMAIN_WALL)
+  add_compile_definitions(LAPH_DOMAIN_WALL)
+endif()
+
 set(VALID_BLAS_LIBS
   OPENBLAS
   GSLCBLAS)
