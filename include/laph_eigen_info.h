@@ -2,14 +2,12 @@
 #define LAPH_EIGEN_INFO_H
 
 #include "field_smearing_info.h"
-#include "xml_handler.h"
 
 namespace LaphEnv {
 
-// *******************************************************************
-// *                                                                 *
-// *   Objects of class "LaphEigenSolverInfo" store identifying info *
-// *   related to solving for the Laplacian eigenvectors using the   *
+//                                                                  *
+//    Objects of class "LaphEigenSolverInfo" store identifying info *
+//    related to solving for the Laplacian eigenvectors using the   *
 // *   restarted Lanczos method.  The XML input must have the format *
 // *                                                                 *
 // *   <LaphEigenSolverInfo>                                         *
@@ -135,7 +133,5 @@ public:
 private:
   void extract_info_from_reader(XMLHandler &xmlr);
 };
-
-// **************************************************
 } // namespace LaphEnv
 #endif

@@ -7,19 +7,16 @@
 
 namespace LaphEnv {
 
-// *****************************************************************
-// *                                                               *
-// *  "GluonSmearingHandler" handles access to the smeared gauge   *
-// *  field.  See declarations below for available member          *
-// *  functions.                                                   *
-// *                                                               *
-// *  GluonSmearingHandler:                                        *
-// *                                                               *
-// *     -- computes smeared gauge field and either writes to      *
-// *        a file or inserts into the NamedObjMap                 *
-// *                                                               *
-// *                                                               *
-// *****************************************************************
+//                                                                
+//   "GluonSmearingHandler" handles access to the smeared gauge   
+//   field.  See declarations below for available member          
+//   functions.                                                   
+//                                                                
+//   GluonSmearingHandler:                                        
+//                                                                
+//      -- computes smeared gauge field and either writes to      
+//         a file or inserts into the NamedObjMap                 
+//                                                                
 
 class GluonSmearingHandler {
 

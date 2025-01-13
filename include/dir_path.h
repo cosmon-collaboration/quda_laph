@@ -1,15 +1,7 @@
 #ifndef DIR_PATH_H
 #define DIR_PATH_H
 
-#include "laph_stdio.h"
-#include "xml_handler.h"
-#include <list>
-#include <set>
-#include <vector>
-
 namespace LaphEnv {
-
-// *********************************************************
 
 class DirPath {
   unsigned long store; // every 3 bits is a direction starting from right
@@ -227,7 +219,7 @@ public:
   }
 
 private:
-  void add_dir(int dir) {
+  void add_dir(const int dir) {
     static const unsigned long rightmask = 0x7ul;
     static const unsigned long full = 0x8000000ul;
     static const unsigned long zero = 0x8ul;
@@ -253,8 +245,6 @@ private:
     }
   }
 };
-
-// ***********************************************************
 
 //  This takes a set and assigns an integer index ordering
 //  to the elements so it "looks" like a vector.  Usage:
@@ -291,6 +281,5 @@ public:
   int size() const { return m_data.size(); }
 };
 
-// ******************************************************************
 } // namespace LaphEnv
 #endif

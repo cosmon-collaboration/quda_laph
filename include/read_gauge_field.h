@@ -4,17 +4,11 @@
 #include "gauge_configuration_info.h"
 #include "latt_field.h"
 #include <cstring>
-#include <string>
-#include <vector>
 
 namespace LaphEnv {
 
-// ********************************************************************************
-// * *
-// *    An object of this class reads a 4-dimensional lattice SU3 gauge *
-// *    configuration from file and puts the field into "U". *
-// * *
-// ********************************************************************************
+//    An object of this class reads a 4-dimensional lattice SU3 gauge *
+//    configuration from file and puts the field into "U". *
 
 class GaugeConfigReader {
 
@@ -118,7 +112,5 @@ inline void GaugeCERNConfigReader::su3_copy(double *dest, const double *src,
                                             int su3dble) {
   std::memcpy(dest, src, su3dble * sizeof(double));
 }
-
-// *************************************************************************
 } // namespace LaphEnv
 #endif

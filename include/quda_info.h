@@ -1,33 +1,28 @@
 #ifndef QUDA_PARAMS_H
 #define QUDA_PARAMS_H
 
-#include "quda.h"
 #include "xml_handler.h"
 
 namespace LaphEnv {
 
-// ***********************************************************************
-// *                                                                     *
-// *   Class "QudaInfo" is a singleton which stores and makes            *
-// *   available global information needed by Quda. Various              *
-// *   quantities, such as the gauge field, quark sinks, will need       *
-// *   complicated parameter set ups.  The data members in this          *
-// *   class will be necessary to initialize such structures.            *
-// *   Some of the information is set by default and cannot be changed.  *
-// *   The class also tries to keep track of whether various quantities  *
-// *   are currently on the device or not.  At the end of program        *
-// *   execution, this class clears the device.                          *
-// *                                                                     *
-// *   The input XML should have the following form (all are             *
-// *   optional since double precision is default):                      *
-// *                                                                     *
-// *   <QudaInfo>                                                        *
-// *      <CPUPrecision>double</CPUPrecision> (or single)                *
-// *      <CUDAPrecision>double</CUDAPrecision> (or single)              *
-// *      <CUDASloppyPrecision>double</CUDASloppyPrecision> (or single)  *
-// *   </QudaInfo>                                                       *
-// *                                                                     *
-// ***********************************************************************
+//   Class "QudaInfo" is a singleton which stores and makes            *
+//   available global information needed by Quda. Various              *
+//   quantities, such as the gauge field, quark sinks, will need       *
+//   complicated parameter set ups.  The data members in this          *
+//   class will be necessary to initialize such structures.            *
+//   Some of the information is set by default and cannot be changed.  *
+//   The class also tries to keep track of whether various quantities  *
+//   are currently on the device or not.  At the end of program        *
+//   execution, this class clears the device.                          *
+//                                                                     *
+//   The input XML should have the following form (all are             *
+//   optional since double precision is default):                      *
+//                                                                     *
+//   <QudaInfo>                                                        *
+//      <CPUPrecision>double</CPUPrecision> (or single)                *
+//      <CUDAPrecision>double</CUDAPrecision> (or single)              *
+//      <CUDASloppyPrecision>double</CUDASloppyPrecision> (or single)  *
+//   </QudaInfo>                                                       *
 
 class QudaInfo {
 

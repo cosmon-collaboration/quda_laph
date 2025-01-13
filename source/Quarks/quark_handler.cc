@@ -824,7 +824,7 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise,
 
   // generate the source noise field
   LaphZnNoise rho(noise.getZNGroup(), noise.getSeed(*uPtr));
-  Array<cmplx> laph_noise =
+  Array<std::complex<double>> laph_noise =
       rho.generateLapHQuarkSourceForSink(Textent, Nspin, nEigs);
   // time dilution masks
   const std::list<int> &on_times = dilHandler->getOnTimes(time_proj_index);
@@ -1003,7 +1003,7 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise,
 // Creates the source (multiplied by gamma_4) in Dirac-Pauli basis
 
 void QuarkHandler::make_source(LattField &ferm_src,
-                               const Array<cmplx> &laph_noise,
+                               const Array<std::complex<double>> &laph_noise,
                                const std::vector<void *> &evList,
                                const std::list<int> &on_times,
                                const std::list<int> &on_spins,

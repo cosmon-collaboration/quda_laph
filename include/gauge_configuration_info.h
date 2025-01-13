@@ -3,60 +3,56 @@
 
 #include "layout_info.h"
 #include "quda.h"
-#include "xml_handler.h"
 
 namespace LaphEnv {
 
-// ********************************************************************
-// *                                                                  *
-// *  Class "GaugeConfigurationInfo" holds information about a        *
-// *  4-dimensional gauge configuration.  The constructor requires    *
-// *  an XMLHandler.  The XML input must have the following form:     *
-// *                                                                  *
-// *      <GaugeConfigurationInfo>                                    *
-// *         <EnsembleName>...</EnsembleName>                         *
-// *         <FileFormat> .... </FileFormat>                          *
-// *         <ConfigType> .... </ConfigType> (optional)               *
-// *         <FileName> .... </FileName>                              *
-// *         <ConfigNumber> .... </ConfigNumber>                      *
-// *         <MarkovChainNumber>...</MarkovChainNumber> (optional)    *
-// *         <NOMId> ...</NOMId> (optional)                           *
-// *         <GluonAnisotropy> ... </GluonAnisotropy> (optional)      *
-// *         <FermionTimeBC> ... </FermionTimeBC> (optional)          *
-// *      </GaugeConfigurationInfo>                                   *
-// *                                                                  *
-// *  Information about the individual tags now follows:              *
-// *                                                                  *
-// *    <EnsembleName>                                                *
-// *       - simple descriptive name, such as CLS_E250                *
-// *       - subsequent tasks will have to use the same name          *
-// *    <FileFormat>                                                  *
-// *       - supported options:                                       *
-// *          -  CERN  or  CLS                                        *
-// *          -  SZIN_SP or USQCD_SP  (DP for double precision)       *
-// *    <ConfigType>                                                  *
-// *       - supported options currently:                             *
-// *          -  Wilson                                               *
-// *          -  WilsonImproved (default)                             *
-// *    <FileName>                                                    *
-// *       - name of file containing the configuration data           *
-// *    <ConfigNumber>                                                *
-// *       - integer number of the config in the ensemble             *
-// *    <MarkovChainNumber>                                           *
-// *       - integer number of the Markov chain (0 default)           *
-// *    <NOMId>                                                       *
-// *       - Id string to use in the NamedObjMap                      *
-// *       - if absent, "default_gauge_id" is used                    *
-// *    <GluonAnisotropy>                                             *
-// *       - real number: spatial spacing/ temporal spacing           *
-// *       - default 1.0                                              *
-// *    <FermionTimeBC>                                               *
-// *       - temporal boundary conditions for the fermion fields      *
-// *       - supported options:                                       *
-// *          - antiperiodic (default), periodic                      *
-// *                                                                  *
-// *                                                                  *
-// ********************************************************************
+//                                                                   
+//   Class "GaugeConfigurationInfo" holds information about a        
+//   4-dimensional gauge configuration.  The constructor requires    
+//   an XMLHandler.  The XML input must have the following form:     
+//                                                                   
+//       <GaugeConfigurationInfo>                                    
+//          <EnsembleName>...</EnsembleName>                         
+//          <FileFormat> .... </FileFormat>                          
+//          <ConfigType> .... </ConfigType> (optional)               
+//          <FileName> .... </FileName>                              
+//          <ConfigNumber> .... </ConfigNumber>                      
+//          <MarkovChainNumber>...</MarkovChainNumber> (optional)    
+//          <NOMId> ...</NOMId> (optional)                           
+//          <GluonAnisotropy> ... </GluonAnisotropy> (optional)      
+//          <FermionTimeBC> ... </FermionTimeBC> (optional)          
+//       </GaugeConfigurationInfo>                                   
+//                                                                   
+//   Information about the individual tags now follows:              
+//                                                                   
+//     <EnsembleName>                                                
+//        - simple descriptive name, such as CLS_E250                
+//        - subsequent tasks will have to use the same name          
+//     <FileFormat>                                                  
+//        - supported options:                                       
+//           -  CERN  or  CLS                                        
+//           -  SZIN_SP or USQCD_SP  (DP for double precision)       
+//     <ConfigType>                                                  
+//        - supported options currently:                             
+//           -  Wilson                                               
+//           -  WilsonImproved (default)                             
+//     <FileName>                                                    
+//        - name of file containing the configuration data           
+//     <ConfigNumber>                                                
+//        - integer number of the config in the ensemble             
+//     <MarkovChainNumber>                                           
+//        - integer number of the Markov chain (0 default)           
+//     <NOMId>                                                       
+//        - Id string to use in the NamedObjMap                      
+//        - if absent, "default_gauge_id" is used                    
+//     <GluonAnisotropy>                                             
+//        - real number: spatial spacing/ temporal spacing           
+//        - default 1.0                                              
+//     <FermionTimeBC>                                               
+//        - temporal boundary conditions for the fermion fields      
+//        - supported options:                                       
+//           - antiperiodic (default), periodic                      
+//                                                                   
 
 class GaugeConfigurationInfo {
 
@@ -113,7 +109,5 @@ private:
 
   friend class GaugeConfigReader;
 };
-
-// **********************************************************
 } // namespace LaphEnv
 #endif

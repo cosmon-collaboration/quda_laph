@@ -1,234 +1,224 @@
 #ifndef XML_HANDLER_H
 #define XML_HANDLER_H
-#include <cmath>
-#include <cstdlib>
+
 #include <iostream>
 #include <list>
 #include <set>
 #include <sstream>
 #include <stack>
-#include <stdexcept>
-#include <string>
 #include <vector>
 
-// *************************************************************************
-// *                                                                       *
-// *                      Brief description of XML                         *
-// *                                                                       *
-// *  Extensible Markup Language (XML) is a markup language that defines   *
-// *  a set of rules for encoding documents in a format that is both       *
-// *  human-readable and machine-readable. The characters which make up    *
-// *  an XML document are divided into "markup" and "content". All strings *
-// *  which constitute markup begin with the character < and end           *
-// *  with a >. Strings of characters which are not markup are content.    *
-// *                                                                       *
-// *  A "tag" is a markup construct that begins with < and ends with >     *
-// *  and contains a valid tag name and zero or one / characters before    *
-// *  or after the tag name.  Tags come in three flavors:                  *
-// *        - start-tags; for example: <section>                           *
-// *        - end-tags; for example: </section>                            *
-// *        - empty-element tags; for example: <line-break/>               *
-// *  There must not be any white space between the starting < character   *
-// *  and the tag name.  However, white space can occur between the end    *
-// *  of the tag name and the ending > character.  There are certain       *
-// *  rules for determining if a character string is a valid tag name.     *
-// *  Here, we use the following rules:                                    *
-// *      -- the first character must be a letter or underscore            *
-// *      -- all other characters must be a letter, numerical digit,       *
-// *               underscore, period, hyphen, exclamation mark            *
-// *      -- first 3 characters cannot be "xml" (case insensitive)         *
-// *                                                                       *
-// *  An XML "comment" starts with <!-- and ends with -->. These           *
-// *  characters and all characters between them are ignored as            *
-// *  comments. The string "--" (double-hyphen) is not allowed             *
-// *  inside comments.  Comments may not appear inside markup text;        *
-// *  they may appear anywhere in a document outside other markup.         *
-// *                                                                       *
-// *  An "element" is a character string that either begins with a         *
-// *  start-tag and ends with a matching end-tag or consists only of       *
-// *  an empty-element tag.  The element includes the start and            *
-// *  end tags.  The "name" of the element is the name of the start        *
-// *  tag, and the name of the end tag must be the same.  The              *
-// *  characters between the start- and end-tags, if any, are the          *
-// *  element's "content", and may contain text and/or markup,             *
-// *  including other elements, which are called child elements.           *
-// *  An element is called "simple" if its content is textual only.        *
-// *                                                                       *
-// *  XML elements can contain one or more "attributes".  Attributes       *
-// *  are superfluous, in my opinion. Any information in an attribute      *
-// *  can be included as an additional child tag.  Hence, the class        *
-// *  defined here will not deal with XML containing attributes.           *
-// *  The one exception is in the declaration element.                     *
-// *                                                                       *
-// *  An XML document may begin by declaring some information about        *
-// *  itself, as in the following example:                                 *
-// *         <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>      *
-// *  This is called a "declaration".  It must have the above form,        *
-// *  and it must start at the very first character.                       *
-// *                                                                       *
-// *  The XML specification defines an XML document as a text that         *
-// *  is well-formed, i.e. it satisfies a list of syntax rules provided    *
-// *  in the specification. The list is fairly lengthy; some key points    *
-// *  are:                                                                 *
-// *    -- The begin, end, and empty-element tags that delimit the         *
-// *       elements are correctly nested, with none missing and none       *
-// *       overlapping.                                                    *
-// *    -- The element tags are case-sensitive; the beginning and end      *
-// *       tags must match exactly. Tag names must be valid as described   *
-// *       above.                                                          *
-// *    -- There is a single "root" element that contains all the other    *
-// *       elements.                                                       *
-// *                                                                       *
-// *                                                                       *
-// *                                                                       *
-// *                       XML Document Object Module                      *
-// *                                                                       *
-// *  The W3C Document Object Model (DOM) is a platform and                *
-// *  language-neutral interface that allows programs and scripts to       *
-// *  dynamically access and update the content, structure, and style of   *
-// *  an XML document. The XML DOM defines a standard way for accessing    *
-// *  and manipulating XML documents. The DOM presents an XML document     *
-// *  as a tree-structure.                                                 *
-// *                                                                       *
-// *  The DOM introduces the concept of an XML "node". An XML document is  *
-// *  represented by a tree of nodes.  Each node has one parent node, zero *
-// *  or more child nodes, and zero or more sibling nodes.  A node can be  *
-// *  an element node or a text node.  For example, the following XML      *
-// *  document                                                             *
-// *     <root>                                                            *
-// *        <tag1>fox <tag2>dog</tag2> cat</tag1>                          *
-// *        <tag3>goose</tag3>                                             *
-// *        <tag4>lion <tag5/></tag4>                                      *
-// *     </root>                                                           *
-// *  contains one root node "root" whose parent is NULL and who has no    *
-// *  siblings, and three children "tag1", "tag3", "tag4". The node "tag1" *
-// *  has parent "root", siblings "tag3" and "tag4", and children nodes    *
-// *  "fox", "tag2", "cat".  Note that node "fox" is a text node which     *
-// *  has no siblings and no children.  Node "tag2" has parent "tag1" and  *
-// *  siblings "fox" and "cat" and one child node "dog".  NOTE: Text is    *
-// *  always stored in text nodes. A common error in DOM processing is to  *
-// *  navigate to an element node and expect it to contain the text.       *
-// *  However, even the simplest element node has a text node under it.    *
-// *  For example, in <year>2005</year>, there is an element node (year),  *
-// *  and a text node under it, which contains the text (2005).            *
-// *                                                                       *
-// *************************************************************************
+//                      Brief description of XML                         *
+//                                                                       *
+//  Extensible Markup Language (XML) is a markup language that defines   *
+//  a set of rules for encoding documents in a format that is both       *
+//  human-readable and machine-readable. The characters which make up    *
+//  an XML document are divided into "markup" and "content". All strings *
+//  which constitute markup begin with the character < and end           *
+//  with a >. Strings of characters which are not markup are content.    *
+//                                                                       *
+//  A "tag" is a markup construct that begins with < and ends with >     *
+//  and contains a valid tag name and zero or one / characters before    *
+//  or after the tag name.  Tags come in three flavors:                  *
+//        - start-tags; for example: <section>                           *
+//        - end-tags; for example: </section>                            *
+//        - empty-element tags; for example: <line-break/>               *
+//  There must not be any white space between the starting < character   *
+//  and the tag name.  However, white space can occur between the end    *
+//  of the tag name and the ending > character.  There are certain       *
+//  rules for determining if a character string is a valid tag name.     *
+//  Here, we use the following rules:                                    *
+//      -- the first character must be a letter or underscore            *
+//      -- all other characters must be a letter, numerical digit,       *
+//               underscore, period, hyphen, exclamation mark            *
+//      -- first 3 characters cannot be "xml" (case insensitive)         *
+//                                                                       *
+//  An XML "comment" starts with <!-- and ends with -->. These           *
+//  characters and all characters between them are ignored as            *
+//  comments. The string "--" (double-hyphen) is not allowed             *
+//  inside comments.  Comments may not appear inside markup text;        *
+//  they may appear anywhere in a document outside other markup.         *
+//                                                                       *
+//  An "element" is a character string that either begins with a         *
+//  start-tag and ends with a matching end-tag or consists only of       *
+//  an empty-element tag.  The element includes the start and            *
+//  end tags.  The "name" of the element is the name of the start        *
+//  tag, and the name of the end tag must be the same.  The              *
+//  characters between the start- and end-tags, if any, are the          *
+//  element's "content", and may contain text and/or markup,             *
+//  including other elements, which are called child elements.           *
+//  An element is called "simple" if its content is textual only.        *
+//                                                                       *
+//  XML elements can contain one or more "attributes".  Attributes       *
+//  are superfluous, in my opinion. Any information in an attribute      *
+//  can be included as an additional child tag.  Hence, the class        *
+//  defined here will not deal with XML containing attributes.           *
+//  The one exception is in the declaration element.                     *
+//                                                                       *
+//  An XML document may begin by declaring some information about        *
+//  itself, as in the following example:                                 *
+//         <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>      *
+//  This is called a "declaration".  It must have the above form,        *
+//  and it must start at the very first character.                       *
+//                                                                       *
+//  The XML specification defines an XML document as a text that         *
+//  is well-formed, i.e. it satisfies a list of syntax rules provided    *
+//  in the specification. The list is fairly lengthy; some key points    *
+//  are:                                                                 *
+//    -- The begin, end, and empty-element tags that delimit the         *
+//       elements are correctly nested, with none missing and none       *
+//       overlapping.                                                    *
+//    -- The element tags are case-sensitive; the beginning and end      *
+//       tags must match exactly. Tag names must be valid as described   *
+//       above.                                                          *
+//    -- There is a single "root" element that contains all the other    *
+//       elements.                                                       *
+//                                                                       *
+//                                                                       *
+//                                                                       *
+//                       XML Document Object Module                      *
+//                                                                       *
+//  The W3C Document Object Model (DOM) is a platform and                *
+//  language-neutral interface that allows programs and scripts to       *
+//  dynamically access and update the content, structure, and style of   *
+//  an XML document. The XML DOM defines a standard way for accessing    *
+//  and manipulating XML documents. The DOM presents an XML document     *
+//  as a tree-structure.                                                 *
+//                                                                       *
+//  The DOM introduces the concept of an XML "node". An XML document is  *
+//  represented by a tree of nodes.  Each node has one parent node, zero *
+//  or more child nodes, and zero or more sibling nodes.  A node can be  *
+//  an element node or a text node.  For example, the following XML      *
+//  document                                                             *
+//     <root>                                                            *
+//        <tag1>fox <tag2>dog</tag2> cat</tag1>                          *
+//        <tag3>goose</tag3>                                             *
+//        <tag4>lion <tag5/></tag4>                                      *
+//     </root>                                                           *
+//  contains one root node "root" whose parent is NULL and who has no    *
+//  siblings, and three children "tag1", "tag3", "tag4". The node "tag1" *
+//  has parent "root", siblings "tag3" and "tag4", and children nodes    *
+//  "fox", "tag2", "cat".  Note that node "fox" is a text node which     *
+//  has no siblings and no children.  Node "tag2" has parent "tag1" and  *
+//  siblings "fox" and "cat" and one child node "dog".  NOTE: Text is    *
+//  always stored in text nodes. A common error in DOM processing is to  *
+//  navigate to an element node and expect it to contain the text.       *
+//  However, even the simplest element node has a text node under it.    *
+//  For example, in <year>2005</year>, there is an element node (year),  *
+//  and a text node under it, which contains the text (2005).            *
+//                                                                       *
 
-// *******************************************************************
-// *                                                                 *
-// *  This file defines the class XMLHandler which is used to        *
-// *  store and manipulate XML documents.  An XMLHandler is          *
-// *  designed like an fstream.  A pointer to a current location     *
-// *  in the document is maintained, like a file pointer.  Use       *
-// *  "seek" to move around the document, like random access.  You   *
-// *  can move around by tag name, like random access, or            *
-// *  sequentially by next sibling, first child, parent, etc.  The   *
-// *  status of the last seek can be determined with the "good" or   *
-// *  "fail" members. Use "get" and "put" to extract and insert      *
-// *  textual data.  "get" and "put" are done relative to the        *
-// *  current location.  "seek" methods change the current           *
-// *  location. Like an fstream, you can turn exceptions on or       *
-// *  off.  When on, exceptions are thrown when the state of         *
-// *  the object is no longer good.  An XMLHandler in some sense     *
-// *  can be viewed as a glorified pointer to XML data.              *
-// *                                                                 *
-// *  NOTE: XMLHandler does NOT allow attributes in the XML          *
-// *  document.  Attributes are superfluous, in my opinion. Any      *
-// *  information in an attribute can be included as an additional   *
-// *  XML tag.  Hence, to simplify this handler, attributes are      *
-// *  disallowed (the one exception is in the XML declaration tag).  *
-// *  XMLHandler is not meant to be a full-fledged XML document      *
-// *  object module.  It is programmed with simplicity in mind,      *
-// *  not efficiency.                                                *
-// *                                                                 *
-// *  An XMLHandler maintains a pointer to the actual data, which    *
-// *  is an object of the class XMLDoc.  XMLDoc objects cannot be    *
-// *  created by the end user; XMLDoc objects are only created by    *
-// *  XMLHandler objects.  A given XMLDoc object can be shared by    *
-// *  several XMLHandler objects.                                    *
-// *                                                                 *
-// *                                                                 *
-// *  Constructors:  There is a default constructor that sets all    *
-// *  pointers to null.  Another constructor takes one or two        *
-// *  strings and creates a single root tag (empty or simple).       *
-// *                                                                 *
-// *     XMLHandler xmlh0;   // default constructor                  *
-// *     XMLHandler xmlh1("roottag");  // create empty root element  *
-// *     XMLHandler xmlh2("tag","text"); // simple root element      *
-// *                                                                 *
-// *  Various "set" members are available to a previously declared   *
-// *  handler.  This allows assignment from an XML string, or a      *
-// *  string residing in a file.  Previous content in the handler    *
-// *  is cleared.                                                    *
-// *                                                                 *
-// *     xmlh.set("roottag","text");                                 *
-// *     xmlh.set_root("roottag","text"); // same routine            *
-// *     xmlh.set_from_string(xmlstring);  // parses string          *
-// *     xmlh.set_from_file(filename);                               *
-// *                                                                 *
-// *  Copy constructor:   The XMLHandler copy constructor takes an   *
-// *  optional enum "copymode".  The allowed values of mode below    *
-// *  are "subtree_pointer" (default), "subtree_copy", "pointer",    *
-// *  or "copy".                                                     *
-// *                                                                 *
-// *     XMLHandler(const XMLHandler& xmlin, copymode mode);         *
-// *                                                                 *
-// *  If "mode" has value "subtree_pointer" or "subtree_copy", the   *
-// *  current location of "xmlin" becomes the root element of this   *
-// *  handler (and so, the new handler cannot access any of the      *
-// *  ancestor nodes).  Otherwise, the root of this handler will be  *
-// *  the same as "xmlin".  If "mode" has value "subtree_copy" or    *
-// *  "copy", then a completely new deep copy is made and the root   *
-// *  element is either the current location or the root of "xmlin"; *
-// *  otherwise, this is just a new pointer to the same data in      *
-// *  memory and the current element is the same as in "xmlin".      *
-// *  When the assignment operator is used, no deep copy is done and *
-// *  the entire document is accessible (equivalent to "pointer").   *
-// *                                                                 *
-// *     XMLHandler xmlh4(xmlh2);                                    *
-// *     XMLHandler xmlh5(xmlh2,false,true);                         *
-// *     XMLHandler xmlh6;  xmlh6=xml4;                              *
-// *                                                                 *
-// *  There is also a "set" routine that does a shallow or deep      *
-// *  copy of an entire document or a subtree:                       *
-// *                                                                 *
-// *     xmlh.set(xmlhin, copymode mode);                            *
-// *                                                                 *
-// *  Nodes can be inserted and appended using "put_child" and       *
-// *  "put_sibling" members.  "put_sibling" inserts a new node as    *
-// *  the next sibling of the current node, then the current node    *
-// *  pointer is updated to the top node of the inserted node(s).    *
-// *  Fails if the current node is the root node.  "put_child"       *
-// *  inserts as the last child of the current node, but the         *
-// *  current node pointer is NOT changed.  Fails if the current     *
-// *  node is a text node.  For put operations, failure always       *
-// *  throws an exception.                                           *
-// *                                                                 *
-// *     xmlh.put_sibling(xmlin);  // from root of xmlin             *
-// *     xmlh.put_sibling("tagname","textcontent");                  *
-// *     xmlh.put_sibling_text_node("text");                         *
-// *                                                                 *
-// *     xmlh.put_child(xmlin);  // from root of xmlin               *
-// *     xmlh.put_child("tagname","textcontent");                    *
-// *     xmlh.put_child_text_node("text");                           *
-// *                                                                 *
-// *  Various "seek" members can be used for moving around the       *
-// *  document.  You can seek incrementally by nodes, or by          *
-// *  searching for a particular tag name:                           *
-// *                                                                 *
-// *     xmlh.seek_root();                                           *
-// *     xmlh.seek_next_sibling();  // fails if no more siblings     *
-// *     xmlh.seek_first_child();   // fails if no children          *
-// *     xmlh.seek_child("tagname");                                 *
-// *     xmlh.seek_parent();                                         *
-// *     xmlh.seek_next_node();  // children first, then siblings    *
-// *     xmlh.seek_next("tagname"); // children first, then siblings *
-// *     xmlh.seek_unique("tagname"); // fails if absent,not unique  *
-// *     xmlh.find("tagname"); // return list<XMLHandler>            *
-// *     xmlh.count("tagname");  // returns integer                  *
-// *                                                                 *
-// *                                                                 *
-// *******************************************************************
+//                                                                 *
+//  This file defines the class XMLHandler which is used to        *
+//  store and manipulate XML documents.  An XMLHandler is          *
+//  designed like an fstream.  A pointer to a current location     *
+//  in the document is maintained, like a file pointer.  Use       *
+//  "seek" to move around the document, like random access.  You   *
+//  can move around by tag name, like random access, or            *
+//  sequentially by next sibling, first child, parent, etc.  The   *
+//  status of the last seek can be determined with the "good" or   *
+//  "fail" members. Use "get" and "put" to extract and insert      *
+//  textual data.  "get" and "put" are done relative to the        *
+//  current location.  "seek" methods change the current           *
+//  location. Like an fstream, you can turn exceptions on or       *
+//  off.  When on, exceptions are thrown when the state of         *
+//  the object is no longer good.  An XMLHandler in some sense     *
+//  can be viewed as a glorified pointer to XML data.              *
+//                                                                 *
+//  NOTE: XMLHandler does NOT allow attributes in the XML          *
+//  document.  Attributes are superfluous, in my opinion. Any      *
+//  information in an attribute can be included as an additional   *
+//  XML tag.  Hence, to simplify this handler, attributes are      *
+//  disallowed (the one exception is in the XML declaration tag).  *
+//  XMLHandler is not meant to be a full-fledged XML document      *
+//  object module.  It is programmed with simplicity in mind,      *
+//  not efficiency.                                                *
+//                                                                 *
+//  An XMLHandler maintains a pointer to the actual data, which    *
+//  is an object of the class XMLDoc.  XMLDoc objects cannot be    *
+//  created by the end user; XMLDoc objects are only created by    *
+//  XMLHandler objects.  A given XMLDoc object can be shared by    *
+//  several XMLHandler objects.                                    *
+//                                                                 *
+//                                                                 *
+//  Constructors:  There is a default constructor that sets all    *
+//  pointers to null.  Another constructor takes one or two        *
+//  strings and creates a single root tag (empty or simple).       *
+//                                                                 *
+//     XMLHandler xmlh0;   // default constructor                  *
+//     XMLHandler xmlh1("roottag");  // create empty root element  *
+//     XMLHandler xmlh2("tag","text"); // simple root element      *
+//                                                                 *
+//  Various "set" members are available to a previously declared   *
+//  handler.  This allows assignment from an XML string, or a      *
+//  string residing in a file.  Previous content in the handler    *
+//  is cleared.                                                    *
+//                                                                 *
+//     xmlh.set("roottag","text");                                 *
+//     xmlh.set_root("roottag","text"); // same routine            *
+//     xmlh.set_from_string(xmlstring);  // parses string          *
+//     xmlh.set_from_file(filename);                               *
+//                                                                 *
+//  Copy constructor:   The XMLHandler copy constructor takes an   *
+//  optional enum "copymode".  The allowed values of mode below    *
+//  are "subtree_pointer" (default), "subtree_copy", "pointer",    *
+//  or "copy".                                                     *
+//                                                                 *
+//     XMLHandler(const XMLHandler& xmlin, copymode mode);         *
+//                                                                 *
+//  If "mode" has value "subtree_pointer" or "subtree_copy", the   *
+//  current location of "xmlin" becomes the root element of this   *
+//  handler (and so, the new handler cannot access any of the      *
+//  ancestor nodes).  Otherwise, the root of this handler will be  *
+//  the same as "xmlin".  If "mode" has value "subtree_copy" or    *
+//  "copy", then a completely new deep copy is made and the root   *
+//  element is either the current location or the root of "xmlin"; *
+//  otherwise, this is just a new pointer to the same data in      *
+//  memory and the current element is the same as in "xmlin".      *
+//  When the assignment operator is used, no deep copy is done and *
+//  the entire document is accessible (equivalent to "pointer").   *
+//                                                                 *
+//     XMLHandler xmlh4(xmlh2);                                    *
+//     XMLHandler xmlh5(xmlh2,false,true);                         *
+//     XMLHandler xmlh6;  xmlh6=xml4;                              *
+//                                                                 *
+//  There is also a "set" routine that does a shallow or deep      *
+//  copy of an entire document or a subtree:                       *
+//                                                                 *
+//     xmlh.set(xmlhin, copymode mode);                            *
+//                                                                 *
+//  Nodes can be inserted and appended using "put_child" and       *
+//  "put_sibling" members.  "put_sibling" inserts a new node as    *
+//  the next sibling of the current node, then the current node    *
+//  pointer is updated to the top node of the inserted node(s).    *
+//  Fails if the current node is the root node.  "put_child"       *
+//  inserts as the last child of the current node, but the         *
+//  current node pointer is NOT changed.  Fails if the current     *
+//  node is a text node.  For put operations, failure always       *
+//  throws an exception.                                           *
+//                                                                 *
+//     xmlh.put_sibling(xmlin);  // from root of xmlin             *
+//     xmlh.put_sibling("tagname","textcontent");                  *
+//     xmlh.put_sibling_text_node("text");                         *
+//                                                                 *
+//     xmlh.put_child(xmlin);  // from root of xmlin               *
+//     xmlh.put_child("tagname","textcontent");                    *
+//     xmlh.put_child_text_node("text");                           *
+//                                                                 *
+//  Various "seek" members can be used for moving around the       *
+//  document.  You can seek incrementally by nodes, or by          *
+//  searching for a particular tag name:                           *
+//                                                                 *
+//     xmlh.seek_root();                                           *
+//     xmlh.seek_next_sibling();  // fails if no more siblings     *
+//     xmlh.seek_first_child();   // fails if no children          *
+//     xmlh.seek_child("tagname");                                 *
+//     xmlh.seek_parent();                                         *
+//     xmlh.seek_next_node();  // children first, then siblings    *
+//     xmlh.seek_next("tagname"); // children first, then siblings *
+//     xmlh.seek_unique("tagname"); // fails if absent,not unique  *
+//     xmlh.find("tagname"); // return list<XMLHandler>            *
+//     xmlh.count("tagname");  // returns integer                  *
 
 class XMLHandler; // forward declaration
 
@@ -348,8 +338,6 @@ public:
   std::string declaration;
   std::set<XMLHandler *> refset; // the XMLHandler objects that point to this
 };
-
-// *********************************************************
 
 class XMLHandler {
 
@@ -600,8 +588,6 @@ inline std::ostream &operator<<(std::ostream &os, const XMLHandler &xmlh) {
   return os;
 }
 
-// *********************************************************
-
 //  Extract a value from a string, throwing an exception on failure.
 
 template <typename T>
@@ -741,8 +727,6 @@ inline void extract_from_string(const std::string &pstring,
   primitive_vector_extract(pstring, result, "bool");
 }
 
-// **********************************************************************
-
 //  Conversion of numerical data to string.
 
 template <typename T> std::string numerical_to_string(const T &data) {
@@ -820,8 +804,6 @@ inline std::string scientific_to_string(const double &data) {
   return oss.str();
 }
 
-// ******************************************************************
-
 // Removes tabs and newline characters, then trims
 // leading and trailing blanks.
 
@@ -876,8 +858,6 @@ void xmlreadchild(XMLHandler &xmlin, const std::string &tagname, T &val,
   }
 }
 
-// *********************************************************
-
 // This returns the number of times that the tag "tagname"
 // is found in the descendents of the current context.
 // A **tag name** should be input.
@@ -892,8 +872,6 @@ void xml_tag_assert(XMLHandler &xmlh, const std::string &tagname,
 void xml_child_assert(XMLHandler &xmlh, const std::string &tagname,
                       const std::string &infoname);
 
-// *********************************************************
-
 template <typename T>
 bool xmlreadif(XMLHandler &xmlh, const std::string &tagname, T &val,
                const std::string &callingClass) {
@@ -903,8 +881,6 @@ bool xmlreadif(XMLHandler &xmlh, const std::string &tagname, T &val,
   }
   return false;
 }
-
-// *********************************************************
 
 template <typename T>
 void assertEqual(const T &obj1, const T &obj2,
@@ -917,15 +893,11 @@ void assertEqual(const T &obj1, const T &obj2,
   }
 }
 
-// *********************************************************
-
 // outputs the current context for a failed xml read
 // (typically in an Info constructor)
 
 void xmlreadfail(XMLHandler &xmlh, const std::string &infoname,
                  const std::string &message = "");
-
-// *********************************************************
 
 // Compares the XML content in "doc1" and "doc2" and returns
 // "true" if they are the same.  In doing the comparison, the
@@ -950,13 +922,10 @@ bool xmlContentIsEqual(XMLHandler &xmlh1, XMLHandler &xmlh2,
 bool headerMatch(const std::string &doc1, const std::string &doc2,
                  float float_rel_tol = 1e-6);
 
-// *********************************************************
-
 std::vector<std::string> string_split(const std::string &astr, char delimiter);
 
 std::string string_extract(const std::string &astr, char left, char right);
 
 int char_count(const std::string &astr, char delimiter);
 
-// *********************************************************
 #endif

@@ -1,67 +1,60 @@
 #ifndef QUARK_SMEARING_HANDLER_H
 #define QUARK_SMEARING_HANDLER_H
 
-#include "array.h"
 #include "data_io_handler.h"
-#include "field_smearing_info.h"
 #include "gauge_configuration_info.h"
 #include "laph_eigen_info.h"
-#include "xml_handler.h"
 
 namespace LaphEnv {
 
-// *****************************************************************
-// *                                                               *
-// *  QuarkSmearingHandler:                                        *
-// *                                                               *
-// *     -- must be constructed in read mode or write mode         *
-// *     -- in 3-d write mode, computes the Laplacian eigenvectors,*
-// *          saving results to "*_time.nn" files, each file       *
-// *          containing all eigenvectors for one time slice OR    *
-// *          inserting into TheNamedObjMap                        *
-// *     -- in 3-d read mode, reads the eigenvectors from the      *
-// *          "*_time.nn" files and makes them available for the   *
-// *          hadron handler to do quark displacements OR gets     *
-// *          from TheNamedObjMap                                  *
-// *     -- in 4-d write mode, either reads the "*_time.nn" files  *
-// *          and combines each level on all time slices into one  *
-// *          4-d file, writing out "_level.nn" files, OR it       *
-// *          computes them on all requested time slices and       *
-// *          inserts results into TheNamedObjMap                  *
-// *     -- in 4-d read mode, reads the "*_level.nn" files and     *
-// *          makes them available for the quark handler to        *
-// *          compute quark sinks, or reads from TheNamedObjMap    *
-// *          (if "level" files are not available, it will read    *
-// *           the "time" files)                                   *
-// *                                                               *
-// *  A note concerning the phases multiplying each eigenvector:   *
-// *                                                               *
-// *   Due to the way that noise is introduced, changing the       *
-// *   overall phase of any given Laph eigenvector changes the     *
-// *   value of the quark line for one particular noise.  The      *
-// *   effect of the phase change is to change the noise (the      *
-// *   noise is effectively U(1)).  This is not a problem, but     *
-// *   erroneous results can occur if the original eigenvector     *
-// *   files used to determine the quark sinks get deleted and     *
-// *   the eigenvectors have to be reconstructed for making the    *
-// *   hadrons.  With different run parameters, the eigensolver    *
-// *   could produce a different phase.  The introduction of a     *
-// *   phase convention eliminates this potential problem.         *
-// *   The phase convention adopted here is as follows:            *
-// *                                                               *
-// *   *** each eigenvector is multiplied by a phase so that       *
-// *       the 0-th color component at site (0,0,0)                *
-// *       is real and positive (abort if component very small)    *
-// *                                                               *
-// *                                                               *
-// *  All Laph Handlers follow the member naming convention:       *
-// *                                                               *
-// *    compute....()  to do original computation                  *
-// *    set...()       to internally set from file or NamedObjMap  *
-// *                                                               *
-// *    get...()       provides access to results                  *
-// *                                                               *
-// *****************************************************************
+//  QuarkSmearingHandler:                                        *
+//                                                               *
+//     -- must be constructed in read mode or write mode         *
+//     -- in 3-d write mode, computes the Laplacian eigenvectors,*
+//          saving results to "*_time.nn" files, each file       *
+//          containing all eigenvectors for one time slice OR    *
+//          inserting into TheNamedObjMap                        *
+//     -- in 3-d read mode, reads the eigenvectors from the      *
+//          "*_time.nn" files and makes them available for the   *
+//          hadron handler to do quark displacements OR gets     *
+//          from TheNamedObjMap                                  *
+//     -- in 4-d write mode, either reads the "*_time.nn" files  *
+//          and combines each level on all time slices into one  *
+//          4-d file, writing out "_level.nn" files, OR it       *
+//          computes them on all requested time slices and       *
+//          inserts results into TheNamedObjMap                  *
+//     -- in 4-d read mode, reads the "*_level.nn" files and     *
+//          makes them available for the quark handler to        *
+//          compute quark sinks, or reads from TheNamedObjMap    *
+//          (if "level" files are not available, it will read    *
+//           the "time" files)                                   *
+//                                                               *
+//  A note concerning the phases multiplying each eigenvector:   *
+//                                                               *
+//   Due to the way that noise is introduced, changing the       *
+//   overall phase of any given Laph eigenvector changes the     *
+//   value of the quark line for one particular noise.  The      *
+//   effect of the phase change is to change the noise (the      *
+//   noise is effectively U(1)).  This is not a problem, but     *
+//   erroneous results can occur if the original eigenvector     *
+//   files used to determine the quark sinks get deleted and     *
+//   the eigenvectors have to be reconstructed for making the    *
+//   hadrons.  With different run parameters, the eigensolver    *
+//   could produce a different phase.  The introduction of a     *
+//   phase convention eliminates this potential problem.         *
+//   The phase convention adopted here is as follows:            *
+//                                                               *
+//   *** each eigenvector is multiplied by a phase so that       *
+//       the 0-th color component at site (0,0,0)                *
+//       is real and positive (abort if component very small)    *
+//                                                               *
+//                                                               *
+//  All Laph Handlers follow the member naming convention:       *
+//                                                               *
+//    compute....()  to do original computation                  *
+//    set...()       to internally set from file or NamedObjMap  *
+//                                                               *
+//    get...()       provides access to results                  *
 
 class QuarkSmearingHandler {
 

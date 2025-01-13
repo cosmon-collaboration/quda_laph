@@ -2,103 +2,90 @@
 #define LAPH_STDIO_H
 
 #include <iomanip>
-#include <sstream>
-#include <string>
 
-// *********************************************************************
-// *                                                                   *
-// *  This file provides the functions                                 *
-// *                                                                   *
-// *      printLaph(const std::string& mesg)                           *
-// *      errorLaph(const std::string& mesg, bool abort=true)          *
-// *      make_str(const std::string& startmesg, ...)                  *
-// *      make_strf(const std::string& format, ...)                    *
-// *                                                                   *
-// *********************************************************************
+//                                                                    *
+//   This file provides the functions                                 *
+//                                                                    *
+//       printLaph(const std::string& mesg)                           *
+//       errorLaph(const std::string& mesg, bool abort=true)          *
+//       make_str(const std::string& startmesg, ...)                  *
+//       make_strf(const std::string& format, ...)                    *
+//                                                                    *
 
-// *********************************************************************
-// *                                                                   *
-// *      printLaph(const std::string& mesg)                           *
-// *                                                                   *
-// *  This function prints a message to standard output only from      *
-// *  the primary MPI rank.  An end-of-line character is inserted      *
-// *  at the end of the message.  The user should use the              *
-// *  make_str(...) or make_strf(...) to make the message.             *
-// *  Typical usage:                                                   *
-// *                                                                   *
-// *      double x=5.6;                                                *
-// *      printLaph(make_str("Value of x is ",x));                     *
-// *                                                                   *
-// *********************************************************************
+//                                                                    *
+//       printLaph(const std::string& mesg)                           *
+//                                                                    *
+//   This function prints a message to standard output only from      *
+//   the primary MPI rank.  An end-of-line character is inserted      *
+//   at the end of the message.  The user should use the              *
+//   make_str(...) or make_strf(...) to make the message.             *
+//   Typical usage:                                                   *
+//                                                                    *
+//       double x=5.6;                                                *
+//       printLaph(make_str("Value of x is ",x));                     *
+//                                                                    *
 
-// *********************************************************************
-// *                                                                   *
-// *      errorLaph(const std::string& mesg, bool abort=true)          *
-// *                                                                   *
-// *  This function prints a message to standard output from every     *
-// *  MPI rank.  An end-of-line character is inserted at the end of    *
-// *  the message.  The user should use the make_str(...) or           *
-// *  make_strf(...) to make the message.  If "abort" is true, then    *
-// *  the program aborts due to the error condition.                   *
-// *  Typical usage:                                                   *
-// *                                                                   *
-// *      double x=-5.6;                                               *
-// *      if (x<0.0){                                                  *
-// *         errorLaph(make_str("Bad value of x is ",x),true);}        *
-// *                                                                   *
-// *********************************************************************
+//                                                                    *
+//       errorLaph(const std::string& mesg, bool abort=true)          *
+//                                                                    *
+//   This function prints a message to standard output from every     *
+//   MPI rank.  An end-of-line character is inserted at the end of    *
+//   the message.  The user should use the make_str(...) or           *
+//   make_strf(...) to make the message.  If "abort" is true, then    *
+//   the program aborts due to the error condition.                   *
+//   Typical usage:                                                   *
+//                                                                    *
+//       double x=-5.6;                                               *
+//       if (x<0.0){                                                  *
+//          errorLaph(make_str("Bad value of x is ",x),true);}        *
+//                                                                    *
 
-// *********************************************************************
-// *                                                                   *
-// *      make_str(mesg,t1,t2,....)                                    *
-// *                                                                   *
-// *  This routine returns a string formed by concatenating the        *
-// *  strings associated with mesg, t1, t2, ... in order.  A           *
-// *  stringstream is used.  The objects in t1, t2, ... have to have   *
-// *  an operator<< defined.  For formatting the strings, io           *
-// *  manipulators can be used.  Currently, there is a maximum of 8    *
-// *  arguments after the original "mesg" string. A usage example      *
-// *  would be                                                         *
-// *                                                                   *
-// *      string mesg("This is start of message k = ");                *
-// *      int k=6;                                                     *
-// *      float x=4.232;                                               *
-// *      make_str(mesg,k," and x = ",std::setprecision(12),x);        *
-// *                                                                   *
-// *********************************************************************
+//                                                                    *
+//       make_str(mesg,t1,t2,....)                                    *
+//                                                                    *
+//   This routine returns a string formed by concatenating the        *
+//   strings associated with mesg, t1, t2, ... in order.  A           *
+//   stringstream is used.  The objects in t1, t2, ... have to have   *
+//   an operator<< defined.  For formatting the strings, io           *
+//   manipulators can be used.  Currently, there is a maximum of 8    *
+//   arguments after the original "mesg" string. A usage example      *
+//   would be                                                         *
+//                                                                    *
+//       string mesg("This is start of message k = ");                *
+//       int k=6;                                                     *
+//       float x=4.232;                                               *
+//       make_str(mesg,k," and x = ",std::setprecision(12),x);        *
+//                                                                    *
 
-// *********************************************************************
-// *                                                                   *
-// *      make_strf(fmt,t1,t2,...)                                     *
-// *                                                                   *
-// *  This routine returns a string using sprintf, except that t1,t2,..*
-// *  can be C++ strings: they don't have to be null-terminanted       *
-// *  C-style strings. This eliminates the annoying need to use        *
-// *  .c_str() for strings. Currently, there is a maximum of 12        *
-// *  arguments after the "fmt" string. In case you forget how to      *
-// *  form the format string, reminders are below (end of line is "\n")*
-// *  For complex number, you need to use the real and imaginary parts *
-// *  separately as floats.                                            *
-// *                                                                   *
-// *  Each format specifier must have the form                         *
-// *         %[flags][width][.precision]specifier                      *
-// *  Specifier characters:                                            *
-// *     %d or %i -> integer (signed or unsigned)                      *
-// *     %u -> unsigned integer                                        *
-// *     %f -> floating point                                          *
-// *     %e -> scientific notation float                               *
-// *     %g -> shortest of %f or %e                                    *
-// *     %c -> character                                               *
-// *     %s -> string                                                  *
-// *  Flags:                                                           *
-// *     -  left-justify (right is default)                            *
-// *     +  print sign (prints + for positive)                         *
-// *  Width:                                                           *
-// *     minimum width of field in characters                          *
-// *  Precision:                                                       *
-// *     number of decimal places                                      *
-// *                                                                   *
-// *********************************************************************
+//                                                                    *
+//       make_strf(fmt,t1,t2,...)                                     *
+//                                                                    *
+//   This routine returns a string using sprintf, except that t1,t2,..*
+//   can be C++ strings: they don't have to be null-terminanted       *
+//   C-style strings. This eliminates the annoying need to use        *
+//   .c_str() for strings. Currently, there is a maximum of 12        *
+//   arguments after the "fmt" string. In case you forget how to      *
+//   form the format string, reminders are below (end of line is "\n")*
+//   For complex number, you need to use the real and imaginary parts *
+//   separately as floats.                                            *
+//                                                                    *
+//   Each format specifier must have the form                         *
+//          %[flags][width][.precision]specifier                      *
+//   Specifier characters:                                            *
+//      %d or %i -> integer (signed or unsigned)                      *
+//      %u -> unsigned integer                                        *
+//      %f -> floating point                                          *
+//      %e -> scientific notation float                               *
+//      %g -> shortest of %f or %e                                    *
+//      %c -> character                                               *
+//      %s -> string                                                  *
+//   Flags:                                                           *
+//      -  left-justify (right is default)                            *
+//      +  print sign (prints + for positive)                         *
+//   Width:                                                           *
+//      minimum width of field in characters                          *
+//   Precision:                                                       *
+//      number of decimal places                                      *
 
 namespace LaphEnv {
 
@@ -339,12 +326,9 @@ std::string make_strf(const std::string &fmt, const T1 &arg1, const T2 &arg2,
   return charstar_to_string(buffer, bufsize);
 }
 
-// *************************************************************
-
 void printLaph(const std::string &mesg);
 
 void errorLaph(const std::string &mesg, bool abort = true);
 
-// *************************************************************
 } // namespace LaphEnv
 #endif

@@ -3,44 +3,38 @@
 
 #include "xml_handler.h"
 #include <map>
-#include <vector>
 
 namespace LaphEnv {
 
-// *******************************************************************
-// *                                                                 *
-// *   Class "LayoutInfo" is a singleton which stores and makes      *
-// *   available information about the lattice and how the fields    *
-// *   are laid out the lattice on the hosts (cpus).  The init(...)  *
-// *   member should be called near the beginning of program         *
-// *   execution, but after MPI and Quda communications have been    *
-// *   initialized. A 4 dimensional lattice is assumed (make the 4th *
-// *   dimension have size 1 to use a 3 dimensional lattice). QDP    *
-// *   lexicographic format is used. The lattice is dividing up on   *
-// *   the MPI ranks in the same way on each rank.  The number of    *
-// *   lattice sites on each MPI rank is the same.  The lattice size *
-// *   in each direction must be divisible by the MPI partition      *
-// *   size in each direction.                                       *
-// *                                                                 *
-// *   The input XML should have the following form:                 *
-// *                                                                 *
-// *       <LatticeLayoutInfo>                                       *
-// *          <XYZTExtents>24 24 24 48</XYTZExtents>                 *
-// *       </LatticeLayoutInfo>                                      *
-// *                                                                 *
-// *   This class can assist with getting and putting the data on    *
-// *   a particular site into the lattice appropriately.             *
-// *                                                                 *
-// *   In order to accommodate red/black checkerboarding for an      *
-// *   efficient solve of the Dirac equation, the number of sites    *
-// *   on each MPI rank must be even. Lattice sites are ordered as   *
-// *   even-odd checkerboard (even/odd sites have x+y+z+t even/odd), *
-// *   with ordering (x,y,z,t) with t varying most slowly for each   *
-// *   parity. "start_parity" is the parity of the local (0,0,0,0)   *
-// *   site on the global lattice.                                   *
-// *                                                                 *
-// *                                                                 *
-// *******************************************************************
+//    Class "LayoutInfo" is a singleton which stores and makes      *
+//    available information about the lattice and how the fields    *
+//    are laid out the lattice on the hosts (cpus).  The init(...)  *
+//    member should be called near the beginning of program         *
+//    execution, but after MPI and Quda communications have been    *
+//    initialized. A 4 dimensional lattice is assumed (make the 4th *
+//    dimension have size 1 to use a 3 dimensional lattice). QDP    *
+//    lexicographic format is used. The lattice is dividing up on   *
+//    the MPI ranks in the same way on each rank.  The number of    *
+//   lattice sites on each MPI rank is the same.  The lattice size *
+//    in each direction must be divisible by the MPI partition      *
+//    size in each direction.                                       *
+//                                                                  *
+//    The input XML should have the following form:                 *
+//                                                                  *
+//        <LatticeLayoutInfo>                                       *
+//           <XYZTExtents>24 24 24 48</XYTZExtents>                 *
+//        </LatticeLayoutInfo>                                      *
+//                                                                  *
+//    This class can assist with getting and putting the data on    *
+//    a particular site into the lattice appropriately.             *
+//                                                                  *
+//    In order to accommodate red/black checkerboarding for an      *
+//    efficient solve of the Dirac equation, the number of sites    *
+//    on each MPI rank must be even. Lattice sites are ordered as   *
+//    even-odd checkerboard (even/odd sites have x+y+z+t even/odd), *
+//    with ordering (x,y,z,t) with t varying most slowly for each   *
+//    parity. "start_parity" is the parity of the local (0,0,0,0)   *
+//    site on the global lattice.                                   *
 
 class LayoutInfo {
 

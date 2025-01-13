@@ -5,25 +5,21 @@
 
 namespace LaphEnv {
 
-// ***********************************************************************
-// *                                                                     *
-// *   Objects of this class can be used for getting timings on the      *
-// *   host.  Typical usage is                                           *
-// *                                                                     *
-// *      StopWatch rolex;                                               *
-// *      rolex.start();   // starts the timer                           *
-// *      ....do something...                                            *
-// *      rolex.stop();   // halts the timer                             *
-// *      cout << "total time is "<<rolex.getTimeInSeconds()<<endl;      *
-// *                                                                     *
-// *   The member "getTimeInSeconds()" returns the total accumulated     *
-// *   time.  You can call a "stop", then a subsequent "start", and      *
-// *   the time will be accumulated.  Use "reset" to set the timer       *
-// *   back to zero.  "getLastIntervalInSeconds()" returns the           *
-// *   time reported between the last start and stop.  Attempting        *
-// *   to reset a running timer results in a fatal execution error.      *
-// *                                                                     *
-// ***********************************************************************
+//   Objects of this class can be used for getting timings on the      *
+//   host.  Typical usage is                                           *
+//                                                                     *
+//      StopWatch rolex;                                               *
+//      rolex.start();   // starts the timer                           *
+//      ....do something...                                            *
+//      rolex.stop();   // halts the timer                             *
+//      cout << "total time is "<<rolex.getTimeInSeconds()<<endl;      *
+//                                                                     *
+//   The member "getTimeInSeconds()" returns the total accumulated     *
+//   time.  You can call a "stop", then a subsequent "start", and      *
+//   the time will be accumulated.  Use "reset" to set the timer       *
+//   back to zero.  "getLastIntervalInSeconds()" returns the           *
+//   time reported between the last start and stop.  Attempting        *
+//   to reset a running timer results in a fatal execution error.      *
 
 class StopWatch {
 

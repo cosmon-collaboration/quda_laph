@@ -5,26 +5,24 @@
 
 namespace LaphEnv {
 
-// ****************************************************************
-// *                                                              *
-// *  "FileListInfo" stores information about a list of files     *
-// *  having a common stub and a numerical suffix from a minimum  *
-// *  value to a maximum value.  A file mode is also stored       *
-// *  which indicates whether files can be overwritten or not.    *
-// *                                                              *
-// *  Required XML input for setting the handler info:            *
-// *                                                              *
-// *   <FileListInfo>                                             *
-// *      <FileNameStub>  ...  </FileNameStub>                    *
-// *      <MaxFileNumber> ...  </MaxFileNumber> (default=0)       *
-// *      <MinFileNumber> ...  </MinFileNumber> (default=0)       *
-// *      <FileMode>      ...  </FileMode>   (optional)           *
-// *   </FileListInfo>                                            *
-// *                                                              *
-// *  FileMode can be omitted (no overwrite) or can be set to     *
-// *  "overwrite".                                                *
-// *                                                              *
-// ****************************************************************
+//                                                               *
+//   "FileListInfo" stores information about a list of files     
+//   having a common stub and a numerical suffix from a minimum  
+//   value to a maximum value.  A file mode is also stored       
+//   which indicates whether files can be overwritten or not.    
+//                                                               
+//   Required XML input for setting the handler info:            
+//                                                               
+//    <FileListInfo>                                             
+//       <FileNameStub>  ...  </FileNameStub>                    
+//       <MaxFileNumber> ...  </MaxFileNumber> (default=0)       
+//       <MinFileNumber> ...  </MinFileNumber> (default=0)       
+//       <FileMode>      ...  </FileMode>   (optional)           
+//    </FileListInfo>                                            
+//                                                               
+//   FileMode can be omitted (no overwrite) or can be set to     
+//   "overwrite".                                                
+//                                                               
 
 class FileListInfo {
 
@@ -77,7 +75,5 @@ private:
   void set_info(const std::string &stub, int min_suffix, int max_suffix,
                 bool over_write);
 };
-
-// ***************************************************************
 } // namespace LaphEnv
 #endif

@@ -4,20 +4,16 @@
 #include "gauge_configuration_info.h"
 #include "latt_field.h"
 #include "quark_action_info.h"
-#include <complex>
-#include <vector>
 
 namespace LaphEnv {
 
-// **************************************************************************
-// *                                                                        *
-// *   This file contains routines for performing various lattice field     *
-// *   operations on the CPU.  Typically, these routines are used for       *
-// *   performing checks on solutions obtained by QUDA.  These routines     *
-// *   are not particularly slow, but they are not particularly fast.       *
-// *   They should only by used for occasional checks.                      *
-// *                                                                        *
-// **************************************************************************
+//
+//    This file contains routines for performing various lattice field     *
+//    operations on the CPU.  Typically, these routines are used for       *
+//    performing checks on solutions obtained by QUDA.  These routines     *
+//    are not particularly slow, but they are not particularly fast.       *
+//    They should only by used for occasional checks.                      *
+//                                                                         *
 
 //  This routine applies an inner product conj(leftfield).rightfield,
 //  where leftfield and rightfield are color-vector fields, but the

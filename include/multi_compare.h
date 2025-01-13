@@ -1,7 +1,5 @@
 #ifndef MULTI_BOOLEAN_H
 #define MULTI_BOOLEAN_H
-#include <set>
-#include <vector>
 
 //  Objects used as keys in C++ maps require a less than
 //  operator.  The templated code here is useful for performing
@@ -15,8 +13,6 @@
 //  require the vectors be input as   u[0], v[0], u[1], v[1], ...
 
 namespace LaphEnv {
-
-// ******************************************************************
 
 template <typename T1, typename T2>
 bool multiLessThan(const T1 &u1, const T1 &v1, const T2 &u2, const T2 &v2) {
@@ -408,8 +404,6 @@ template <typename T> std::size_t multiHash(const std::vector<T> &dat) {
     ret ^= aD;
   return ret;
 }
-
-// ******************************************************************
 } // namespace LaphEnv
 
 #endif

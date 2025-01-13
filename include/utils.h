@@ -1,14 +1,9 @@
 #ifndef LAPH_UTILS_H
 #define LAPH_UTILS_H
 
-#include "byte_handler.h"
 #include "xml_handler.h"
-#include <cstdarg>
-#include <string>
 
 namespace LaphEnv {
-
-// *********************************************************
 
 //  Tests if file having name "file_name" exists on disk: works
 //  in global or local mode.
@@ -186,6 +181,5 @@ int xmlputQLEnum(const std::string &tagname, const std::vector<int> &quda_enums,
 
 XMLHandler getXML_nofail(XMLHandler xmlin, const std::string &tagname);
 
-// *************************************************************************************
 } // namespace LaphEnv
 #endif

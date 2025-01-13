@@ -3,136 +3,123 @@
 
 #include "data_io_handler.h"
 #include "dilution_handler.h"
-#include "dilution_scheme_info.h"
 #include "dir_path.h"
-#include "field_smearing_info.h"
-#include "filelist_info.h"
-#include "gauge_configuration_handler.h"
-#include "gauge_configuration_info.h"
 #include "gluon_smearing_handler.h"
 #include "inverter_info.h"
 #include "laph_noise.h"
 #include "laph_noise_info.h"
-#include "laph_stdio.h"
-#include "quark_action_info.h"
 #include "quark_smearing_handler.h"
-#include "quda.h"
-#include "xml_handler.h"
-#include <list>
+
 
 namespace LaphEnv {
 
-// *****************************************************************
-// *                                                               *
-// *  "QuarkHandler" handles computation of and subsequent access  *
-// *  to the quark source and sink functions.                      *
-// *                                                               *
-// *  One of these handlers deals with quark sources/sinks         *
-// *  for **one** set of info parameters, given by                 *
-// *                                                               *
-// *         GaugeConfigurationInfo                                *
-// *         GluonSmearingInfo                                     *
-// *         QuarkSmearingInfo                                     *
-// *         DilutionSchemeInfo                                    *
-// *         QuarkActionInfo                                       *
-// *         FileListInfo                                          *
-// *                                                               *
-// *  but one handler deals with different                         *
-// *                                                               *
-// *         time dilution projectors                              *
-// *         laph noises                                           *
-// *         all spin-eigvec dilution indices                      *
-// *                                                               *
-// *  File structure and contents:                                 *
-// *                                                               *
-// *   - Results manipulated by one handler are contained in       *
-// *     several files.  Each file has the same stub, but          *
-// *     different positive integer suffices.                      *
-// *             stub.0                                            *
-// *             stub.1                                            *
-// *             ...                                               *
-// *             stub.N                                            *
-// *     The files included are specified in a FileListInfo.       *
-// *                                                               *
-// *   - The header info in each file has a common part and a      *
-// *     part that is specific to that one file:                   *
-// *        <QuarkHandlerDataFile>                                 *
-// *           - common part                                       *
-// *           - specific part                                     *
-// *        </QuarkHandlerDataFile>                                *
-// *                                                               *
-// *   - The common header info includes                           *
-// *         GaugeConfigurationInfo                                *
-// *         GluonSmearingInfo                                     *
-// *         QuarkSmearingInfo                                     *
-// *         DilutionSchemeInfo                                    *
-// *         QuarkActionInfo                                       *
-// *                                                               *
-// *   - The specific header info includes (FileKey)               *
-// *         LaphNoiseInfo noise;                                  *
-// *         int time_projector_index;                             *
-// *                                                               *
-// *   - Each file contains several records whose access is given  *
-// *     by a RecordKey.  The RecordKey contains spin, time, and   *
-// *     the spin-eigvec dilution index.  The data in each record  *
-// *     (DataType) is a multi1d<Complex> containing "nev"         *
-// *     complex numbers, where "nev" is the number of Laph        *
-// *     eigenvectors.  Hence, each quark sink is stored by its    *
-// *     superposition coefficients in terms of the Laph           *
-// *     eigenvectors.   Only sinks are stored.  Sources are made  *
-// *     on the fly.  The Dirac-Pauli spin convention is used.     *
-// *     Note that these coefficients are **gauge invariant.**     *
-// *                                                               *
-// *   - In 3d, the "get" functions must re-construct the full     *
-// *     LatticeColorVector by evaluating the superposition of     *
-// *     Laph eigenvectors.  Hence, the Laph eigenvectors are      *
-// *     needed at this stage too. Quark displacements are done    *
-// *     on the fly as well, so the smeared gauge field is needed. *
-// *                                                               *
-// *  All Laph Handlers follow the member naming convention:       *
-// *                                                               *
-// *    compute....()  to do original computation                  *
-// *    set...()       to internally set from file or NamedObjMap  *
-// *                                                               *
-// *    get...()       provides access to results                  *
-// *                                                               *
-// *  When using "set" and "get", individual spin components and   *
-// *  time slices are returned, and this handler computes the      *
-// *  requested covariant displacements on the fly.                *
-// *                                                               *
-// *  The usual use of a QuarkHandler is as follows:               *
-// *                                                               *
-// *   - to compute the quark sources/sinks:                       *
-// *                                                               *
-// *       QuarkHandler Q;  // declare                             *
-// *       Q.setInfo(...);            // input common info         *
-// *       Q.setInverter(...);        // input inverter info       *
-// *       Q.computeSink(...);                                     *
-// *                                                               *
-// *   - to subsequently use results to compute                    *
-// *     hadron source/sinks:                                      *
-// *                                                               *
-// *       QuarkHandler Q;                                         *
-// *       Q.setInfo(...);                                         *
-// *       Q.getSink(...);      // stores in internal map          *
-// *       Q.getSources(...);   // also does displacements         *
-// *                                                               *
-// *       Q.querySources(...);  // query if available             *
-// *       Q.querySink(...);                                       *
-// *                                                               *
-// *       Q.removeSources(...);  // remove from internal map      *
-// *       Q.removeSink(...);                                      *
-// *       Q.clearOnlyDisplacedData();                             *
-// *       Q.clearData();                                          *
-// *                                                               *
-// *  Gamma-5 Hermiticity can be applied by calling                *
-// *                                                               *
-// *       Q.setGamma5HermiticityMode();                           *
-// *                                                               *
-// *  This essentially multiplies sinks by gamma_5*gamma_4 and     *
-// *  sources by -gamma_5*gamma_4.                                 *
-// *                                                               *
-// *****************************************************************
+//  "QuarkHandler" handles computation of and subsequent access  *
+//  to the quark source and sink functions.                      *
+//                                                               *
+//  One of these handlers deals with quark sources/sinks         *
+//  for **one** set of info parameters, given by                 *
+//                                                               *
+//         GaugeConfigurationInfo                                *
+//         GluonSmearingInfo                                     *
+//         QuarkSmearingInfo                                     *
+//         DilutionSchemeInfo                                    *
+//         QuarkActionInfo                                       *
+//         FileListInfo                                          *
+//                                                               *
+//  but one handler deals with different                         *
+//                                                               *
+//         time dilution projectors                              *
+//         laph noises                                           *
+//         all spin-eigvec dilution indices                      *
+//                                                               *
+//  File structure and contents:                                 *
+//                                                               *
+//   - Results manipulated by one handler are contained in       *
+//     several files.  Each file has the same stub, but          *
+//     different positive integer suffices.                      *
+//             stub.0                                            *
+//             stub.1                                            *
+//             ...                                               *
+//             stub.N                                            *
+//     The files included are specified in a FileListInfo.       *
+//                                                               *
+//   - The header info in each file has a common part and a      *
+//     part that is specific to that one file:                   *
+//        <QuarkHandlerDataFile>                                 *
+//           - common part                                       *
+//           - specific part                                     *
+//        </QuarkHandlerDataFile>                                *
+//                                                               *
+//   - The common header info includes                           *
+//         GaugeConfigurationInfo                                *
+//         GluonSmearingInfo                                     *
+//         QuarkSmearingInfo                                     *
+//         DilutionSchemeInfo                                    *
+//         QuarkActionInfo                                       *
+//                                                               *
+//   - The specific header info includes (FileKey)               *
+//         LaphNoiseInfo noise;                                  *
+//         int time_projector_index;                             *
+//                                                               *
+//   - Each file contains several records whose access is given  *
+//     by a RecordKey.  The RecordKey contains spin, time, and   *
+//     the spin-eigvec dilution index.  The data in each record  *
+//     (DataType) is a multi1d<Complex> containing "nev"         *
+//     complex numbers, where "nev" is the number of Laph        *
+//     eigenvectors.  Hence, each quark sink is stored by its    *
+//     superposition coefficients in terms of the Laph           *
+//     eigenvectors.   Only sinks are stored.  Sources are made  *
+//     on the fly.  The Dirac-Pauli spin convention is used.     *
+//     Note that these coefficients are **gauge invariant.**     *
+//                                                               *
+//   - In 3d, the "get" functions must re-construct the full     *
+//     LatticeColorVector by evaluating the superposition of     *
+//     Laph eigenvectors.  Hence, the Laph eigenvectors are      *
+//     needed at this stage too. Quark displacements are done    *
+//     on the fly as well, so the smeared gauge field is needed. *
+//                                                               *
+//  All Laph Handlers follow the member naming convention:       *
+//                                                               *
+//    compute....()  to do original computation                  *
+//    set...()       to internally set from file or NamedObjMap  *
+//                                                               *
+//    get...()       provides access to results                  *
+//                                                               *
+//  When using "set" and "get", individual spin components and   *
+//  time slices are returned, and this handler computes the      *
+//  requested covariant displacements on the fly.                *
+//                                                               *
+//  The usual use of a QuarkHandler is as follows:               *
+//                                                               *
+//   - to compute the quark sources/sinks:                       *
+//                                                               *
+//       QuarkHandler Q;  // declare                             *
+//       Q.setInfo(...);            // input common info         *
+//       Q.setInverter(...);        // input inverter info       *
+//       Q.computeSink(...);                                     *
+//                                                               *
+//   - to subsequently use results to compute                    *
+//     hadron source/sinks:                                      *
+//                                                               *
+//       QuarkHandler Q;                                         *
+//       Q.setInfo(...);                                         *
+//       Q.getSink(...);      // stores in internal map          *
+//       Q.getSources(...);   // also does displacements         *
+//                                                               *
+//       Q.querySources(...);  // query if available             *
+//       Q.querySink(...);                                       *
+//                                                               *
+//       Q.removeSources(...);  // remove from internal map      *
+//       Q.removeSink(...);                                      *
+//       Q.clearOnlyDisplacedData();                             *
+//       Q.clearData();                                          *
+//                                                               *
+//  Gamma-5 Hermiticity can be applied by calling                *
+//                                                               *
+//       Q.setGamma5HermiticityMode();                           *
+//                                                               *
+//  This essentially multiplies sinks by gamma_5*gamma_4 and     *
+//  sources by -gamma_5*gamma_4.                                 *
 
 class QuarkHandler {
 
@@ -416,44 +403,7 @@ public:
 
   // Access to the displaced sources/sinks.  If a source is zero,
   // a null pointer is returned.
-  /*
-     const LatticeColorVector* getData(bool source, const LaphNoiseInfo& noise,
-                                       int time_proj_index,
-                                       int spinlev_dilution_index, int spin,
-                                       const DirPath& displace, int disp_length,
-                                       int time);
-
-     multi1d<Complex> getCoefficients(bool source, const LaphNoiseInfo& noise,
-                                      int time_proj_index,
-                                      int spinlev_dilution_index, int spin,
-                                      int time);
-
-     bool queryData(bool source, const LaphNoiseInfo& noise, int
-     time_proj_index, int spinlev_dilution_index, int spin=1, int time=-1);
-
-
-     void removeData(bool source, const LaphNoiseInfo& noise,
-                     int time_proj_index, int spinlev_dilution_index, int spin,
-                     const DirPath& displace, int disp_length, int time);
-
-
-     void clearOnlyDisplacedData();
-  */
   void clearData();
-  /*
-     void clearGaugeData();
-
-     DataType getLaphEigenvectorSinkCoefficients(const LaphNoiseInfo& noise,
-                                                 int time_proj_index,
-                                                 int spinlev_dilution_index,
-                                                 int spin, int time);
-
-     QuarkSmearingHandler& getQuarkSmearingHandler()
-      {return *qSmearHandler;}
-
-     GluonSmearingHandler& getGluonSmearingHandler()
-      {return *gSmearHandler;}
-  */
 
 private:
   void set_info(const GaugeConfigurationInfo &gaugeinfo,
@@ -491,7 +441,7 @@ private:
   // Makes the source in the Dirac-Pauli basis.  The source is
   // gamma_4 times the usual source since we use the chi = psi-bar gamma_4
   // field operator.
-  void make_source(LattField &ferm_src, const Array<cmplx> &laph_noise,
+  void make_source(LattField &ferm_src, const Array<std::complex<double>> &laph_noise,
                    const std::vector<void *> &evList,
                    const std::list<int> &on_times,
                    const std::list<int> &on_spins,
@@ -503,6 +453,5 @@ private:
 
 typedef QuarkHandler::FileKey NoiseAndTimeProjector;
 
-// ***************************************************************
 } // namespace LaphEnv
 #endif

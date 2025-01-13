@@ -2,7 +2,6 @@
 #define LAPH_NOISE_INFO_H
 
 #include "gauge_configuration_info.h"
-#include <cstdint>
 
 namespace LaphEnv {
 

@@ -6,52 +6,50 @@
 
 namespace LaphEnv {
 
-// *******************************************************************
-// *                                                                 *
-// *   Objects of class "GluonSmearingInfo" and "QuarkSmearingInfo"  *
-// *   store identifying info about both the link and quark field    *
-// *   smearing used.  Stout link smearing and quark Laph smearing   *
-// *   are enforced.  The XML input must have the format             *
-// *                                                                 *
-// *       <GluonStoutSmearingInfo>                                  *
-// *           <LinkIterations> 4 </LinkIterations>                  *
-// *           <LinkStapleWeight>  0.25 </LinkStapleWeight>          *
-// *       </GluonStoutSmearingInfo>                                 *
-// *                                                                 *
-// *       <QuarkLaphSmearingInfo>                                   *
-// *           <LaphSigmaCutoff> 0.76 </LaphSigmaCutoff>             *
-// *           <NumberLaphEigvecs> 32 </NumberLaphEigvecs>           *
-// *       </QuarkLaphSmearingInfo>                                  *
-// *                                                                 *
-// *   Remember that the Laplacian Heaviside smearing (Laph) is      *
-// *   defined by                                                    *
-// *              theta( sigma_s^2 + Delta )                         *
-// *                                                                 *
-// *   where Delta = covariant Laplacian and sigma_s is specified    *
-// *   in the <LaphSigmaCutoff> tag.                                 *
-// *                                                                 *
-// *   Example usage:                                                *
-// *                                                                 *
-// *     XmlReader xml_in(...);                                      *
-// *     GluonSmearingInfo Gsmear(xml_in);                           *
-// *     QuarkSmearingInfo Qsmear(xml_in);                           *
-// *                                                                 *
-// *     GluonSmearingInfo smear2(....);                             *
-// *     Gsmear.checkEqual(smear2); // throws string exception       *
-// *                                //   if smear2 != smear          *
-// *     if (smear==smear2) ...     // returns boolean               *
-// *                                                                 *
-// *     int ival = Gsmear.getNumberOfLinkIterations();              *
-// *     double dval = Gsmear.getLinkStapleWeight();                 *
-// *     int jval = Qsmear.getNumberOfLaplacianEigenvectors();       *
-// *     double dval = Qsmear.getLaphSigmaCutoff();                  *
-// *     string sval = Gsmear.getSmearingType();                     *
-// *     string ssval = Qsmear.getSmearingType();                    *
-// *                                                                 *
-// *     string out = smear.output();    // xml output               *
-// *     string out = smear.output(2);   // indented xml output      *
-// *                                                                 *
-// *******************************************************************
+//                                                                 *
+//    Objects of class "GluonSmearingInfo" and "QuarkSmearingInfo"  
+//    store identifying info about both the link and quark field    
+//    smearing used.  Stout link smearing and quark Laph smearing   
+//    are enforced.  The XML input must have the format             
+//                                                                  
+//        <GluonStoutSmearingInfo>                                  
+//            <LinkIterations> 4 </LinkIterations>                  
+//            <LinkStapleWeight>  0.25 </LinkStapleWeight>          
+//        </GluonStoutSmearingInfo>                                 
+//                                                                  
+//        <QuarkLaphSmearingInfo>                                   
+//            <LaphSigmaCutoff> 0.76 </LaphSigmaCutoff>             
+//            <NumberLaphEigvecs> 32 </NumberLaphEigvecs>           
+//        </QuarkLaphSmearingInfo>                                  
+//                                                                  
+//    Remember that the Laplacian Heaviside smearing (Laph) is      
+//    defined by                                                    
+//               theta( sigma_s^2 + Delta )                         
+//                                                                  
+//    where Delta = covariant Laplacian and sigma_s is specified    
+//    in the <LaphSigmaCutoff> tag.                                 
+//                                                                  
+//    Example usage:                                                
+//                                                                  
+//      XmlReader xml_in(...);                                      
+//      GluonSmearingInfo Gsmear(xml_in);                           
+//      QuarkSmearingInfo Qsmear(xml_in);                           
+//                                                                  
+//      GluonSmearingInfo smear2(....);                             
+//      Gsmear.checkEqual(smear2); // throws string exception       
+//                                 //   if smear2 != smear          
+//      if (smear==smear2) ...     // returns boolean               
+//                                                                  
+//      int ival = Gsmear.getNumberOfLinkIterations();              
+//      double dval = Gsmear.getLinkStapleWeight();                 
+//      int jval = Qsmear.getNumberOfLaplacianEigenvectors();       
+//      double dval = Qsmear.getLaphSigmaCutoff();                  
+//      string sval = Gsmear.getSmearingType();                     
+//      string ssval = Qsmear.getSmearingType();                    
+//                                                                  
+//      string out = smear.output();    // xml output               
+//      string out = smear.output(2);   // indented xml output      
+//                                                                  
 
 class GluonSmearingInfo {
 

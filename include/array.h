@@ -1,11 +1,8 @@
 #ifndef ARRAY_H
 #define ARRAY_H
+
 #include <complex>
-#include <cstring>
-#include <iostream>
 #include <map>
-#include <string>
-#include <utility>
 #include <vector>
 
 // ************************************************************
