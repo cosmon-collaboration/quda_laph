@@ -6,11 +6,6 @@
 #include "latt_field.h"
 #include <fstream>
 
-//#include <list>
-//#include <unistd.h>
-//#include "layout_info.h"
-//#include <complex>
-
 #ifdef ARCH_PARALLEL
 #include <mpi.h>
 #endif
