@@ -1,14 +1,16 @@
 #include "quark_handler.h"
 #include "multi_compare.h"
-#include "array.h"
 #include "stop_watch.h"
 #include "field_ops.h"
+#include "laph_noise.h"
 
 #if defined(USE_GSL_CBLAS)
 #include "gsl_cblas.h"
 #elif defined(USE_OPENBLAS)
 #include "cblas.h"
 #endif
+
+//#define EXTRA_LAPH_CHECKS
 
     // STILL TO DO:  single asynchronous thread for output so can continue next computations
     //                   while output occurs
@@ -206,7 +208,7 @@ void QuarkHandler::set_info(const GaugeConfigurationInfo& gaugeinfo,
     errorLaph(make_strf("allocation problem in QuarkHandler: %s",xp.what()));}
 
  connectGaugeConfigurationHandler();
- connectGluonSmearingHandler(smeared_gauge_filename);
+ //connectGluonSmearingHandler(smeared_gauge_filename);
  connectQuarkSmearingHandler(smeared_quark_filestub);
  connectDilutionHandler();
 }
@@ -361,7 +363,7 @@ void QuarkHandler::clear()
  preconditioner=0;
 
  disconnectGaugeConfigurationHandler();
- disconnectGluonSmearingHandler();
+ //disconnectGluonSmearingHandler();
  disconnectQuarkSmearingHandler();
  disconnectDilutionHandler();
  clearData();
@@ -378,89 +380,56 @@ void QuarkHandler::clear()
 
 void QuarkHandler::connectGaugeConfigurationHandler()
 {
- if ((gaugeCounter==0)&&(gaugeHandler.get()==0)){
+ if (gaugeHandler.get()==0){
     try{
-       gaugeHandler.reset(new GaugeConfigurationHandler(*uPtr));
-       gaugeCounter=1;}
+       gaugeHandler.reset(new GaugeConfigurationHandler(*uPtr));}
     catch(const std::exception& xp){
        errorLaph("allocation problem in QuarkHandler::connectGaugeConfigurationHandler");}}
- else{
-    try{
-       if (gaugeHandler.get()==0) throw(std::invalid_argument("error"));
-       uPtr->checkEqual(gaugeHandler->getGaugeConfigurationInfo());
-       gaugeCounter++;}
-    catch(const std::exception& xp){
-       errorLaph("inconsistent QuarkHandler::connectGaugeConfigurationHandler");}}
 }
 
 void QuarkHandler::disconnectGaugeConfigurationHandler()
 {
- gaugeCounter--;
- if (gaugeCounter==0){
-    try{ gaugeHandler.reset();}
-    catch(const std::exception& xp){
-       errorLaph("delete problem in QuarkHandler::disconnectGaugeConfigurationHandler");}}
+ try{ gaugeHandler.reset();}
+ catch(const std::exception& xp){
+    errorLaph("delete problem in QuarkHandler::disconnectGaugeConfigurationHandler");}
 }
 
 
 
-
+/*
 void QuarkHandler::connectGluonSmearingHandler(const string& smeared_gauge_filename)
 {
- if ((gSmearCounter==0)&&(gSmearHandler.get()==0)){
+ if (gSmearHandler.get()==0){
     try{
-       gSmearHandler.reset(new GluonSmearingHandler(*gSmearPtr,*uPtr,smeared_gauge_filename));
-       gSmearCounter=1;}
+       gSmearHandler.reset(new GluonSmearingHandler(*gSmearPtr,*uPtr,smeared_gauge_filename));}
     catch(const std::exception& xp){
        clear();
        errorLaph("allocation problem in QuarkHandler::connectGluonSmearingHandler");}}
- else{
-    try{
-       if (gSmearHandler.get()==0) throw(std::invalid_argument("error"));
-       uPtr->checkEqual(gSmearHandler->getGaugeConfigurationInfo());
-       gSmearPtr->checkEqual(gSmearHandler->getGluonSmearingInfo());
-       gSmearCounter++;}
-    catch(const std::exception& xp){
-       errorLaph("inconsistent QuarkHandler::connectGluonSmearingHandler");}}
 }
 
 void QuarkHandler::disconnectGluonSmearingHandler()
 {
- gSmearCounter--;
- if (gSmearCounter==0){
-    try{ gSmearHandler.reset();}
-    catch(const std::exception& xp){
-       errorLaph("delete problem in QuarkHandler::disconnectGluonSmearingHandler");}}
+ try{ gSmearHandler.reset();}
+ catch(const std::exception& xp){
+    errorLaph("delete problem in QuarkHandler::disconnectGluonSmearingHandler");}
 }
-
+*/
 
 void QuarkHandler::connectQuarkSmearingHandler(const string& smeared_quark_filestub)
 {
- if ((qSmearCounter==0)&&(qSmearHandler.get()==0)){
+ if (qSmearHandler.get()==0){
     try{
        qSmearHandler.reset(new QuarkSmearingHandler(*gSmearPtr,*uPtr,*qSmearPtr,
-                                                    smeared_quark_filestub));
-       qSmearCounter=1;}
+                                                    smeared_quark_filestub));}
     catch(const std::exception& xp){
        errorLaph("allocation problem in QuarkHandler::connectQuarkSmearingHandler");}}
- else{
-    try{
-       if (qSmearHandler.get()==0) throw(std::invalid_argument("error"));
-       uPtr->checkEqual(qSmearHandler->getGaugeConfigurationInfo());
-       qSmearHandler->updateSmearing(*qSmearPtr);  // increase eigvecs if needed
-       qSmearCounter++;}
-    catch(const std::exception& xp){
-       errorLaph("inconsistent QuarkHandler::connectQuarkSmearingHandler");}}
- qSmearHandler->checkAllLevelFilesExist();
 }
 
 void QuarkHandler::disconnectQuarkSmearingHandler()
 {
- qSmearCounter--;
- if (qSmearCounter==0){
-    try{ qSmearHandler.reset();}
-    catch(const std::exception& xp){
-       errorLaph("delete problem in QuarkHandler::disconnectQuarkSmearingHandler");}}
+ try{ qSmearHandler.reset();}
+ catch(const std::exception& xp){
+    errorLaph("delete problem in QuarkHandler::disconnectQuarkSmearingHandler");}
 }
 
 
@@ -768,15 +737,20 @@ void QuarkHandler::computeSinks(bool verbose, bool extra_soln_check)
      // load the gauge configuration onto host and device
  StopWatch rolex; rolex.start();
  gaugeHandler->setData();
+ XMLHandler gauge_xmlinfo;
+ gaugeHandler->getXMLInfo(gauge_xmlinfo);
+ printLaph("XML info for the gauge configuration:");
+ printLaph(make_strf("%s\n",gauge_xmlinfo.output()));
+
      // quda hack to handle antifermionic temporal boundary conditions
- bool fermbchack=qactionPtr->isFermionTimeBCAntiPeriodic();
- if (fermbchack){
-    gaugeHandler->eraseDataOnDevice();  // erase on device to apply b.c. below to host, then copy to device
-    gaugeHandler->applyFermionTemporalAntiPeriodic();}
+// bool fermbchack=qactionPtr->isFermionTimeBCAntiPeriodic();
+// if (fermbchack){
+//    gaugeHandler->eraseDataOnDevice();  // erase on device to apply b.c. below to host, then copy to device
+//    gaugeHandler->applyFermionTemporalAntiPeriodic();}
  gaugeHandler->copyDataToDevice();
      // undo the hack on the host
- if (fermbchack){
-    gaugeHandler->applyFermionTemporalAntiPeriodic();}
+// if (fermbchack){
+//    gaugeHandler->applyFermionTemporalAntiPeriodic();}
  rolex.stop();
  double grtime=rolex.getTimeInSeconds();
  printLaph("...gauge configuration loaded on host and device");
@@ -795,6 +769,19 @@ void QuarkHandler::computeSinks(bool verbose, bool extra_soln_check)
        printLaph(make_str(" Time to set up clover term was ",clovertime," seconds"));
        QudaInfo::clover_on_device=true;}}
 
+     // load the LapH eigenvectors onto host, store pointers
+ rolex.reset(); rolex.start();
+ int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
+ if (!qSmearHandler->queryLaphEigenvectors()){
+    errorLaph("Could not load the LapH eigenvectors--computation cannot continue");}
+ const vector<LattField>& laphevs(qSmearHandler->getLaphEigenvectors());
+ vector<void*> evList(nEigs);
+ for (int n=0;n<nEigs;n++){
+    evList[n] = (void*)(laphevs[n].getDataConstPtr());}
+ rolex.stop();
+ double evreadtime=rolex.getTimeInSeconds();
+ printLaph(make_str("All Laph eigvecs read in ",evreadtime," seconds\n"));
+ 
     // set up any preconditioning in the inverter
  double precondtime=0.0;
  rolex.reset(); rolex.start();
@@ -804,18 +791,6 @@ void QuarkHandler::computeSinks(bool verbose, bool extra_soln_check)
  if (precond){
     printLaph(make_str(" Time to set up inverter preconditioner was ",precondtime," seconds"));}
 
-     // load the LapH eigenvectors onto host, store pointers
- rolex.reset(); rolex.start();
- int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
- vector<void*> evList(nEigs);
- for (int n=0;n<nEigs;n++){
-    evList[n] = (void*)(qSmearHandler->getLaphEigenvector(n).getDataConstPtr());
-    printLaph(make_strf("read LapH eigvec level %d",n));}
- qSmearHandler->closeLaphLevelFiles();
- rolex.stop();
- double evreadtime=rolex.getTimeInSeconds();
- printLaph(make_str("All Laph eigvecs read in ",evreadtime," seconds\n"));
- 
  double srctime=0.0;
  double invtime=0.0;
  double evprojtime=0.0;
@@ -964,7 +939,7 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo& noise, int time_proj_index,
        LattField sol_check(FieldSiteType::ColorSpinVector);
        void *sol_checkptr=sol_check.getDataPtr();
        MatQuda(sol_checkptr,spinor_snk,&quda_inv_param);
-       compare_latt_fields(sol_check,ferm_src);}
+       LaphEnv::compare_latt_fields(sol_check,ferm_src);}
 
     if ((quda_inv_param.iter>0)&&(quda_inv_param.iter<int(invertPtr->getMaxIterations()))){
        sinkBatchInds[iSinkBatch] = dil;
@@ -1120,14 +1095,9 @@ void QuarkHandler::clearData()
 
   //  static pointers (set to null in default constructor)
 
-unique_ptr<GluonSmearingHandler> QuarkHandler::gSmearHandler;
+//unique_ptr<GluonSmearingHandler> QuarkHandler::gSmearHandler;
 unique_ptr<QuarkSmearingHandler> QuarkHandler::qSmearHandler;
 unique_ptr<GaugeConfigurationHandler> QuarkHandler::gaugeHandler;
-
-int QuarkHandler::gSmearCounter=0;
-int QuarkHandler::qSmearCounter=0;
-int QuarkHandler::gaugeCounter=0;
-//bool QuarkHandler::keepInMemory=false;
 
 // ***************************************************************
 }

@@ -1,11 +1,7 @@
 #include "read_gauge_field.h"
-#include "layout_info.h"
 #include "byte_handler.h"
-#include "util_quda.h"
 #include "laph_stdio.h"
 #include "stop_watch.h"
-#include "gauge_configuration_info.h"
-#include <fstream>
 using namespace std;
 using namespace quda;
 
@@ -27,7 +23,8 @@ bool GaugeConfigReader::read(std::vector<LattField>& U,
        // if gauge config type is CERN
  if ((ginfo.file_format=="CERN")||(ginfo.file_format=="CLS")){
     GaugeCERNConfigReader GCCR;
-    GCCR.read(U,ginfo.getFileName());}
+    GCCR.read(U,ginfo.getFileName());
+    ginfo.output(gauge_xmlinfo);}
 
  return true;
 }

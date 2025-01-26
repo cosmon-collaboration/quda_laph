@@ -98,16 +98,16 @@ bool LaphNoiseInfo::operator<(const LaphNoiseInfo& in) const
 // **********************************************************
 
 
-unsigned long LaphNoiseInfo::getSeed(const GaugeConfigurationInfo& G) const
+uint32_t LaphNoiseInfo::getSeed(const GaugeConfigurationInfo& G) const
 {
  int traj_num=G.getConfigNumber();
  if ((traj_num<0)||(traj_num>65535)){
     std::cerr << " Error in LaphNoiseInfo::getSeed; unsupported HMC"
                 << " trajectory number...limited range 0..65535"<<std::endl;
     throw(std::invalid_argument("error"));}
- unsigned long m_seed = getSeed();
- unsigned long currTraj = traj_num;
- unsigned long rngseed  = m_seed & 0xFFUL;         // 8 least sig bits of m_seed
+ uint32_t m_seed = getSeed();
+ uint32_t currTraj = traj_num;
+ uint32_t rngseed  = m_seed & 0xFFUL;              // 8 least sig bits of m_seed
  rngseed = (rngseed<<16) | (currTraj & 0xFF00UL);  // 8 most sig bits of currTraj
  rngseed = (rngseed<<8) | (m_seed & 0xFF00UL)      // 8 most sig bits of m_seed
            | (currTraj & 0xFFUL);                  // 8 least sig bits of currTraj

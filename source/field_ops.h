@@ -1,11 +1,10 @@
 #ifndef FIELD_OPS_H
 #define FIELD_OPS_H
 
-#include <complex>
-#include <vector>
 #include "latt_field.h"
 #include "gauge_configuration_info.h"
 #include "quark_action_info.h"
+#include <complex>
 
 
 namespace LaphEnv {
@@ -36,8 +35,16 @@ void setUnitField(LattField& field);
 
 void setZeroField(LattField& field);
 
+   // Sets the zeroth element at a site to exp(I*sum(site[k]*momfactors[k],k))
+   // and each subsequent element at the site gets multiplied by another
+   // factor of exp(I*local_phase)
+
+void setVariablePhaseField(LattField& field, const std::vector<double>& momfactors,
+                           const double& local_phase);
+
 void compare_latt_fields(const LattField& src1, const LattField& src2);
 
+void convertSpinBasis(LattField& outferm, const LattField& inferm, const std::string& from_to);
 
    //   Applies the clover Dirac operation to "infield", returning
    //   the result in "outfield".  This operation is
@@ -58,7 +65,8 @@ void compare_latt_fields(const LattField& src1, const LattField& src2);
    //                     + U(-mu,-nu,mu,nu) + U(-nu,mu,nu,-mu)
    //
    //   Lattice shifts must take the fermion temporal boundary
-   //   conditions into account.
+   //   conditions into account.  This routine assumes the Dirac-Pauli
+   //   convention for the Dirac gamma-matrices.
    
 
 void applyCloverDirac(LattField& outfield, const LattField& infield,

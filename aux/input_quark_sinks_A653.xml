@@ -75,7 +75,7 @@
               <DilutionType>full</DilutionType>
            </SpinDilution>
         </LaphDilutionScheme>
-        <Verbosity>full</Verbosity>
+        <Verbosity>low</Verbosity>
      </QuarkLineEndInfo> 
      <SinkComputations>
         <NumSinksBeforeProject>  4 </NumSinksBeforeProject>

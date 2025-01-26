@@ -26,9 +26,13 @@ namespace LaphEnv {
 // *  necessary.  This class is mainly useful for file I/O of lattice       *
 // *  fields and simple storage on the hosts.                               *
 // *                                                                        *
-// *  QDPXX format is assumed: lattice sites are assumed to be even-odd     *
-// *  checkerboard (even/odd sites have x+y+z+t even/odd), with ordering    *
-// *  (x,y,z,t) with t varying most slowly for each parity; SU3 color       *
+// *  QDPXX format is assumed: data are ordered as follows:                 *
+// *     ( site, spin, color ) with color index varying fastest.            *
+// *  Data associated with a particular site are contiguous. Lattice sites  *
+// *  are ordered in an even-odd checkerboard (even/odd sites have global   *
+// *  coordinates x+y+z+t even/odd), with ordering (x,y,z,t) with t varying *
+// *  most slowly for each parity; on each MPI rank, all even parity sites  *
+// *  are ordered first, followed by the odd parity sites. Each SU3 color   *
 // *  matrix is all 9 complex components row major; ColorSpinVector has     *
 // *  the color index varying fastest.                                      *
 // *                                                                        *
@@ -74,9 +78,9 @@ class LattField
                                     m_site_bytes(in.m_site_bytes){}
    
    LattField& operator=(const LattField& in)
-    {m_data=in.m_data; m_sitetype=in.m_sitetype; 
+    {m_data=in.m_data; m_sitetype=in.m_sitetype;
      m_site_elems=in.m_site_elems;
-     m_site_bytes=in.m_site_bytes; return *this;}           
+     m_site_bytes=in.m_site_bytes; return *this;}
    
    size_t bytesPerSite() const
     {return m_site_bytes;}

@@ -1,9 +1,6 @@
 #ifndef DIR_PATH_H
 #define DIR_PATH_H
 
-#include <set>
-#include <list>
-#include <vector>
 #include "xml_handler.h"
 #include "laph_stdio.h"
 

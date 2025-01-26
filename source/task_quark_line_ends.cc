@@ -1,22 +1,15 @@
 #include "tasks.h"
-#include "gauge_configuration_info.h"
-#include "quark_smearing_handler.h"
-#include "dilution_scheme_info.h"
-#include "quark_action_info.h"
-#include "inverter_info.h"
-#include "filelist_info.h"
 #include "quark_handler.h"
 #include "stop_watch.h"
 
 using namespace std;
-using namespace quda;
 
 namespace LaphEnv {
 
 // *****************************************************************************************
 // *                                                                                       *
-// *   Task to compute stochastic LapH quark line sinks and write to file or               *
-// *   the NamedObjMap.   The input XML is expected to have the following  form:           *
+// *   Task to compute stochastic LapH quark line sinks and write to file(s).              *
+// *   The input XML is expected to have the following  form:                              *
 // *                                                                                       *
 // *      <Task>                                                                           *
 // *         <Name>LAPH_QUARK_LINE_ENDS</Name>                                             *
@@ -33,12 +26,11 @@ namespace LaphEnv {
 // *               <LinkIterations>20</LinkIterations>                                     *
 // *               <LinkStapleWeight>0.1</LinkStapleWeight>                                *
 // *            </GluonStoutSmearingInfo>                                                  *
-// *            <SmearedGaugeFileName>/path/smeared_gauge_field_1</SmearedGaugeFileName>   *
 // *            <QuarkLaphSmearingInfo>                                                    *
 // *               <LaphSigmaCutoff>0.32</LaphSigmaCutoff>                                 *
 // *               <NumberLaphEigvecs> 32 </NumberLaphEigvecs>                             *
 // *            </QuarkLaphSmearingInfo>                                                   *
-// *            <SmearedQuarkFileStub>/path/smeared_quark_field_1</SmearedQuarkFileStub>   *
+// *            <SmearedQuarkFileStub>/path/sq_field</SmearedQuarkFileStub> (see below)    *
 // *            <QuarkActionInfo>                                                          *
 // *               <Name> WILSON_CLOVER </Name>                                            *
 // *               <Flavor> ud </Flavor>                                                   *
@@ -69,7 +61,7 @@ namespace LaphEnv {
 // *               </SpinDilution>                                                         *
 // *            </LaphDilutionScheme>                                                      *
 // *            <Verbosity>full</Verbosity>                                                *
-// *            <ExtraSolutionChecks/> (optional)                                           *
+// *            <ExtraSolutionChecks/> (optional)                                          *
 // *         </QuarkLineEndInfo>                                                           *
 // *         <SinkComputations>                                                            *
 // *            <NumSinksBeforeProject>  4 </NumSinksBeforeProject>                        *
@@ -97,9 +89,13 @@ namespace LaphEnv {
 // *         </SinkComputations>                                                           *
 // *      </Task>                                                                          *
 // *                                                                                       *
-// *   If the tag "Verbosity" is included with value "full", then the quark sink           *
-// *   solutions will be echoed to standard output as coefficients of the LapH             *
-// *   eigenvectors.                                                                       *
+// *   If the tag <SmearedQuarkFileStub> is set, then the LapH eigenvectors will be read   *
+// *   from file.  Otherwise, this task expects that the LapH eigenvectors already         *
+// *   reside in HostGlobal; otherwise, an error results.                                  *
+// *                                                                                       *
+// *   If the tag "Verbosity" is included with value "medium" or higher, then the quark    *
+// *   sink solutions will be echoed to standard output as coefficients of the LapH        *
+// *   eigenvectors.  This overrides the default verbosity.                                *
 // *                                                                                       *
 // *****************************************************************************************
 
@@ -112,23 +108,19 @@ void doLaphQuarkLineEnds(XMLHandler& xmltask)
  GluonSmearingInfo gSmear(xmlr);
  QuarkSmearingInfo qSmear(xmlr);
  string smeared_quark_filestub;
- xmlread(xmlr,"SmearedQuarkFileStub",smeared_quark_filestub,"LAPH_QUARK_LINE_ENDS");
+ xmlreadif(xmlr,"SmearedQuarkFileStub",smeared_quark_filestub,"LAPH_QUARK_LINE_ENDS");
  string smeared_gauge_filename;
- xmlread(xmlr,"SmearedGaugeFileName",smeared_gauge_filename,"LAPH_QUARK_LINE_ENDS");
+ xmlreadif(xmlr,"SmearedGaugeFileName",smeared_gauge_filename,"LAPH_QUARK_LINE_ENDS");
  DilutionSchemeInfo dil(xmlr);
  QuarkActionInfo quark(xmlr);
  FileListInfo files(xmlr);
  InverterInfo invinfo(xmlr);
  bool verbose=false;  // output final results
- string verbosity;
- xmlreadif(xmlr,"Verbosity",verbosity,"LAPH_QUARK_LINE_ENDS");
- if (tidyString(verbosity)=="full"){
-    verbose=true; 
-    setVerbosity(QUDA_VERBOSE);}
- else if (verbosity=="low"){
-    setVerbosity(QUDA_SUMMARIZE);}
- else if (verbosity=="none"){
-    setVerbosity(QUDA_SILENT);}
+ Verbosity verbosity(getVerbosity());
+ xml_read_if(xmlr,verbosity);
+ setVerbosity(verbosity.getQudaValue());
+ if (verbosity.isMediumOrHigher()){
+    verbose=true;}
  bool extra_soln_check=false;
  if (xml_tag_count(xmlr,"ExtraSolutionChecks")>=1){
     extra_soln_check=true;}
@@ -143,8 +135,10 @@ void doLaphQuarkLineEnds(XMLHandler& xmltask)
  printLaph(make_strf("\n%s\n",gaugeinfo.output()));
  printLaph(make_strf("\n\nGluon Smearing:\n%s\n",gSmear.output()));
  printLaph(make_strf("\n\nQuark Smearing:\n%s\n",qSmear.output()));
- printLaph(make_strf("SmearedQuarkFileStub: %s",smeared_quark_filestub));
- printLaph(make_strf("SmearedGaugeFileName: %s",smeared_gauge_filename));
+ if (!smeared_quark_filestub.empty()){
+    printLaph(make_strf("SmearedQuarkFileStub: %s",smeared_quark_filestub));}
+ if (!smeared_gauge_filename.empty()){
+    printLaph(make_strf("SmearedGaugeFileName: %s",smeared_gauge_filename));}
  printLaph(make_strf("\nDilution Scheme Info:\n%s\n",dil.output()));
  printLaph(make_str("\nQuarkAction:\n",quark.output()));
  printLaph(make_str("\nInverter Info:\n",invinfo.output()));

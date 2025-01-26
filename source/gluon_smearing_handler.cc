@@ -1,4 +1,5 @@
 #include "gluon_smearing_handler.h"
+#include "host_global.h"
 #include "stop_watch.h"
 
 using namespace std;
@@ -18,7 +19,7 @@ namespace LaphEnv {
    // constructors
 
 GluonSmearingHandler::GluonSmearingHandler() 
-     : smearPtr(0), uPtr(0), m_read_mode(true), dh_ptr(0)  {}
+     : smearPtr(0), uPtr(0), m_read_mode(true) {}
 
 
 
@@ -27,7 +28,6 @@ GluonSmearingHandler::GluonSmearingHandler(const GluonSmearingInfo& gluon_smeari
                                            const string& smearedFieldFileName,
                                            bool readmode)
 {
- dh_ptr = 0;
  set_info(gluon_smearing,gauge,smearedFieldFileName,readmode);
 }
 
@@ -48,34 +48,13 @@ void GluonSmearingHandler::set_info(const GluonSmearingInfo& gluon_smearing,
                                     bool readmode)
 {
  m_read_mode=readmode;
- string ftype("Laph--SmearedGaugeField4D");
- h_filename=tidyString(smearedFieldFileName);
- if (emptyFileName(h_filename)){
-    errorLaph("empty file name in GluonSmearingHandler");}
+ h_filename=tidyNameOfFile(smearedFieldFileName);
  try{
     uPtr=new GaugeConfigurationInfo(gauge);
     smearPtr=new GluonSmearingInfo(gluon_smearing);}
  catch(const std::exception& xp){
     printLaph("problem in setInfo in GluonSmearingHandler");
     throw(std::runtime_error("No smeared gauge file found"));}
-
-    // check that the file exists and contains the appropriate data
- if (m_read_mode){
-    printLaph(make_strf("Checking file: %s",h_filename));
-    if (!fileExists(h_filename)){
-         string mesg("file "); mesg+=h_filename+" does not exist\n";
-         mesg+=" reading the smeared gauge time slices\n";
-         mesg+="   will not be possible\n";
-         mesg+="No smeared gauge file found\n";
-         clear(); 
-         throw(std::runtime_error(mesg));}}
-
-      // Open for reading (reads header info and checks)
-
- if (m_read_mode){
-    dh_ptr = new DataGetHandlerSFO<GluonSmearingHandler,RecordKey,
-                                   vector<LattField> >(*this,h_filename,ftype);
-    printLaph(make_strf("File %s successfully opened and header matches\n",h_filename));}
 }
 
     // destructor
@@ -88,9 +67,6 @@ GluonSmearingHandler::~GluonSmearingHandler()
 
 void GluonSmearingHandler::clear()
 {
- clearData();
- if (dh_ptr) delete dh_ptr; 
- dh_ptr=0;
  try{
     delete smearPtr;
     delete uPtr;} 
@@ -139,9 +115,9 @@ void GluonSmearingHandler::filefail(const string& message)
 
  // **********************************************************
 
-           // Compute the smeared gauge field and put into the file
-           // whose name is stored in "h_filename".  Use file name
-           // starting with "NOM_" to place in the NamedObjMap.
+           // Compute the smeared gauge field into HostGlobal and put into
+           // the file whose name is stored in "h_filename" unless the
+           // file name is empty
 
 void GluonSmearingHandler::computeSmearedGaugeField()
 {
@@ -149,16 +125,29 @@ void GluonSmearingHandler::computeSmearedGaugeField()
  if (m_read_mode)
     throw(std::runtime_error("Cannot computeSmearedGaugeField in read mode"));
 
+ if (GB::theSmearedGaugeConfigIsSet()){
+    return;}
+ 
     // check if output file exists; if so, we do not want to overwrite
-    // so quit
+    // so return
 
- if (fileExists(h_filename)){
+ if ((!h_filename.empty())&&(fileExists(h_filename))){
     printLaph(make_strf("file %s already exists",h_filename));
     printLaph(" will not overwrite; no output written\n");
     return;}
 
  printLaph("Computation of smeared gauge field commencing in GluonSmearingHandler");
  printLaph(smearPtr->output());
+
+    // get the gauge configuration and put onto the device (config will remain
+    // in HostGlobal and on the device after this handler is destroyed)
+ GaugeConfigurationHandler GH(*uPtr);
+ GH.setData();
+ XMLHandler gauge_xmlinfo;
+ GH.getXMLInfo(gauge_xmlinfo);
+ printLaph("XML info for the gauge configuration:");
+ printLaph(make_strf("%s\n",gauge_xmlinfo.output()));
+ GH.copyDataToDevice();
 
  QudaGaugeSmearParam gauge_smear_param = newQudaGaugeSmearParam();
  smearPtr->setQudaGaugeSmearParam(gauge_smear_param);
@@ -179,46 +168,79 @@ void GluonSmearingHandler::computeSmearedGaugeField()
  printLaph(make_strf("Smearing computation done: time was %g seconds",bulova.getTimeInSeconds()));
  QudaInfo::smeared_gauge_on_device=true;
 
-    // Now save to host
+    // Now save smeared gauge to host
  bulova.reset(); bulova.start();
  QudaGaugeParam smeared_gauge_info = newQudaGaugeParam();
  uPtr->setQudaGaugeParam(smeared_gauge_info);
  smeared_gauge_info.type = QUDA_SMEARED_LINKS;
 
- std::vector<LattField> stoutlinks(LayoutInfo::Ndim,FieldSiteType::ColorMatrix);
+ GB::theSmearedGaugeConfig.resize(LayoutInfo::Ndim,FieldSiteType::ColorMatrix);
  std::vector<char*> gaugeptrs(LayoutInfo::Ndim);
- for (int k=0;k<LayoutInfo::Ndim;++k) gaugeptrs[k]=stoutlinks[k].getDataPtr();
+ for (int k=0;k<LayoutInfo::Ndim;++k) gaugeptrs[k]=GB::theSmearedGaugeConfig[k].getDataPtr();
  saveGaugeQuda(gaugeptrs.data(), &smeared_gauge_info);
- printLaph("Smeared links saved to host");
 
-     //  Now output to file or the NamedObjMap
- DataPutHandlerSFO<GluonSmearingHandler,UIntKey,vector<LattField>> 
-           dhput(*this,h_filename,"Laph--SmearedGaugeField4D");
- UIntKey dummykey(0);
- dhput.putData(dummykey,stoutlinks);
+     //  Now output to file if requested
+ if (!h_filename.empty()){
+    DataPutHandlerSF<GluonSmearingHandler,UIntKey,vector<LattField>> 
+               dhput(*this,h_filename,"Laph--SmearedGaugeField4D");
+    UIntKey dummykey(0);
+    dhput.putData(dummykey,GB::theSmearedGaugeConfig);
+    printLaph("Write to file complete");}
+
  bulova.stop();
- printLaph("Write to file complete");
  printLaph(make_strf("Time to write to host and then to file was %g seconds",bulova.getTimeInSeconds()));
-
  printLaph("\n\nSmeared gauge field computation done");
  printLaph(make_strf("Output file: %s\n",h_filename));
  QudaInfo::clearDeviceSmearedGaugeConfiguration();   // remove from device
 }
 
 
-const vector<LattField>& GluonSmearingHandler::getSmearedGaugeField() const
+const vector<LattField>& GluonSmearingHandler::getSmearedGaugeField()
 {
- if (!m_read_mode)
-    throw(std::runtime_error("Cannot getSmearedGaugeField in write mode"));
- check_info_set("setSmearedGaugeFieldTimeSlice");
- RecordKey dummykey(0);
- return dh_ptr->getData(dummykey);
+ if (!GB::theSmearedGaugeConfigIsSet()){
+    if (!loadSmearedGaugeField()){
+       errorLaph("Was unable to get the smeared gauge field");}}
+ return GB::theSmearedGaugeConfig;
+}
+
+bool GluonSmearingHandler::querySmearedGaugeField()
+{
+ if (!GB::theSmearedGaugeConfigIsSet()){
+    return loadSmearedGaugeField();}
+ return true;
+}
+
+   // load from file into HostGlobal
+
+bool GluonSmearingHandler::loadSmearedGaugeField()
+{
+ check_info_set("loadSmearedGaugeField");
+ if (!m_read_mode) return false;
+ if (GB::theSmearedGaugeConfigIsSet()) return true;
+ if (h_filename.empty()) return false;
+
+    // check that the file exists and contains the appropriate data
+ printLaph(make_strf("Checking file: %s",h_filename));
+ if (!fileExists(h_filename)) return false;
+
+      // Open for reading (reads header info and checks)
+ try{
+    string ftype("Laph--SmearedGaugeField4D");
+    DataGetHandlerSF<GluonSmearingHandler,RecordKey,vector<LattField>> DH(*this,h_filename,ftype);
+    printLaph(make_strf("File %s successfully opened and header matches\n",h_filename));
+    RecordKey dummykey(0);
+    GB::theSmearedGaugeConfig=DH.getData(dummykey);
+    return true;}
+ catch(const std::exception& xp){
+   printLaph("unable to read smeared gauge from file(s)");
+   return false;}
+ return true;
 }
 
 
 void GluonSmearingHandler::clearData()
 {
- if (dh_ptr) dh_ptr->clearData();
+ GB::theSmearedGaugeConfig.clear();
 }
 
 
@@ -246,7 +268,7 @@ bool GluonSmearingHandler::checkHeader(XMLHandler& xmlr)
 void GluonSmearingHandler::copyDataToDevice()
 {
  check_info_set("copyDataToDevice");
- if (QudaInfo::smeared_gauge_on_device) return;
+ if (QudaInfo::smeared_gauge_on_device){ return;}
 
       // Create the array of pointers, and call the load function
  const vector<LattField>& stoutlinks=getSmearedGaugeField();
@@ -262,21 +284,12 @@ void GluonSmearingHandler::copyDataToDevice()
       // copy to the gpu device ( gaugeSmeared is pointer to it)
  loadGaugeQuda((void *)gauge_ptrs.data(), &smeared_gauge_info);
  QudaInfo::smeared_gauge_on_device=true;
-
-   //  HACK
-   // sometimes we don't need the original gauge configuration at this point,
-   // but quda will barf at some point if not set, so load to original too 
- if (!QudaInfo::gauge_config_on_device){
-    smeared_gauge_info.type = QUDA_WILSON_LINKS;
-    loadGaugeQuda((void *)gauge_ptrs.data(), &smeared_gauge_info);}
 }
 
 
 void GluonSmearingHandler::eraseDataOnDevice()
 {
- if (QudaInfo::smeared_gauge_on_device){
-    freeGaugeSmearedQuda();
-    QudaInfo::smeared_gauge_on_device=false;}
+ QudaInfo::clearDeviceSmearedGaugeConfiguration();   // remove from device
 }
 
 // ******************************************************************

@@ -75,8 +75,6 @@ class FileListInfo
 
    int getFirstAvailableSuffix(bool global_mode=true) const;
 
-   int getFirstAvailableSuffixNOM() const;
-
    void output(XMLHandler& xmlout) const;
 
    std::string str() const;

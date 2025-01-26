@@ -1,6 +1,4 @@
 #include "byte_handler.h"
-#include <cstdlib>
-#include <iostream>
 #include <stdexcept>
 
 /*

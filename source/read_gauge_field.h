@@ -1,11 +1,9 @@
 #ifndef READ_GAUGE_H
 #define READ_GAUGE_H
 
-#include <vector>
-#include <string>
-#include <cstring>
 #include "latt_field.h"
 #include "gauge_configuration_info.h"
+#include <cstring>
 
 
 namespace LaphEnv {

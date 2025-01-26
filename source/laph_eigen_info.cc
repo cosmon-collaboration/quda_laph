@@ -5,8 +5,9 @@
 
 using namespace std;
 
-namespace LaphEnv {
+extern QudaVerbosity getVerbosity();
 
+namespace LaphEnv {
 
 // *************************************************************
 
@@ -70,12 +71,8 @@ void LaphEigenSolverInfo::extract_info_from_reader(XMLHandler& xmlr)
  else{
     check_solution=false;}
 
- if (xml_tag_count(xmlr,"OutputVerbosity")==1){
-    xmlread(xmlr,"OutputVerbosity",outputVerbosity,"LaphEigenSolverInfo");
-    if (outputVerbosity<0) outputVerbosity=0;
-    if (outputVerbosity>2) outputVerbosity=2;}
- else
-    outputVerbosity=0;
+ outputVerbosity.setByInt(getVerbosity());
+ xml_read_if(xmlr,outputVerbosity);
 
  if ((maxIterations<4)||(dimKrylov<6)||(tolerance<=0)){
     xmlreadfail(xmlr,"LaphEigenSolverInfo",
@@ -136,7 +133,8 @@ void LaphEigenSolverInfo::output(XMLHandler& xmlout) const
     xmlout.put_child("CheckSolution","true");}
  else{
     xmlout.put_child("CheckSolution","false");}
- xmlout.put_child("OutputVerbosity", make_string(outputVerbosity));
+ XMLHandler xmlv; outputVerbosity.output(xmlv);
+ xmlout.put_child(xmlv);
 }
 
 
@@ -159,6 +157,7 @@ void LaphEigenSolverInfo::setQudaParam(QudaInvertParam& eig_inv_param,
  eig_inv_param.mass_normalization = QUDA_MASS_NORMALIZATION;
  eig_inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
  eig_inv_param.dirac_order = QUDA_DIRAC_ORDER;
+// eig_inv_param.use_smeared_gauge = QUDA_BOOLEAN_TRUE;       WILL CHANGF THIS EVENTUALLY
 
  eig_inv_param.laplace3D = LayoutInfo::Ndim-1;  // spatial laplacian
  eig_inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
@@ -167,13 +166,7 @@ void LaphEigenSolverInfo::setQudaParam(QudaInvertParam& eig_inv_param,
  eig_inv_param.cuda_prec = QudaInfo::get_cuda_prec();
  eig_inv_param.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
  eig_inv_param.cuda_prec_eigensolver = QudaInfo::get_cuda_prec();
- if (getOutputVerbosity()==0){
-    eig_inv_param.verbosity = QUDA_SILENT;}
- else if (getOutputVerbosity()==1){
-    eig_inv_param.verbosity = QUDA_SUMMARIZE;}
- else{
-    eig_inv_param.verbosity = QUDA_VERBOSE;}
-
+ eig_inv_param.verbosity = outputVerbosity.getQudaValue();
 // eig_inv_param.extlib_type = solver_ext_lib;
 // eig_inv_param.native_blas_lapack = (native_blas_lapack ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE);
  eig_inv_param.struct_size = sizeof(eig_inv_param);
@@ -185,7 +178,7 @@ void LaphEigenSolverInfo::setQudaParam(QudaInvertParam& eig_inv_param,
  eig_param.spectrum = QUDA_SPECTRUM_SR_EIG;   // -Laplacian eigenvalues all positive (SR = smallest, real)
  eig_param.n_conv = qsmear.getNumberOfLaplacianEigenvectors();
  eig_param.max_restarts = maxIterations;
- eig_param.use_smeared_gauge = QUDA_BOOLEAN_TRUE;
+ eig_param.use_smeared_gauge = QUDA_BOOLEAN_TRUE;       //  WILL CHANGE THIS EVENTUALLY
  eig_param.max_ortho_attempts = 4;    // not used at the moment
  eig_param.tol = tolerance;
  eig_param.n_kr = dimKrylov;

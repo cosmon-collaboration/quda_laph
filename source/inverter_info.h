@@ -3,7 +3,6 @@
 
 #include "xml_handler.h"
 #include "quark_action_info.h"
-#include "quda.h"
 #include <memory>
 
 namespace LaphEnv {
@@ -41,39 +40,39 @@ namespace LaphEnv {
 // *                                                                    *
 // *    Conjugate-Gradient on the Normal Equations:                     *
 // *                                                                    *
-// *   <InvertInfo>                                                     *
+// *   <InverterInfo>                                                   *
 // *     <Name>CGNR</Name>                                              *
 // *     <Tolerance>1.0e-10</Tolerance>                                 *
 // *     <MaxIterations>10000</MaxIterations>                           *
-// *   </InvertInfo>                                                    *
+// *   </InverterInfo>                                                  *
 // *                                                                    *
 // *    Biconjugate Gradient Stabilized:                                *
 // *                                                                    *
-// *   <InvertInfo>                                                     *
+// *   <InverterInfo>                                                   *
 // *     <Name>BICGSTAB</Name>                                          *
 // *     <Tolerance>1.0e-10</Tolerance>                                 *
 // *     <MaxIterations>6000</MaxIterations>                            *
-// *   </InvertInfo>                                                    *
+// *   </InverterInfo>                                                  *
 // *                                                                    *
 // *    Generalized Conjugate Residual (GCR)                            *
 // *                                                                    *
-// *   <InvertInfo>                                                     *
+// *   <InverterInfo>                                                   *
 // *     <Name>GCR</Name>                                               *
 // *     <Tolerance>1.0e-10</Tolerance>                                 *
 // *     <MaxIterations>5000</MaxIterations>                            *
 // *     <NKrylov>16</NKrylov>                                          *
-// *   </InvertInfo>                                                    *
+// *   </InverterInfo>                                                  *
 // *                                                                    *
 // *    Generalized Conjugate Residual (GCR) with Adaptive Multigrid    *
 // *      preconditioning                                               *
 // *                                                                    *
-// *   <InvertInfo>                                                     *
+// *   <InverterInfo>                                                   *
 // *     <Name>GCR_MULTIGRID</Name>                                     *
 // *     <Tolerance>1.0e-12</Tolerance>                                 *
 // *     <MaxIterations>5000</MaxIterations>                            *
 // *     <NKrylov>24</NKrylov>                                          *
 // *     .... (see below)                                               *
-// *   </InvertInfo>                                                    *
+// *   </InverterInfo>                                                  *
 // *                                                                    *
 // **********************************************************************
 
@@ -167,7 +166,7 @@ namespace LaphEnv {
 // *      (all tags except initial <Name> optional; default values shown,        *
 // *       except as discussed below)                                            *
 // *                                                                             *
-// *   <InvertInfo>                                                              *
+// *   <InverterInfo>                                                            *
 // *     <Name>GCR_MULTIGRID</Name>                                              *
 // *     <Tolerance>1.0e-11</Tolerance>                                          *
 // *     <MaxIterations>200</MaxIterations>                                      *
@@ -193,10 +192,10 @@ namespace LaphEnv {
 // *        <GenerateAllLevels>true</GenerateAllLevels>  all or level 0 only     *
 // *        <PreOrthoNullVectors>true</PreOrthoNullVectors>                      *
 // *        <PostOrthoNullVectors>true</PostOrthoNullVectors>                    *
-// *        <SetupMinimizeMemory>false<SetupMinimizeMemory>                      *
 // *        <RunVerify>false</RunVerify>   (use true for initial runs)           *
+// *        <Verbosity>low</Verbosity>  (none is default)                        *
 // *     </MGPreconditioner>                                                     *
-// *   </InvertInfo>                                                             *
+// *   </InverterInfo>                                                           *
 // *                                                                             *
 // *  Input XML for the deflation on coarsest level (if present)                 *
 // *                                                                             *
@@ -236,7 +235,7 @@ namespace LaphEnv {
 // *  your XML input should turn it on.  You might wish to control the blocking  *
 // *  yourself.                                                                  *
 // *                                                                             *
-// *   <InvertInfo>                                                              *
+// *   <InverterInfo>                                                            *
 // *     <Name>GCR_MULTIGRID</Name>                                              *
 // *     <Tolerance>1.0e-11</Tolerance>                                          *
 // *     <MaxIterations>200</MaxIterations>                                      *
@@ -250,7 +249,7 @@ namespace LaphEnv {
 // *           <TRLMDeflation/>                                                  *
 // *        </Level1>                                                            *
 // *     </MGPreconditioner>                                                     *
-// *   </InvertInfo>                                                             *
+// *   </InverterInfo>                                                           *
 // *                                                                             *
 // *******************************************************************************
 

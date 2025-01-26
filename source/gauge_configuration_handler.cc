@@ -1,13 +1,9 @@
 #include "gauge_configuration_handler.h"
-#include "xml_handler.h"
-#include "named_obj_map.h"
+#include "host_global.h"
 #include "laph_stdio.h"
 #include "read_gauge_field.h"
-#include "layout_info.h"
-#include "timer.h"
 
 using namespace std;
-using namespace quda;
 
 namespace LaphEnv {
 
@@ -43,11 +39,10 @@ void GaugeConfigurationHandler::setData()
 {
  check_info_set("setData");
       // check first to see if configuration has already been read
- if (NamedObjMap::query(m_gauge_info->getNOMId())){
-    XMLHandler gauge_xml;
-    NamedObjMap::getDataAndXMLInfo(m_gauge_info->getNOMId(), m_cfg, gauge_xml);}
-     // if not already in the NamedObjMap, then must read it now
- else{
+ if (GB::theGaugeConfigIsSet()){
+    m_cfg = &GB::theGaugeConfig; }
+   
+ else{      // if not already in the HostGlobal, then must read it now
     initialize_config();}
 }
 
@@ -57,7 +52,7 @@ GaugeConfigurationHandler::~GaugeConfigurationHandler()
  clear();
 }
 
-     // clears this handler, but leaves config in NamedObjMap
+     // clears this handler, but leaves config in HostGlobal
 
 void GaugeConfigurationHandler::clear()
 {
@@ -69,11 +64,11 @@ void GaugeConfigurationHandler::clear()
  m_cfg=0;
 }
 
-     // removes config from NamedObjMap
+     // removes config from HostGlobal
      
 void GaugeConfigurationHandler::eraseDataOnHost()
 {
- NamedObjMap::erase(m_gauge_info->getNOMId());
+ GB::theGaugeConfig.clear();
 }
  
 
@@ -103,20 +98,22 @@ void GaugeConfigurationHandler::check_info_set(const string& name) const
 void GaugeConfigurationHandler::getXMLInfo(XMLHandler& gauge_xmlinfo) const
 {
  check_info_set("getXMLInfo");
- NamedObjMap::getXMLInfo(m_gauge_info->getNOMId(),gauge_xmlinfo);
+ m_gauge_info->output(gauge_xmlinfo);
 }
 
 
 void GaugeConfigurationHandler::initialize_config()
 {
  try{
-    vector<LattField>& U(NamedObjMap::insert<vector<LattField>>(
-                         m_gauge_info->getNOMId()));
-    m_cfg=&U;
+    m_cfg=&GB::theGaugeConfig;
     GaugeConfigReader GR;
     XMLHandler gauge_xmlinfo;
-    GR.read(U,gauge_xmlinfo,*m_gauge_info);
-    NamedObjMap::setXMLInfo(m_gauge_info->getNOMId(),gauge_xmlinfo); }
+    GR.read(GB::theGaugeConfig,gauge_xmlinfo,*m_gauge_info);
+        // if the fermion field is antiperiodic in time, then multiply the temporal
+        // links on the last time slice by -1.  This does not change the plaquette
+        // nor any spatial smearing or hadron operators defined on single time slices.
+    if (m_gauge_info->isFermionTimeBCAntiPeriodic()){
+       applyFermionTemporalAntiPeriodic();}}
  catch(const std::exception& xp){
     errorLaph(make_strf("Gauge configuration initialization failed: %s",xp.what()));}
 }
@@ -129,10 +126,9 @@ void GaugeConfigurationHandler::applyFermionTemporalAntiPeriodic()
  const int Tdir=LayoutInfo::Ndim-1;
  check_info_set("getData");
  if (!isDataSet()){
-    errorLaph("Gauge configuration must already be in the NamedObjMap to apply fermion temporal antiperiodic b.c.");}
+    errorLaph("Gauge configuration must already be in the HostGlobal to apply fermion temporal antiperiodic b.c.");}
  try{
-    vector<LattField>& U(NamedObjMap::getData<vector<LattField>>(m_gauge_info->getNOMId()));
-    U[Tdir].applyFermionTemporalAntiPeriodic();}
+    GB::theGaugeConfig[Tdir].applyFermionTemporalAntiPeriodic();}
  catch(const std::exception& xp){
     errorLaph(make_strf("applyFermionTemporalAntiPeriodic failed: %s",xp.what()));}
 }
@@ -168,8 +164,8 @@ void GaugeConfigurationHandler::copyDataToDevice(bool removeFromHost)
  printLaph(make_strf("  spatial mean plaquette = %15.12f",param.plaquette[1]));
  printLaph(make_strf(" temporal mean plaquette = %15.12f",param.plaquette[2]));
 
-      // remove out of the NamedObjMap if requested
- if (removeFromHost) eraseDataOnHost();
+      // remove out of the HostGlobal if requested
+ if (removeFromHost){ eraseDataOnHost();}
 }
 
 

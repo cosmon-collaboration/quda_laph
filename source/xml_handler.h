@@ -1,15 +1,12 @@
 #ifndef XML_HANDLER_H
 #define XML_HANDLER_H
+#include <string>
+#include <stack>
 #include <iostream>
 #include <set>
 #include <list>
-#include <string>
-#include <cmath>
 #include <sstream>
-#include <cstdlib>
 #include <vector>
-#include <stack>
-#include <stdexcept>
 
 // *************************************************************************
 // *                                                                       *

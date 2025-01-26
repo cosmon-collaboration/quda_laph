@@ -1,11 +1,8 @@
 #include "xml_handler.h"
-#include <stdlib.h>
-#include <fstream>
-#include <sstream>
-#include <cstring>
-#include <unistd.h>
 #include "utils.h"
 #include "laph_stdio.h"
+#include <fstream>
+#include <cstring>
 
 
 using namespace std;
@@ -328,7 +325,7 @@ bool XMLDoc::nonwhitespace(const string& instr, size_t charstart, size_t charsto
 void XMLDoc::find_next_xml_event(const string& xmlstr, size_t start, size_t in_stop,
                                  XMLDoc::XMLEvent& type, size_t& pos, bool incomment)
 {
- size_t stop=min(in_stop,xmlstr.length());
+ size_t stop=std::min(in_stop,xmlstr.length());
  type=none; pos=stop;
  if (start>=stop) return;
  

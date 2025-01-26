@@ -1,18 +1,9 @@
 #ifndef PERAMBULATOR_HANDLER_H
 #define PERAMBULATOR_HANDLER_H
 
-#include "gauge_configuration_info.h"
 #include "gauge_configuration_handler.h"
-#include "xml_handler.h"
-#include "field_smearing_info.h"
-#include "gluon_smearing_handler.h"
 #include "quark_smearing_handler.h"
-#include "quark_action_info.h"
 #include "inverter_info.h"
-#include "filelist_info.h"
-#include "laph_stdio.h"
-#include "quda.h"
-#include <set>
 
 
 namespace LaphEnv {
@@ -236,9 +227,6 @@ class PerambulatorHandler
 
    static std::unique_ptr<QuarkSmearingHandler> qSmearHandler;
    static std::unique_ptr<GaugeConfigurationHandler> gaugeHandler;
-
-   static int qSmearCounter;
-   static int gaugeCounter;
 
        // Prevent copying ... handler might contain large
        // amounts of data

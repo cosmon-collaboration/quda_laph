@@ -1,11 +1,8 @@
 #ifndef LAPH_NOISE_H
 #define LAPH_NOISE_H
 #include "array.h"
-#include <iostream>
-#include <vector>
-#include <complex>
+#include <cstdint>
 
-typedef unsigned long   uint32;
 typedef std::complex<double>  cmplx;
 
 namespace LaphEnv {
@@ -47,39 +44,38 @@ class UniformDeviate32
 
  private:
 
-    typedef unsigned long uint32;  // unsigned integer type, at least 32 bits
     static const int N = 624;      // length of state vector
     static const int M = 397;      // period parameter
-    static const uint32 MATRIX_A = 0x9908b0dfUL;  // constant vector a
-    static const uint32 UMASK = 0x80000000UL;     // most significant w-r bits
-    static const uint32 LMASK = 0x7fffffffUL;     // least significant r bits
+    static const uint32_t MATRIX_A = 0x9908b0dfUL;  // constant vector a
+    static const uint32_t UMASK = 0x80000000UL;     // most significant w-r bits
+    static const uint32_t LMASK = 0x7fffffffUL;     // least significant r bits
                       // hexadecimal constants start with 0x, UL=unsigned long
 
-    uint32 state[N];  // internal state
-    uint32 *next;     // next value to get from state
-    int left;         // number of values left before next_state needed
+    uint32_t state[N];  // internal state
+    uint32_t *next;     // next value to get from state
+    int left;           // number of values left before next_state needed
 
  public:
           
-    UniformDeviate32();             // Default constructor, seeded by time.
-    UniformDeviate32(uint32 seed);  // Constructor with explicit seed (0 <= seed < 2^32).
-    ~UniformDeviate32(){}           // Destructor.
-    void Reseed(uint32 seed);       // Explicitly re-seeds the generator (0 <= seed < 2^32   or  seed < 0 to seed by time).  
+    UniformDeviate32();               // Default constructor, seeded by time.
+    UniformDeviate32(uint32_t seed);  // Constructor with explicit seed (0 <= seed < 2^32).
+    ~UniformDeviate32(){}             // Destructor.
+    void Reseed(uint32_t seed);       // Explicitly re-seeds the generator (0 <= seed < 2^32   or  seed < 0 to seed by time).  
    
-    uint32 generate();              // generates random 32 bit unsigned int
+    uint32_t generate();              // generates random 32 bit unsigned int
 
  private:
 
-    uint32 twist( const uint32& m, const uint32& s0, const uint32& s1 ) const
+    uint32_t twist( const uint32_t& m, const uint32_t& s0, const uint32_t& s1 ) const
       { return m ^ (((s0 & UMASK) | (s1 & LMASK)) >> 1) ^ (-(s1 & 1UL) & MATRIX_A); }
 
 };
 
-inline UniformDeviate32::uint32 UniformDeviate32::generate()
+inline uint32_t UniformDeviate32::generate()
 {
  if (left==0){
     int i;
-    uint32 *p=state;
+    uint32_t *p=state;
     left=N;
     next=state;
     for (i=N-M+1;--i;p++)
@@ -89,7 +85,7 @@ inline UniformDeviate32::uint32 UniformDeviate32::generate()
     *p=twist(p[M-N],p[0],state[0]);
     }
  left--;
- uint32 s1 = *next++;
+ uint32_t s1 = *next++;
  s1 ^= (s1 >> 11);
  s1 ^= (s1 <<  7) & 0x9d2c5680UL;
  s1 ^= (s1 << 15) & 0xefc60000UL;
@@ -103,7 +99,7 @@ inline UniformDeviate32::uint32 UniformDeviate32::generate()
  // *   Only Z[4], Z[8], and Z[32] are supported.       *
  // *   Usage:                                          *
  // *                                                   *
- // *       uint32 seed = 1293962291; ->  0 .. 2^32-1   *
+ // *       uint32_t seed = 1293962291; ->  0 .. 2^32-1 *
  // *       int zngroup = 4;          -> 4, 8, or 32    *
  // *       LaphZnNoise rho(zngroup,seed);              *
  // *       rho.generate();  -> returns complex Z[N]    *
@@ -118,13 +114,13 @@ class LaphZnNoise
    int znGroup;
    UniformDeviate32 rng;
    std::vector<cmplx> values;
-   uint32 current;
+   uint32_t current;
    int count;
    cmplx (LaphZnNoise::*genptr)();
 
  public:
 
-   LaphZnNoise(int zn, const uint32& seed);
+   LaphZnNoise(int zn, const uint32_t& seed);
 
    cmplx generate() {return (this->*genptr)();}
 

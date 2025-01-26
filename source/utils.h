@@ -1,9 +1,6 @@
 #ifndef LAPH_UTILS_H
 #define LAPH_UTILS_H
 
-#include <string>
-#include <cstdarg>
-#include "byte_handler.h"
 #include "xml_handler.h"
 
 namespace LaphEnv {
@@ -16,19 +13,15 @@ namespace LaphEnv {
 bool doesFileExist(const std::string& file_name, bool global_mode=true);
 
     //  Tests if file having name "file_name" exists: works
-    //  in global or local mode. If starts with "NOM_", checks to
-    //  see if exists in the NamedObjMap.
+    //  in global or local mode. 
 
 bool fileExists(const std::string& file_name, bool global_mode=true);
 
-    //  Returns true if name of file is empty or "NOM_" only
-    
-bool emptyFileName(const std::string& file_name);
+  // Removes tabs and newline characters, then trims
+  // leading and trailing blanks of the string.  If the
+  // string starts with "_NOM", the string is cleared.
 
-    //  Returns true if name of disk file, false is name
-    //  starts with "NOM_" indicating the NamedObjMap
-    
-bool isFileOnDisk(const std::string& file_name);
+std::string tidyNameOfFile(const std::string& filename);
 
 
 // *********************************************************

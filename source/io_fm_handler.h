@@ -1,16 +1,15 @@
 #ifndef IO_FM_HANDLER_H
 #define IO_FM_HANDLER_H
 
-#include <list>
-#include <vector>
 #include "array.h"
-
-#include <fstream>
-#include <unistd.h>
 #include "byte_handler.h"
-#include "layout_info.h"
 #include "latt_field.h"
-#include <complex>
+#include <fstream>
+
+//#include <list>
+//#include <unistd.h>
+//#include "layout_info.h"
+//#include <complex>
 
 #ifdef ARCH_PARALLEL
 #include <mpi.h>

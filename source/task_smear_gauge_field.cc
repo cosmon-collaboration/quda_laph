@@ -1,14 +1,8 @@
 #include "tasks.h"
-#include "gauge_configuration_info.h"
-#include "gauge_configuration_handler.h"
 #include "gluon_smearing_handler.h"
-#include "layout_info.h"
-#include "latt_field.h"
-#include "field_smearing_info.h"
 #include "stop_watch.h"
 
 using namespace std;
-using namespace quda;
 
 namespace LaphEnv {
 
@@ -16,8 +10,8 @@ namespace LaphEnv {
 // *********************************************************************************
 // *                                                                               *
 // *   Task to compute the smeared gauge field with stout link smearing and        *
-// *   either write to file or to the NamedObjMap.  The input XML is expected to   *
-// *   have the following form:                                                    *
+// *   optionially write to file. The gauge field will be stored in HostGlobal.    *
+// *   The input XML is expected to have the following form:                       *
 // *                                                                               *
 // *   <Task>                                                                      *
 // *      <Name>SMEAR_GAUGE_FIELD</Name>                                           *
@@ -32,8 +26,12 @@ namespace LaphEnv {
 // *         <LinkIterations>20</LinkIterations>                                   *
 // *         <LinkStapleWeight>0.1</LinkStapleWeight>                              *
 // *      </GluonStoutSmearingInfo>                                                *
-// *      <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>     *
+// *      <SmearedGaugeFileName>smg_field</SmearedGaugeFileName> (see below)       *
 // *   </Task>                                                                     *
+// *                                                                               *
+// *   If the tag <SmearedGaugeFileName> is set, then the smeared gauge field is   *
+// *   written out to file.  In any case, the smeared gauge field is returned in   *
+// *   HostGlobal.                                                                 *
 // *                                                                               *
 // *   The smeared gauge remains in the gpu device memory after this task.         * 
 // *                                                                               *
@@ -45,13 +43,13 @@ void doSmearGaugeField(XMLHandler& xmltask)
  GaugeConfigurationInfo gaugeinfo(xmltask);
  GluonSmearingInfo smear(xmltask);
  string smeared_filename;
- xmlread(xmltask,"SmearedGaugeFileName",smeared_filename,"SMEAR_GAUGE_FIELD");
+ xmlreadif(xmltask,"SmearedGaugeFileName",smeared_filename,"SMEAR_GAUGE_FIELD");
 
  printLaph("\n");
  printLaph(" ***********************************************************");
  printLaph(" *                                                         *");
  printLaph(" *   Laph Task:   Stout smear the gauge field and write    *");
- printLaph(" *                to file or the NamedObjMap               *");
+ printLaph(" *                to file or the HostGlobal                *");
  printLaph(" *                                                         *");
  printLaph(" ***********************************************************\n\n");
  printLaph(make_strf("%s",gaugeinfo.output()));
@@ -59,20 +57,12 @@ void doSmearGaugeField(XMLHandler& xmltask)
 
     // create the handler in write mode
 
- GaugeConfigurationHandler GH(gaugeinfo);
- GH.setData();
- XMLHandler gauge_xmlinfo;
- GH.getXMLInfo(gauge_xmlinfo);
- printLaph("XML info for the gauge configuration:");
- printLaph(make_strf("%s\n",gauge_xmlinfo.output()));
-
- GH.copyDataToDevice();
+ StopWatch outer; outer.start();
  GluonSmearingHandler G(smear,gaugeinfo,smeared_filename,false);
 
- StopWatch outer; outer.start();
-
-    //  Compute the stout-smeared gauge field, write to file or NamedObjMap.
-    //  Leaves the smeared gauge on the gpu device. 
+    //  Compute the stout-smeared gauge field, place in the HostGlobal,
+    //  optionally write to file. Leaves the smeared gauge 
+    //  on the gpu device. 
 
  G.computeSmearedGaugeField();
 

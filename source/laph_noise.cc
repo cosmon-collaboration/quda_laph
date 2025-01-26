@@ -1,7 +1,7 @@
-#include <ctime>
-#include <cstdlib>
 #include "laph_noise.h"
 #include "laph_stdio.h"
+//#include <ctime>
+//#include <cstdlib>
 using namespace std;
 
 namespace LaphEnv {
@@ -15,7 +15,7 @@ UniformDeviate32::UniformDeviate32()
  Reseed(0);             // choose seed based on clock time
 }
 
-UniformDeviate32::UniformDeviate32(uint32 seed)
+UniformDeviate32::UniformDeviate32(uint32_t seed)
 {
  Reseed(seed);
 }
@@ -29,9 +29,9 @@ UniformDeviate32::UniformDeviate32(uint32 seed)
  // indicates it is unsigned, and an "L" indicates it is
  // a long integer.
 
-void UniformDeviate32::Reseed(uint32 seed)
+void UniformDeviate32::Reseed(uint32_t seed)
 { 
- uint32 s=seed;
+ uint32_t s=seed;
  int j;
  if (seed==0){
     printLaph("WARNING: Setting MT seed using system time");
@@ -48,7 +48,7 @@ void UniformDeviate32::Reseed(uint32 seed)
 
 // *************************************************************
 
-LaphZnNoise::LaphZnNoise(int zn, const uint32& seed) : rng(seed), values(zn)
+LaphZnNoise::LaphZnNoise(int zn, const uint32_t& seed) : rng(seed), values(zn)
 {
  if (zn==4){
     double one=1.0;
