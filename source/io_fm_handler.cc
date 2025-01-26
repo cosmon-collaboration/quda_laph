@@ -1019,12 +1019,12 @@ void IOFMHandler::write(const LattField& output)
 {
  int sizeT=output.bytesPerSite();
  lattinfo.resetBytes(sizeT);
- unsigned int sz[LayoutInfo::Ndim+2];
+ vector<unsigned int> sz(LayoutInfo::Ndim+2);
  sz[0]=LayoutInfo::Ndim;
  for (int k=0;k<LayoutInfo::Ndim;k++)
     sz[k+1]=LayoutInfo::getLattExtents()[k];
  sz[LayoutInfo::Ndim+1]=sizeT;
- multi_write(sz,LayoutInfo::Ndim+2);
+ multi_write(sz.data(),LayoutInfo::Ndim+2);
  write_lattice((const char *)(output.getDataConstPtr()),output.bytesPerWord(), lattinfo);
 }
 
