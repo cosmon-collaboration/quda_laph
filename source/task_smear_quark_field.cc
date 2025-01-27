@@ -41,8 +41,9 @@ namespace LaphEnv {
 // *          <CutoffEigenvalue>0.5</CutoffEigenvalue>                                *
 // *          <StartingVectorType>equal_components</StartingVectorType>               *
 // *          <CheckSolution>true</CheckSolution>                                     *
-// *          <Verbosity>low</Verbosity> (optional)                                   *
 // *       </LaphEigenSolverInfo>                                                     *
+// *       <Verbosity>low</Verbosity> (optional: override default)                    *
+// *       <PrintEigenvalues/> (optional)                                             *
 // *    </Task>                                                                       *
 // *                                                                                  *
 // *   If the tag <SmearedGaugeFileName> is set, then the smeared gauge field is      *
@@ -60,6 +61,9 @@ namespace LaphEnv {
 // *   The default verbosity from the main program is used, unless overridden by      *
 // *   the <Verbosity> tag above.                                                     *
 // *                                                                                  *
+// *   If the <PrintEigenvalues/> is present, then the eigenvalues on each time       *
+// *   slice are printed to standard output.                                          *
+// *                                                                                  *
 // ************************************************************************************
 	
 
@@ -73,6 +77,13 @@ void doSmearQuarkField(XMLHandler& xmltask)
  string smeared_quark_filestub;
  xmlreadif(xmltask,"SmearedQuarkFileStub",smeared_quark_filestub,"SMEAR_QUARK_FIELD");
  LaphEigenSolverInfo eigsolveinfo(xmltask);
+    // change verbosity from default if requested
+ Verbosity task_verbosity(getVerbosity());
+ if (xml_read_if(xmltask,task_verbosity)){
+    setVerbosity(task_verbosity.getQudaValue());}
+ bool print_eigvals=false;
+ if (xml_tag_count(xmltask,"PrintEigenvalues")>0){
+    print_eigvals=true;}
 
  printLaph("\n");
  printLaph(" *************************************************************");
@@ -95,7 +106,7 @@ void doSmearQuarkField(XMLHandler& xmltask)
 
  QuarkSmearingHandler Q(gsmear,gaugeinfo,qsmear,smeared_quark_filestub,false);
  StopWatch outer; outer.start();
- Q.computeLaphEigenvectors(eigsolveinfo,smeared_gauge_filename);
+ Q.computeLaphEigenvectors(eigsolveinfo,smeared_gauge_filename,print_eigvals);
  outer.stop();
  printLaph(make_strf("SMEAR_QUARK_FIELD task: total time = %g seconds",
                      outer.getTimeInSeconds()));

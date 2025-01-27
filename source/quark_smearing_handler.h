@@ -233,7 +233,8 @@ class QuarkSmearingHandler
            // optionally output to file
 
    void computeLaphEigenvectors(const LaphEigenSolverInfo& solver_info,
-                                const std::string& smeared_gauge_file);
+                                const std::string& smeared_gauge_file,
+                                bool print_eigvals);
 /*
            // Compute covariantly displaced Laph Eigenvectors
 

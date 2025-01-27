@@ -22,7 +22,6 @@ namespace LaphEnv {
 // *      <MaxEigenvalue> 15.0 </MaxEigenvalue> (can be omitted)     *
 // *      <CutoffEigenvalue> 3.4 </CutoffEigenvalue> (optional)      *
 // *      <StartingVectorType>equal_components</StartingVectorType>  *
-// *      <Verbosity>low</Verbosity>  (optional: low default)        *
 // *      <CheckSolution/>  (optional)                               *
 // *   </LaphEigenSolverInfo>                                        *
 // *                                                                 *
@@ -80,10 +79,6 @@ namespace LaphEnv {
 // *   "StartingVectorType" is optional: its default value is        *
 // *   "equal_components", although "random" is another valid value. *
 // *                                                                 *
-// *   "Verbosity" is optional: it must have value "none", "low",    *
-// *   "medium", or "high".  The default value is the global         *
-// *   verbosity.                                                    *
-// *                                                                 *
 // *                                                                 *
 // *******************************************************************
 
@@ -99,7 +94,6 @@ class LaphEigenSolverInfo
   double cutoffEigenvalue;
   std::string startVector;
   bool check_solution;
-  Verbosity outputVerbosity;
 
 
  public:  
@@ -130,8 +124,6 @@ class LaphEigenSolverInfo
 
   std::string getStartingVectorType() const { return startVector; }
 
-  Verbosity getOutputVerbosity() const { return outputVerbosity; }
-  
   bool doCheckSolution() const { return check_solution;}
 
   std::string output(int indent = 0) const;

@@ -48,7 +48,6 @@ namespace LaphEnv {
 // *               <Tolerance>1.0e-11</Tolerance>                                          *
 // *               <MaxIterations>35000</MaxIterations>                                    *
 // *            </InverterInfo>                                                            *
-// *            <Verbosity>full</Verbosity>  (or override default)                         *
 // *            <ExtraSolutionChecks/> (optional)                                          *
 // *         </QuarkPerambulatorInfo>                                                      *
 // *         <ComputationSet>                                                              *
@@ -65,15 +64,19 @@ namespace LaphEnv {
 // *               <SourceLaphEigvecIndexMax>32</SourceLaphEigvecIndexMax>                 *
 // *            </Computation>                                                             *
 // *         </ComputationSet>                                                             *
+// *         <Verbosity>full</Verbosity>  (optional: override default)                     *
+// *         <PrintCoefficients/>  (optional)                                              *
 // *      </Task>                                                                          *
 // *                                                                                       *
 // *   If the tag <SmearedQuarkFileStub> is set, then the LapH eigenvectors will be read   *
 // *   from file.  Otherwise, this task expects that the LapH eigenvectors already         *
 // *   reside in HostGlobal; otherwise, an error results.                                  *
 // *                                                                                       *
-// *   If the tag "Verbosity" is included with value "medium" or higher, then the quark    *
-// *   sink solutions will be echoed to standard output as coefficients of the LapH        *
-// *   eigenvectors.  This overrides the default verbosity.                                *
+// *   The default verbosity from the main program is used, unless overridden by           *
+// *   the <Verbosity> tag above.                                                          *
+// *                                                                                       *
+// *   If the <PrintCoefficients/> is present, then the coefficients are printed           *
+// *   to standard output.                                                                 *
 // *                                                                                       *
 // *   Often, all of the perambulators for all source Laph eigenvector indices cannot be   *
 // *   done in a single run, and so for safety, the data for different sets of source ev   *
@@ -100,15 +103,16 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
  bool upper_spin_only=false;
  if (xml_tag_count(xmlr,"UpperSpinComponentsOnly")>=1){
     upper_spin_only=true;}
- bool verbose=false;  // output final results
- Verbosity verbosity(getVerbosity());
- xml_read_if(xmlr,verbosity);
- setVerbosity(verbosity.getQudaValue());
- if (verbosity.isMediumOrHigher()){
-    verbose=true;}
  bool extra_soln_check=false;
  if (xml_tag_count(xmlr,"ExtraSolutionChecks")>=1){
     extra_soln_check=true;}
+    // change verbosity from default if requested
+ Verbosity task_verbosity(getVerbosity());
+ if (xml_read_if(xmltask,task_verbosity)){
+    setVerbosity(task_verbosity.getQudaValue());}
+ bool print_coeffs=false;
+ if (xml_tag_count(xmltask,"PrintCoefficients")>0){
+    print_coeffs=true;}
  PerambulatorHandler::Mode mode=PerambulatorHandler::Compute;
 
  printLaph("\n");
@@ -149,7 +153,7 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
 
      // now do the computations!
  StopWatch outer; outer.start();
- Q.computePerambulators(verbose,extra_soln_check);
+ Q.computePerambulators(extra_soln_check,print_coeffs);
  outer.stop();
  printLaph(make_strf("LAPH_PERAMBULATORS: total time = %g secs",
            outer.getTimeInSeconds()));

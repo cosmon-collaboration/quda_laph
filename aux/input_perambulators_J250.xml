@@ -57,8 +57,9 @@
         <StartingVectorType>equal_components</StartingVectorType>
 	<!--  <CheckSolution>true</CheckSolution> -->
         <CutoffEigenvalue>0.10</CutoffEigenvalue>
-        <Verbosity>low</Verbosity>
-       </LaphEigenSolverInfo>
+     </LaphEigenSolverInfo>
+     <Verbosity>low</Verbosity>  <!-- optional -->
+     <PrintEigenvalues/>         <!-- optional -->
   </Task> 
 
   <Task>
@@ -128,8 +129,7 @@
 	      <Verbosity>none</Verbosity> <!-- for the preconditioner -->
            </MGPreconditioner>                                                     
         </InverterInfo>                                                             
-	<Verbosity>none</Verbosity>  <!-- to overrid the default verbosity -->
-       <ExtraSolutionChecks/>
+        <ExtraSolutionChecks/>
      </QuarkPerambulatorInfo>
      <ComputationSet>
         <NumSinksBeforeProject>  4 </NumSinksBeforeProject>
@@ -141,6 +141,8 @@
            <SourceLaphEigvecIndexMax>28</SourceLaphEigvecIndexMax>
         </Computation>
      </ComputationSet>
+     <Verbosity>none</Verbosity>  <!-- to override the default verbosity -->
+     <PrintCoefficients/>         <!-- optional -->
   </Task>
 
 </QudaLaph>

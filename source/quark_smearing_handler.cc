@@ -200,11 +200,11 @@ void QuarkSmearingHandler::failure(const string& message)
            // requested, output to level files.
 
 void QuarkSmearingHandler::computeLaphEigenvectors(
-                         const LaphEigenSolverInfo& solver_info,
-                         const string& smeared_gauge_file)
+                             const LaphEigenSolverInfo& solver_info,
+                             const string& smeared_gauge_file,
+                             bool print_eigvals)
 {
  check_info_set("computeLaphEigenvectors",2);
- setVerbosity(solver_info.getOutputVerbosity().getQudaValue());
 
  StopWatch rolex,bulova;
  rolex.start();
@@ -314,7 +314,7 @@ void QuarkSmearingHandler::computeLaphEigenvectors(
  printLaph(make_strf(" Phase shift convention applied in %g seconds\n",
            bulova.getTimeInSeconds()));
 
- if (solver_info.getOutputVerbosity().isMediumOrHigher()){
+ if (print_eigvals){
     printLaph("Eigenvalues of -Laplacian:");
     for (int t=0;t<nTime;++t)
     for (int v=0;v<nEigvecs;++v){

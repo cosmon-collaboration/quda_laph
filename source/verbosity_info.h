@@ -106,7 +106,7 @@ class Verbosity
 };
 
 
-void xml_read_if(XMLHandler& xmlin, Verbosity& v);
+bool xml_read_if(XMLHandler& xmlin, Verbosity& v);
 
 
 // *************************************************************

@@ -525,7 +525,7 @@ bool PerambulatorHandler::setUpPreconditioning(QudaInvertParam& invParam)
     //  at the sink are computed. 
  
 
-void PerambulatorHandler::computePerambulators(bool verbose, bool extra_soln_check)
+void PerambulatorHandler::computePerambulators(bool extra_soln_check, bool print_coeffs)
 {
  if ((!isInfoSet())||(invertPtr==0)||(mode!=Compute)){
     errorLaph(make_str("cannot computePerambulators in PerambulatorHandler until info ",
@@ -634,7 +634,7 @@ for (int i=0;i<72;++i,++tmp){
     printLaph(" *");
     printLaph(" *************************************************************");
 
-    computePerambulators(it->src_time,it->src_lapheigvec_indices,evList,verbose,extra_soln_check,
+    computePerambulators(it->src_time,it->src_lapheigvec_indices,evList,print_coeffs,extra_soln_check,
                          srctime,invtime,evprojtime,writetime);
     }
 
@@ -660,7 +660,7 @@ for (int i=0;i<72;++i,++tmp){
     //  of source laph-eigenvector dilution indices (all source spins)
 
 void PerambulatorHandler::computePerambulators(int src_time, const set<int>& src_evindices,
-                                               const std::vector<void*>& evList, bool verbose,
+                                               const std::vector<void*>& evList, bool print_coeffs,
                                                bool extra_soln_check, double& makesrc_time, double& inv_time,
                                                double& evproj_time, double& write_time)
 {
@@ -830,7 +830,7 @@ void PerambulatorHandler::computePerambulators(int src_time, const set<int>& src
                 for (int iEv=0; iEv<nEigs; ++iEv) {
                    quark_sink[iEv] = soln_rescale*qudaRes(iSpin, t, iEv, iSink);}
                    DHputPtr->putData(RecordKey(iSpin+1,t,sinkBatchInds[iSink]),quark_sink);
-                   if (verbose){
+                   if (print_coeffs){
                       printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchInds[iSink],iSpin+1,t));
                       for (int n=0;n<nEigs;n++){
                          printLaph(make_strf("coef for eigenlevel %d = (%14.8f, %14.8f)",

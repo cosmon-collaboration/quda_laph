@@ -12,6 +12,7 @@
 #ifdef ARCH_PARALLEL
 #include <mpi.h>
 #endif
+
 using namespace std;
 using namespace LaphEnv;
 

@@ -60,7 +60,6 @@ namespace LaphEnv {
 // *                  <DilutionType>full</DilutionType>                                    *
 // *               </SpinDilution>                                                         *
 // *            </LaphDilutionScheme>                                                      *
-// *            <Verbosity>full</Verbosity>                                                *
 // *            <ExtraSolutionChecks/> (optional)                                          *
 // *         </QuarkLineEndInfo>                                                           *
 // *         <SinkComputations>                                                            *
@@ -87,17 +86,22 @@ namespace LaphEnv {
 // *               </TimeProjIndexList>                                                    *
 // *            </NoiseList_TimeProjIndexList>                                             *
 // *         </SinkComputations>                                                           *
+// *         <Verbosity>full</Verbosity>  (optional: override default)                     *
+// *         <PrintCoefficients/>  (optional)                                              *
 // *      </Task>                                                                          *
 // *                                                                                       *
 // *   If the tag <SmearedQuarkFileStub> is set, then the LapH eigenvectors will be read   *
 // *   from file.  Otherwise, this task expects that the LapH eigenvectors already         *
 // *   reside in HostGlobal; otherwise, an error results.                                  *
 // *                                                                                       *
-// *   If the tag "Verbosity" is included with value "medium" or higher, then the quark    *
-// *   sink solutions will be echoed to standard output as coefficients of the LapH        *
-// *   eigenvectors.  This overrides the default verbosity.                                *
+// *   The default verbosity from the main program is used, unless overridden by           *
+// *   the <Verbosity> tag above.                                                          *
+// *                                                                                       *
+// *   If the <PrintCoefficients/> is present, then the coefficients are printed           *
+// *   to standard output.                                                                 *
 // *                                                                                       *
 // *****************************************************************************************
+
 
 void doLaphQuarkLineEnds(XMLHandler& xmltask)
 {
@@ -115,15 +119,16 @@ void doLaphQuarkLineEnds(XMLHandler& xmltask)
  QuarkActionInfo quark(xmlr);
  FileListInfo files(xmlr);
  InverterInfo invinfo(xmlr);
- bool verbose=false;  // output final results
- Verbosity verbosity(getVerbosity());
- xml_read_if(xmlr,verbosity);
- setVerbosity(verbosity.getQudaValue());
- if (verbosity.isMediumOrHigher()){
-    verbose=true;}
  bool extra_soln_check=false;
  if (xml_tag_count(xmlr,"ExtraSolutionChecks")>=1){
     extra_soln_check=true;}
+    // change verbosity from default if requested
+ Verbosity task_verbosity(getVerbosity());
+ if (xml_read_if(xmltask,task_verbosity)){
+    setVerbosity(task_verbosity.getQudaValue());}
+ bool print_coeffs=false;
+ if (xml_tag_count(xmltask,"PrintCoefficients")>0){
+    print_coeffs=true;}
 
  printLaph("\n");
  printLaph(" ***********************************************************");
@@ -164,7 +169,7 @@ void doLaphQuarkLineEnds(XMLHandler& xmltask)
 
      // now do the computations!
  StopWatch outer; outer.start();
- Q.computeSinks(verbose,extra_soln_check);
+ Q.computeSinks(extra_soln_check,print_coeffs);
  outer.stop();
  printLaph(make_strf("LAPH_QUARK_LINE_ENDS: total time = %g secs",
            outer.getTimeInSeconds()));

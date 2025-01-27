@@ -310,9 +310,10 @@ class PerambulatorHandler
 
         // compute quark perambulators (exact distillation); useful for smearing studies
 
-   void computePerambulators(bool verbose=false, bool extra_soln_check=false);
+   void computePerambulators(bool extra_soln_check=false,
+                             bool print_coeffs=false);
 
-//   void mergeData(const FileListInfo& input_files);
+///   void mergeData(const FileListInfo& input_files);
 
 
  private:
@@ -343,7 +344,7 @@ class PerambulatorHandler
    void disconnectQuarkSmearingHandler();
 
    void computePerambulators(int src_time, const std::set<int>& src_evindices,
-                             const std::vector<void*>& evList, bool verbose,
+                             const std::vector<void*>& evList, bool print_coeffs,
                              bool extra_soln_check, double& makesrc_time, double& inv_time,
                              double& evproj_time, double& write_time);
 

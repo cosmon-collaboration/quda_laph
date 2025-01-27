@@ -9,6 +9,7 @@
      <CUDASloppyPrecision>single</CUDASloppyPrecision>
   </QudaInfo>
   <Verbosity>none</Verbosity>
+
   <Task>
      <Name>SMEAR_GAUGE_FIELD</Name>
      <GaugeConfigurationInfo>
@@ -51,8 +52,9 @@
         <ChebyshevOrder>8</ChebyshevOrder>
         <MaxEigenvalue>15.0</MaxEigenvalue>
         <CutoffEigenvalue>0.5</CutoffEigenvalue>
-        <Verbosity>low</Verbosity>
      </LaphEigenSolverInfo>
+     <Verbosity>low</Verbosity> 
+     <PrintEigenvalues/> 
   </Task>
 
   <Task>
@@ -124,8 +126,6 @@
               <PostOrthoNullVectors>false</PostOrthoNullVectors>
            </MGPreconditioner> -->
         </InverterInfo>
-
-        <Verbosity>low</Verbosity> 
       <!--  <ExtraSolutionChecks/> -->
      </QuarkPerambulatorInfo> 
      <ComputationSet>
@@ -142,6 +142,8 @@
            <SourceLaphEigvecIndexMax>31</SourceLaphEigvecIndexMax>
         </Computation>
      </ComputationSet>
+     <Verbosity>low</Verbosity> 
+     <PrintCoefficients/> 
   </Task> 
 
   <Task>
@@ -202,9 +204,7 @@
               </Level0>
            </MGPreconditioner>
         </InverterInfo>
-
-        <Verbosity>none</Verbosity>
-       <ExtraSolutionChecks/>
+        <ExtraSolutionChecks/>
      </QuarkPerambulatorInfo> 
      <ComputationSet>
         <NumSinksBeforeProject>  4 </NumSinksBeforeProject>
@@ -220,6 +220,8 @@
            <SourceLaphEigvecIndexMax>28</SourceLaphEigvecIndexMax>
         </Computation>
      </ComputationSet>
+     <Verbosity>none</Verbosity>  <!-- to override the default verbosity -->
+     <PrintCoefficients/>         <!-- optional -->
   </Task> 
 
 </QudaLaph>

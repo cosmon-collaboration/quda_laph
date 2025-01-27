@@ -71,12 +71,15 @@ std::string Verbosity::message() const
     return string("Verbosity set to high: DEBUG_VERBOSE");}
 }
 
-
-void xml_read_if(XMLHandler& xmlin, Verbosity& v)
+   // Optionally reads if present.  Return true if read, false otherwise
+   
+bool xml_read_if(XMLHandler& xmlin, Verbosity& v)
 {
  if (xml_tag_count(xmlin,"Verbosity")==1){
     Verbosity vv(xmlin);
-    v=vv;}
+    v=vv;
+    return true;}
+ return false;
 }
 
 // ***************************************************************

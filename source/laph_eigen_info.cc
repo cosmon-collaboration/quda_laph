@@ -71,9 +71,6 @@ void LaphEigenSolverInfo::extract_info_from_reader(XMLHandler& xmlr)
  else{
     check_solution=false;}
 
- outputVerbosity.setByInt(getVerbosity());
- xml_read_if(xmlr,outputVerbosity);
-
  if ((maxIterations<4)||(dimKrylov<6)||(tolerance<=0)){
     xmlreadfail(xmlr,"LaphEigenSolverInfo",
         "invalid input parameters in LaphEigenSolverInfo");}
@@ -92,8 +89,7 @@ LaphEigenSolverInfo::LaphEigenSolverInfo(const LaphEigenSolverInfo& in)
                maxEigenvalue(in.maxEigenvalue),
                cutoffEigenvalue(in.cutoffEigenvalue),
                startVector(in.startVector),
-               check_solution(in.check_solution),
-               outputVerbosity(in.outputVerbosity) {}
+               check_solution(in.check_solution) {}
 
 LaphEigenSolverInfo& LaphEigenSolverInfo::operator=(
                const LaphEigenSolverInfo& in)
@@ -106,7 +102,6 @@ LaphEigenSolverInfo& LaphEigenSolverInfo::operator=(
  maxEigenvalue=in.maxEigenvalue;
  cutoffEigenvalue=in.cutoffEigenvalue;
  check_solution=in.check_solution;
- outputVerbosity=in.outputVerbosity;
  return *this;
 }
 
@@ -133,8 +128,6 @@ void LaphEigenSolverInfo::output(XMLHandler& xmlout) const
     xmlout.put_child("CheckSolution","true");}
  else{
     xmlout.put_child("CheckSolution","false");}
- XMLHandler xmlv; outputVerbosity.output(xmlv);
- xmlout.put_child(xmlv);
 }
 
 
@@ -166,7 +159,7 @@ void LaphEigenSolverInfo::setQudaParam(QudaInvertParam& eig_inv_param,
  eig_inv_param.cuda_prec = QudaInfo::get_cuda_prec();
  eig_inv_param.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
  eig_inv_param.cuda_prec_eigensolver = QudaInfo::get_cuda_prec();
- eig_inv_param.verbosity = outputVerbosity.getQudaValue();
+ eig_inv_param.verbosity = getVerbosity();
 // eig_inv_param.extlib_type = solver_ext_lib;
 // eig_inv_param.native_blas_lapack = (native_blas_lapack ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE);
  eig_inv_param.struct_size = sizeof(eig_inv_param);

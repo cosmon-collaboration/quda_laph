@@ -391,7 +391,7 @@ class QuarkHandler
         // if "verbose" is set to true, the quark sinks
         // will be output to standard output too
 
-   void computeSinks(bool verbose=false, bool extra_soln_check=false);
+   void computeSinks(bool extra_soln_check=false, bool print_coeffs=false);
 
 
    bool isNormalMode() const {return normal_mode;}
@@ -487,7 +487,7 @@ class QuarkHandler
    void disconnectDilutionHandler() const;
 
    void computeSinks(const LaphNoiseInfo& noise, int time_proj_index, 
-                     const std::vector<void*>& evList, bool verbose, bool extra_soln_check, 
+                     const std::vector<void*>& evList, bool print_coefs, bool extra_soln_check, 
                      double& srctime, double& invtime, double& evprojtime, double& writetime);
 
           // Makes the source in the Dirac-Pauli basis.  The source is
