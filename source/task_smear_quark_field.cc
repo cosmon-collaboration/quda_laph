@@ -41,8 +41,8 @@ namespace LaphEnv {
 // *          <CutoffEigenvalue>0.5</CutoffEigenvalue>                                *
 // *          <StartingVectorType>equal_components</StartingVectorType>               *
 // *          <CheckSolution>true</CheckSolution>                                     *
+// *          <Verbosity>low</Verbosity> (optional)                                   *
 // *       </LaphEigenSolverInfo>                                                     *
-// *       <Verbosity>low</Verbosity> (optional)                                      *
 // *    </Task>                                                                       *
 // *                                                                                  *
 // *   If the tag <SmearedGaugeFileName> is set, then the smeared gauge field is      *
