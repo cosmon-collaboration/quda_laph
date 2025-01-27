@@ -190,7 +190,8 @@ void GluonSmearingHandler::computeSmearedGaugeField()
  bulova.stop();
  printLaph(make_strf("Time to write to host and then to file was %g seconds",bulova.getTimeInSeconds()));
  printLaph("\n\nSmeared gauge field computation done");
- printLaph(make_strf("Output file: %s\n",h_filename));
+ if (!h_filename.empty()){
+    printLaph(make_strf("Output file: %s\n",h_filename));}
  QudaInfo::clearDeviceSmearedGaugeConfiguration();   // remove from device
 }
 
