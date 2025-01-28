@@ -120,7 +120,7 @@ void doLaphQuarkLineEnds(XMLHandler& xmltask)
  FileListInfo files(xmlr);
  InverterInfo invinfo(xmlr);
  bool extra_soln_check=false;
- if (xml_tag_count(xmlr,"ExtraSolutionChecks")>=1){
+ if (xml_tag_count(xmlr,"ExtraSolutionChecks")>0){
     extra_soln_check=true;}
     // change verbosity from default if requested
  Verbosity task_verbosity(getVerbosity());

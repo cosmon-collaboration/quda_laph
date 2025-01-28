@@ -101,10 +101,10 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
  FileListInfo files(xmlr);
  InverterInfo invinfo(xmlr);
  bool upper_spin_only=false;
- if (xml_tag_count(xmlr,"UpperSpinComponentsOnly")>=1){
+ if (xml_tag_count(xmlr,"UpperSpinComponentsOnly")>0){
     upper_spin_only=true;}
  bool extra_soln_check=false;
- if (xml_tag_count(xmlr,"ExtraSolutionChecks")>=1){
+ if (xml_tag_count(xmlr,"ExtraSolutionChecks")>0){
     extra_soln_check=true;}
     // change verbosity from default if requested
  Verbosity task_verbosity(getVerbosity());

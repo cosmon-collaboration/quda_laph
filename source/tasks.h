@@ -25,7 +25,7 @@ void doLaphQuarkLineEnds(XMLHandler& xmltask);
 
 void doLaphQuarkPerambulators(XMLHandler& xmltask);
 
-void doLaphSmearTune(XMLHandler& xmltask);
+//void doLaphSmearTune(XMLHandler& xmltask);
 
 
 // ***********************************************************

@@ -275,61 +275,59 @@ void PerambulatorHandler::setComputationSet(const XMLHandler& xmlin)
  if (!perambComps.computations.empty()) perambComps.computations.clear();
  uint Textent = uPtr->getTimeExtent();
  uint nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
+ if (xml_tag_count(xmlrdr,"ComputationSet")!=1){
+    errorLaph("Cannot setComputationSet in PerambulatorHandler since no <ComputationSet> tag");}
+ 
+ XMLHandler xmlrd(xmlrdr,"ComputationSet");
+ uint nSinkLaphBatch,nSinkQudaBatch,nEigQudaBatch;
+ xmlread(xmlrd,"NumSinksBeforeProject",nSinkLaphBatch,"LAPH_PERAMBULATORS");
+ xmlread(xmlrd,"NumSinksInProjectBatch",nSinkQudaBatch,"LAPH_PERAMBULATORS"); 
+ xmlread(xmlrd,"NumEigsInProjectBatch",nEigQudaBatch,"LAPH_PERAMBULATORS");
 
- if (xml_tag_count(xmlrdr,"ComputationSet")==1){
+ if ((nSinkLaphBatch > nEigs*Nspin) || (nSinkLaphBatch == 0)){
+    errorLaph(make_strf("Invalid value %d for <NumSinksBeforeProject>: must be between 1 and nEigs*Nspin=%d",
+              nSinkLaphBatch,nEigs*Nspin));}
+ if ((nEigQudaBatch > nEigs) || (nEigQudaBatch == 0)){
+    errorLaph(make_strf("Invalid value %d for <NumEigsInProjectBatch>: must be between 1 and nEigs=%d",
+              nEigQudaBatch,nEigs));}
+ if ((nSinkQudaBatch > nSinkLaphBatch) || (nSinkQudaBatch == 0)){
+    errorLaph(make_strf("Invalid value %d for <NumSinksInProjectBatch>: must be between 1 and %d",
+              nSinkQudaBatch,nSinkLaphBatch));}
+ perambComps.nSinkLaphBatch=nSinkLaphBatch;
+ perambComps.nSinkQudaBatch=nSinkQudaBatch;
+ perambComps.nEigQudaBatch=nEigQudaBatch;
 
-    XMLHandler xmlrd(xmlrdr,"ComputationSet");
-
-    uint nSinkLaphBatch,nSinkQudaBatch,nEigQudaBatch;
-    xmlread(xmlrd,"NumSinksBeforeProject",nSinkLaphBatch,"LAPH_PERAMBULATORS");
-    xmlread(xmlrd,"NumSinksInProjectBatch",nSinkQudaBatch,"LAPH_PERAMBULATORS");
-    xmlread(xmlrd,"NumEigsInProjectBatch",nEigQudaBatch,"LAPH_PERAMBULATORS");
-
-    if ((nSinkLaphBatch > nEigs*Nspin) || (nSinkLaphBatch == 0)){
-       errorLaph(make_strf("Invalid value %d for <NumSinksBeforeProject>: must be between 1 and nEigs*Nspin=%d",
-                 nSinkLaphBatch,nEigs*Nspin));}
-    if ((nEigQudaBatch > nEigs) || (nEigQudaBatch == 0)){
-       errorLaph(make_strf("Invalid value %d for <NumEigsInProjectBatch>: must be between 1 and nEigs=%d",
-                 nEigQudaBatch,nEigs));}
-    if ((nSinkQudaBatch > nSinkLaphBatch) || (nSinkQudaBatch == 0)){
-       errorLaph(make_strf("Invalid value %d for <NumSinksInProjectBatch>: must be between 1 and %d",
-                 nSinkQudaBatch,nSinkLaphBatch));}
-    perambComps.nSinkLaphBatch=nSinkLaphBatch;
-    perambComps.nSinkQudaBatch=nSinkQudaBatch;
-    perambComps.nEigQudaBatch=nEigQudaBatch;
-
-    list<XMLHandler> xmlcs(xmlrd.find("Computation"));
-    for (list<XMLHandler>::iterator it=xmlcs.begin();it!=xmlcs.end();++it){
-       int source_time;
-       xmlread(*it,"SourceTime",source_time,"LAPH_PERAMBULATORS");
-       if ((source_time<0)||(source_time>=int(Textent))){
-          errorLaph(make_strf("Invalid source time %d",source_time));}
-       set<int> srcev_indices;
-       if (xml_tag_count(*it,"SourceLaphEigvecIndices")==1){
-          vector<int> srcev_inds;
-          xmlread(*it,"SourceLaphEigvecIndices",srcev_inds,"LAPH_PERAMBULATORS");
-          for (int k=0;k<int(srcev_inds.size());++k){
-             if ((srcev_inds[k]<0)||(srcev_inds[k]>=int(nEigs))){
-                errorLaph(make_strf("Invalid src laph eigvec index %d",srcev_inds[k]));}
-          srcev_indices.insert(srcev_inds[k]);}}
-       else if (  (xml_tag_count(*it,"SourceLaphEigvecIndexMin")==1)
-                &&(xml_tag_count(*it,"SourceLaphEigvecIndexMax")==1)){
-          int sevmin=-1, sevmax=-1;
-          xmlread(*it,"SourceLaphEigvecIndexMin",sevmin,"LAPH_PERAMBULATORS");
-          xmlread(*it,"SourceLaphEigvecIndexMax",sevmax,"LAPH_PERAMBULATORS");
-          if (sevmin<0) sevmin=0;
-          if (sevmax>=int(nEigs)) sevmax=nEigs-1;
-          if (sevmax<sevmin) sevmax=sevmin;
-          for (int ev=sevmin;ev<=sevmax;++ev){
-             srcev_indices.insert(ev);}}
-       else{
-          for (int ev=0;ev<int(nEigs);++ev){
-             srcev_indices.insert(ev);}}
-       if (srcev_indices.empty()){
-          errorLaph("Empty src laph eigvec indices set");}
-       perambComps.computations.push_back(
-             PerambComputation(source_time,srcev_indices));}
-    }
+ list<XMLHandler> xmlcs(xmlrd.find("Computation"));
+ for (list<XMLHandler>::iterator it=xmlcs.begin();it!=xmlcs.end();++it){
+    int source_time;
+    xmlread(*it,"SourceTime",source_time,"LAPH_PERAMBULATORS");
+    if ((source_time<0)||(source_time>=int(Textent))){
+       errorLaph(make_strf("Invalid source time %d",source_time));}
+    set<int> srcev_indices;
+    if (xml_tag_count(*it,"SourceLaphEigvecIndices")==1){
+       vector<int> srcev_inds;
+       xmlread(*it,"SourceLaphEigvecIndices",srcev_inds,"LAPH_PERAMBULATORS");
+       for (int k=0;k<int(srcev_inds.size());++k){
+          if ((srcev_inds[k]<0)||(srcev_inds[k]>=int(nEigs))){
+             errorLaph(make_strf("Invalid src laph eigvec index %d",srcev_inds[k]));}
+       srcev_indices.insert(srcev_inds[k]);}}
+    else if (  (xml_tag_count(*it,"SourceLaphEigvecIndexMin")==1)
+             &&(xml_tag_count(*it,"SourceLaphEigvecIndexMax")==1)){
+       int sevmin=-1, sevmax=-1;
+       xmlread(*it,"SourceLaphEigvecIndexMin",sevmin,"LAPH_PERAMBULATORS");
+       xmlread(*it,"SourceLaphEigvecIndexMax",sevmax,"LAPH_PERAMBULATORS");
+       if (sevmin<0) sevmin=0;
+       if (sevmax>=int(nEigs)) sevmax=nEigs-1;
+       if (sevmax<sevmin) sevmax=sevmin;
+       for (int ev=sevmin;ev<=sevmax;++ev){
+          srcev_indices.insert(ev);}}
+    else{
+       for (int ev=0;ev<int(nEigs);++ev){
+          srcev_indices.insert(ev);}}
+    if (srcev_indices.empty()){
+       errorLaph("Empty src laph eigvec indices set");}
+    perambComps.computations.push_back(
+          PerambComputation(source_time,srcev_indices));}
 
  printLaph("\nLAPH_PERAMBULATORS sink computations:\n");
  printLaph(make_strf("  NumSinksBeforeProject = %d",perambComps.nSinkLaphBatch));

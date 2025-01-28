@@ -497,6 +497,8 @@ void QuarkSmearingHandler::applyLaphPhaseConvention(vector<LattField>& laph_evec
 
 // **********************************************************************************
 
+   // This is slow CPU code.  Use it only for debugging purposes, or as a one-time
+   // run to ensure correct results, then do not use for subsequent runs.
 
 void QuarkSmearingHandler::checkLaphEigvecComputation(const vector<LattField>& laphEigvecs,
                                                       const vector<LattField>& smeared_gauge_field)

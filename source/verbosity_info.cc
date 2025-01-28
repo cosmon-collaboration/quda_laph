@@ -75,7 +75,7 @@ std::string Verbosity::message() const
    
 bool xml_read_if(XMLHandler& xmlin, Verbosity& v)
 {
- if (xml_tag_count(xmlin,"Verbosity")==1){
+ if (xml_tag_count(xmlin,"Verbosity")>=1){
     Verbosity vv(xmlin);
     v=vv;
     return true;}

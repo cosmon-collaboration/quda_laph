@@ -150,7 +150,7 @@ void LayoutInfo::init(const XMLHandler& xmlin, const std::vector<int> npartition
  XMLHandler xml_in(xmlin);
  if (latt_extents.size()==Ndim){
     throw(std::runtime_error("LayoutInfo::init can only be run ONCE! Don't try it again!"));}
- xmlreadchild(xml_in,"XYZTExtents",latt_extents,"LayoutInfo");
+ xmlread(xml_in,"XYZTExtents",latt_extents,"LayoutInfo");
  if (latt_extents.size()!=Ndim){
     throw(std::runtime_error("XYZTExtents in invalid"));}
  for (uint k=0;k<Ndim;++k){

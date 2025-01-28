@@ -99,7 +99,6 @@ target_sources(quda_laph PRIVATE
     quda_info.cc
     read_gauge_field.cc
     stop_watch.cc
-    task_laph_smear_tune.cc
     task_quark_line_ends.cc
     task_quark_perambulators.cc
     task_smear_gauge_field.cc

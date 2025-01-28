@@ -258,60 +258,59 @@ void QuarkHandler::setSinkComputations(const XMLHandler& xmlin)
     errorLaph("Cannot setSinkComputations in QuarkHandler unless info is set");}
  XMLHandler xmlrdr(xmlin);
  if (!sinkComps.computations.empty()) sinkComps.computations.clear();
+ if (xml_tag_count(xmlrdr,"SinkComputations")!=1){
+    errorLaph("Cannot setSinkComputations in QuarkHandler since no <SinkComputations> tag");}
 
- if (xml_tag_count(xmlrdr,"SinkComputations")==1){
+ XMLHandler xmlrd(xmlrdr,"SinkComputations");
 
-    XMLHandler xmlrd(xmlrdr,"SinkComputations");
+ uint nSinkLaphBatch,nSinkQudaBatch,nEigQudaBatch;
+ xmlread(xmlrd,"NumSinksBeforeProject",nSinkLaphBatch,"LAPH_QUARK_LINE_ENDS");
+ xmlread(xmlrd,"NumSinksInProjectBatch",nSinkQudaBatch,"LAPH_QUARK_LINE_ENDS");
+ xmlread(xmlrd,"NumEigsInProjectBatch",nEigQudaBatch,"LAPH_QUARK_LINE_ENDS");
 
-    uint nSinkLaphBatch,nSinkQudaBatch,nEigQudaBatch;
-    xmlread(xmlrd,"NumSinksBeforeProject",nSinkLaphBatch,"LAPH_QUARK_LINE_ENDS");
-    xmlread(xmlrd,"NumSinksInProjectBatch",nSinkQudaBatch,"LAPH_QUARK_LINE_ENDS");
-    xmlread(xmlrd,"NumEigsInProjectBatch",nEigQudaBatch,"LAPH_QUARK_LINE_ENDS");
+ int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
+ int ndil=dilHandler->getNumberOfSpinEigvecProjectors();
+ if ((int(nSinkLaphBatch) > ndil) || (nSinkLaphBatch == 0)){
+    errorLaph(make_strf("Invalid value %d for <NumSinksBeforeProject>: must be between 1 and ndil=%d",
+              nSinkLaphBatch,ndil));}
+ if ((int(nEigQudaBatch) > nEigs) || (nEigQudaBatch == 0)){
+    errorLaph(make_strf("Invalid value %d for <NumEigsInProjectBatch>: must be between 1 and nEigs=%d",
+              nEigQudaBatch,nEigs));}
+ if ((nSinkQudaBatch > nSinkLaphBatch) || (nSinkQudaBatch == 0)){
+    errorLaph(make_strf("Invalid value %d for <NumSinksInProjectBatch>: must be between 1 and %d",
+              nSinkQudaBatch,nSinkLaphBatch));}
+ sinkComps.nSinkLaphBatch=nSinkLaphBatch;
+ sinkComps.nSinkQudaBatch=nSinkQudaBatch;
+ sinkComps.nEigQudaBatch=nEigQudaBatch;
 
-    int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
-    int ndil=dilHandler->getNumberOfSpinEigvecProjectors();
-    if ((int(nSinkLaphBatch) > ndil) || (nSinkLaphBatch == 0)){
-       errorLaph(make_strf("Invalid value %d for <NumSinksBeforeProject>: must be between 1 and ndil=%d",
-                 nSinkLaphBatch,ndil));}
-    if ((int(nEigQudaBatch) > nEigs) || (nEigQudaBatch == 0)){
-       errorLaph(make_strf("Invalid value %d for <NumEigsInProjectBatch>: must be between 1 and nEigs=%d",
-                 nEigQudaBatch,nEigs));}
-    if ((nSinkQudaBatch > nSinkLaphBatch) || (nSinkQudaBatch == 0)){
-       errorLaph(make_strf("Invalid value %d for <NumSinksInProjectBatch>: must be between 1 and %d",
-                 nSinkQudaBatch,nSinkLaphBatch));}
-    sinkComps.nSinkLaphBatch=nSinkLaphBatch;
-    sinkComps.nSinkQudaBatch=nSinkQudaBatch;
-    sinkComps.nEigQudaBatch=nEigQudaBatch;
-
-    if (xml_tag_count(xmlrd,"NoiseList_TimeProjIndexList")==1){
-       XMLHandler xmlr(xmlrd,"NoiseList_TimeProjIndexList");
-       vector<int> time_proj_inds;
-       if (xml_tag_count(xmlr,"TimeProjIndexList")==1){
-          XMLHandler xmltpi(xmlr,"TimeProjIndexList");
-          if (xml_tag_count(xmltpi,"All")==1){
-             int tpnum=dilHandler->getNumberOfTimeProjectors();
-             time_proj_inds.resize(tpnum);
-             for (int t=0;t<tpnum;t++) time_proj_inds[t]=t;}
-          else{
-             xmlread(xmltpi,"Values",time_proj_inds,"LAPH_QUARK_LINE_ENDS");}}
-       XMLHandler xmln(xmlr,"LaphNoiseList");
-       list<XMLHandler> xmlns(xmln.find("LaphNoiseInfo"));
-       for (list<XMLHandler>::iterator it=xmlns.begin();it!=xmlns.end();++it){
-          LaphNoiseInfo aNoise(*it);
-          for (int t=0;t<int(time_proj_inds.size());t++){
-             sinkComps.computations.push_back(
-                  SinkComputation(aNoise,time_proj_inds[t]));}}}
-
-    if (xml_tag_count(xmlrd,"ComputationList")==1){
-       XMLHandler xmlr(xmlrd,"ComputationList");
-       list<XMLHandler> xmlcs(xmlr.find("Computation"));
-       for (list<XMLHandler>::iterator it=xmlcs.begin();it!=xmlcs.end();++it){
-          LaphNoiseInfo aNoise(*it);
-          int time_proj_index;
-          xmlread(*it,"TimeProjIndex",time_proj_index,"LAPH_QUARK_LINE_ENDS");
+ if (xml_tag_count(xmlrd,"NoiseList_TimeProjIndexList")==1){
+    XMLHandler xmlr(xmlrd,"NoiseList_TimeProjIndexList");
+    vector<int> time_proj_inds;
+    if (xml_tag_count(xmlr,"TimeProjIndexList")==1){
+       XMLHandler xmltpi(xmlr,"TimeProjIndexList");
+       if (xml_tag_count(xmltpi,"All")==1){
+          int tpnum=dilHandler->getNumberOfTimeProjectors();
+          time_proj_inds.resize(tpnum);
+          for (int t=0;t<tpnum;t++) time_proj_inds[t]=t;}
+       else{
+          xmlread(xmltpi,"Values",time_proj_inds,"LAPH_QUARK_LINE_ENDS");}}
+    XMLHandler xmln(xmlr,"LaphNoiseList");
+    list<XMLHandler> xmlns(xmln.find("LaphNoiseInfo"));
+    for (list<XMLHandler>::iterator it=xmlns.begin();it!=xmlns.end();++it){
+       LaphNoiseInfo aNoise(*it);
+       for (int t=0;t<int(time_proj_inds.size());t++){
           sinkComps.computations.push_back(
-                SinkComputation(aNoise,time_proj_index));}}
-    }
+               SinkComputation(aNoise,time_proj_inds[t]));}}}
+
+ if (xml_tag_count(xmlrd,"ComputationList")==1){
+    XMLHandler xmlr(xmlrd,"ComputationList");
+    list<XMLHandler> xmlcs(xmlr.find("Computation"));
+    for (list<XMLHandler>::iterator it=xmlcs.begin();it!=xmlcs.end();++it){
+       LaphNoiseInfo aNoise(*it);
+       int time_proj_index;
+       xmlread(*it,"TimeProjIndex",time_proj_index,"LAPH_QUARK_LINE_ENDS");
+       sinkComps.computations.push_back(
+             SinkComputation(aNoise,time_proj_index));}}
 
  printLaph("\nLAPH_QUARK_LINE_ENDS sink computations:\n");
  printLaph(make_strf("  NumSinksBeforeProject = %d",sinkComps.nSinkLaphBatch));
