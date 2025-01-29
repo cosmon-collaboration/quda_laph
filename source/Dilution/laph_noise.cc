@@ -37,78 +37,43 @@ void UniformDeviate32::Reseed(const std::uint32_t seed) {
   left = 0;
 }
 
-LaphZnNoise::LaphZnNoise(const int zn, const std::uint32_t &seed) : rng(seed), values(zn) {
-  const double one = 1.0, zero = 0.0;
-  if (zn == 4) {
-    values[0] = std::complex<double>(one, zero);
-    values[1] = std::complex<double>(zero, one);
-    values[2] = std::complex<double>(-one, zero);
-    values[3] = std::complex<double>(zero, -one);
-    genptr = &LaphZnNoise::z4_generate;
-  } else if (zn == 8) {
-    const double sqrthalf = 0.70710678118654752440;
-    values[0] = std::complex<double>(one, zero);
-    values[1] = std::complex<double>(sqrthalf, sqrthalf);
-    values[2] = std::complex<double>(zero, one);
-    values[3] = std::complex<double>(-sqrthalf, sqrthalf);
-    values[4] = std::complex<double>(-one, zero);
-    values[5] = std::complex<double>(-sqrthalf, -sqrthalf);
-    values[6] = std::complex<double>(zero, -one);
-    values[7] = std::complex<double>(sqrthalf, -sqrthalf);
-    genptr = &LaphZnNoise::z8_generate;
-  } else if (zn == 32) {
-    const double c0 = 0.98078528040323044912; // cos(Pi/16)
-    const double c1 = 0.92387953251128675613; // cos(Pi/8)
-    const double c2 = 0.83146961230254523707; // cos(3*Pi/16)
-    const double c3 = 0.70710678118654752440; // sqrt(1/2);
-    const double c4 = 0.55557023301960222475; // cos(5*Pi/16)
-    const double c5 = 0.38268343236508977173; // cos(3*Pi/8)
-    const double c6 = 0.19509032201612826785; // cos(7*Pi/16)
-    values[0] = std::complex<double>(one, zero);
-    values[1] = std::complex<double>(c0, c6);
-    values[2] = std::complex<double>(c1, c5);
-    values[3] = std::complex<double>(c2, c4);
-    values[4] = std::complex<double>(c3, c3);
-    values[5] = std::complex<double>(c4, c2);
-    values[6] = std::complex<double>(c5, c1);
-    values[7] = std::complex<double>(c6, c0);
-    values[8] = std::complex<double>(zero, one);
-    values[9] = std::complex<double>(-c6, c0);
-    values[10] = std::complex<double>(-c5, c1);
-    values[11] = std::complex<double>(-c4, c2);
-    values[12] = std::complex<double>(-c3, c3);
-    values[13] = std::complex<double>(-c2, c4);
-    values[14] = std::complex<double>(-c1, c5);
-    values[15] = std::complex<double>(-c0, c6);
-    values[16] = std::complex<double>(-one, zero);
-    values[17] = std::complex<double>(-c0, -c6);
-    values[18] = std::complex<double>(-c1, -c5);
-    values[19] = std::complex<double>(-c2, -c4);
-    values[20] = std::complex<double>(-c3, -c3);
-    values[21] = std::complex<double>(-c4, -c2);
-    values[22] = std::complex<double>(-c5, -c1);
-    values[23] = std::complex<double>(-c6, -c0);
-    values[24] = std::complex<double>(zero, -one);
-    values[25] = std::complex<double>(c6, -c0);
-    values[26] = std::complex<double>(c5, -c1);
-    values[27] = std::complex<double>(c4, -c2);
-    values[28] = std::complex<double>(c3, -c3);
-    values[29] = std::complex<double>(c2, -c4);
-    values[30] = std::complex<double>(c1, -c5);
-    values[31] = std::complex<double>(c0, -c6);
-    genptr = &LaphZnNoise::z32_generate;
-  } else if (zn == 1) {
-    printLaph("Warning: ZN group set to N=1 for debugging ONLY");
-    values[0] = std::complex<double>(one, zero);
-    genptr = &LaphZnNoise::z1_generate;
-  } else {
-    errorLaph("Unsupported Zn group in LaphZnNoise: only Z4, Z8, Z32");
+// works for arbitrary zn group to the same precision as the old code
+static inline std::complex<double>
+computeZ( const int idx , const int zn )
+{
+  long double cn = 0 , sn = 0 ;
+  if( (2*idx)%zn == 0 ) {
+    return std::complex( (double)(1-2*(2*idx)/zn) , 0.0 ) ;
   }
+  if( (4*idx)%zn == 0 ) {
+    return std::complex( 0.0 , (double)(2-(4*idx)/zn) ) ;
+  }
+  // generic case cast up to long double and back down to recover better precision
+  sincosl( 2*idx*(M_PIl/(long double)zn) , &sn , &cn ) ;
+  return std::complex( (double)cn , (double)sn ) ;
+}
 
+LaphZnNoise::LaphZnNoise(const int zn, const std::uint32_t &seed) : rng(seed), values(zn) {
+  // generic version
+  for( int i = 0 ; i < zn ; i++ ) {
+    values[i] = computeZ( i , zn ) ;
+  }
+  switch( zn ) {
+  case 1  :
+    printLaph("Warning: ZN group set to N=1 for debugging ONLY");
+    genptr = &LaphZnNoise::z1_generate  ;
+    break ;
+  case 4  : genptr = &LaphZnNoise::z4_generate  ; break ;
+  case 8  : genptr = &LaphZnNoise::z8_generate  ; break ;
+  case 32 : genptr = &LaphZnNoise::z32_generate ; break ;
+  default :
+    errorLaph("Unsupported Zn group in LaphZnNoise: only Z4, Z8, Z32");
+    break ;
+  }
   // call Mersenne Twister 12 times to start things
-  for (int i = 0; i < 11; i++)
-    rng.generate();
-  current = rng.generate();
+  for (int i = 0; i < 12; i++) {
+    current = rng.generate();
+  }
   znGroup = zn;
   count = 1;
 };

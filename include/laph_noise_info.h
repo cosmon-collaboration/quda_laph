@@ -119,7 +119,5 @@ private:
   friend class TetraquarkOneInternalLoopHandler;
   friend class TetraquarkTwoInternalLoopHandler;
 };
-
-// **************************************************
 } // namespace LaphEnv
 #endif

@@ -6,3 +6,7 @@ target_link_libraries(TestRephase PUBLIC ${LiveLaphLibs} gputoolkitlib quda Quda
 add_executable(TestPeramSrc test_peram_src.cc)
 target_include_directories(TestPeramSrc PUBLIC include)
 target_link_libraries(TestPeramSrc PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
+
+add_executable(TestNoise test_noise.cc)
+target_include_directories(TestNoise PUBLIC include)
+target_link_libraries(TestNoise PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)

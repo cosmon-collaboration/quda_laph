@@ -102,12 +102,14 @@ private:
 class LaphZnNoise {
   int znGroup;
   UniformDeviate32 rng;
-  std::vector<std::complex<double>> values;
   std::uint32_t current;
   int count;
   std::complex<double> (LaphZnNoise::*genptr)();
 
 public:
+
+  std::vector<std::complex<double>> values;
+  
   LaphZnNoise(int zn, const std::uint32_t &seed);
 
   std::complex<double> generate() { return (this->*genptr)(); }
