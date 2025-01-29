@@ -2,12 +2,15 @@
 #include "byte_handler.h"
 #include "laph_stdio.h"
 #include "stop_watch.h"
-using namespace std;
-using namespace quda;
 
 #ifdef ARCH_PARALLEL
 #include <mpi.h>
+#else
+#include <fstream>
 #endif
+
+using namespace std;
+using namespace quda;
 
 namespace LaphEnv {
 

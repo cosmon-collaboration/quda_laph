@@ -3,6 +3,7 @@
 
 #include "io_fm_handler.h"
 #include "utils.h"
+#include "layout_info.h"
 #include "laph_stdio.h"
 
 #define UINTSIZE     4

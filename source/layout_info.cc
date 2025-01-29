@@ -1,8 +1,6 @@
 #include "layout_info.h"
 #include "utils.h"
 #include "laph_stdio.h"
-#include "verbosity_info.h"
-#include "util_quda.h"
 #include <algorithm>
 #include <cstring>
 
@@ -333,20 +331,25 @@ void LayoutInfo::set_up_comm_map()
  for (int rank=0;rank<num_ranks;++rank){
     if (check[rank]!=rank){
         throw(std::runtime_error("Sanity check did not pass in setting up comm_map in LayoutInfo"));}}
-   // output the comm map
- Verbosity v(getVerbosity());
- if (v.isMediumOrHigher()){
-    for (comm_coords[0]=0;comm_coords[0]<num_partitions[0];++comm_coords[0])
-    for (comm_coords[1]=0;comm_coords[1]<num_partitions[1];++comm_coords[1])
-    for (comm_coords[2]=0;comm_coords[2]<num_partitions[2];++comm_coords[2])
-    for (comm_coords[3]=0;comm_coords[3]<num_partitions[3];++comm_coords[3]){
-       int rank=comm_map[rank_encode(comm_coords)];
-       printLaph(make_strf("Sublattice at comm coord (%3d, %3d, %3d, %3d) is on rank %d",
-            comm_coords[0],comm_coords[1],comm_coords[2],comm_coords[3],rank));}
-    printLaph("\n\n");}
 }
 
-  
+      // output the comm map
+
+void LayoutInfo::print_comm_map()
+{
+#if defined(ARCH_PARALLEL)
+ vector<int> comm_coords(Ndim);
+ for (comm_coords[0]=0;comm_coords[0]<num_partitions[0];++comm_coords[0])
+ for (comm_coords[1]=0;comm_coords[1]<num_partitions[1];++comm_coords[1])
+ for (comm_coords[2]=0;comm_coords[2]<num_partitions[2];++comm_coords[2])
+ for (comm_coords[3]=0;comm_coords[3]<num_partitions[3];++comm_coords[3]){
+    int rank=comm_map[rank_encode(comm_coords)];
+    printLaph(make_strf("Sublattice at comm coord (%3d, %3d, %3d, %3d) is on rank %d",
+              comm_coords[0],comm_coords[1],comm_coords[2],comm_coords[3],rank));}
+ printLaph("\n\n");
+#endif
+}
+
 int LayoutInfo::get_rank_from_comm_coords(const std::vector<int>& comm_coords)
 {
  return comm_map[rank_encode(comm_coords)];

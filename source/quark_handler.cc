@@ -10,8 +10,6 @@
 #include "cblas.h"
 #endif
 
-//#define EXTRA_LAPH_CHECKS
-
     // STILL TO DO:  single asynchronous thread for output so can continue next computations
     //                   while output occurs
 

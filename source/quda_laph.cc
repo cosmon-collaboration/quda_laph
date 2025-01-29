@@ -324,9 +324,11 @@ int main(int argc, char** argv)
     QudaInfo::init(xml_qudainfo,echo);}
      // set the verbosity level for Quda output
  setVerbosity(verbosity.getQudaValue()); 
+     // output communications map if high verbosity
+ if (verbosity.isHigh()){
+    LayoutInfo::print_comm_map();}
 
    // Quda initializations
- //initComms(argc, argv, gridsize_from_cmdline);
  initQuda(QudaInfo::getDeviceOrdinal());
 
  printLaph(make_strf("\n\n  Number of tasks is %d",ntasks));

@@ -167,6 +167,8 @@ class LayoutInfo
 
   static void evenodd_to_lexico(char* dest, const char* src, int sitebytes);
 
+  static void print_comm_map();
+
 #if defined(ARCH_PARALLEL)
     // This routine uses MPI_Get_processor_name to determine how the MPI ranks
     // have been distributed among the processor nodes.  A single char is returned:  
