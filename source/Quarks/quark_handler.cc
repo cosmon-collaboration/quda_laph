@@ -794,118 +794,154 @@ void QuarkHandler::computeSinks(const bool verbose,
 // code from witnesser sortof
 template <class T>
 static void
-DirtyWilson4D( const int fermsize,
-	       T sol[] )
+DirtyWilson4D( const size_t fermsize,
+	       QudaInvertParam inv_param,
+	       std::complex<T> sol[] )
 {
-  T tmp1[ fermsize ] ;
-  memcpy( tmp1 , sol , fermsize*sizeof(T) ) ;
+  std::complex<T> *tmp = new std::complex<T>[ fermsize ] ;
+  memcpy( tmp , sol , fermsize*sizeof(std::complex<T>) ) ;
   
   QudaInvertParam Wil = newQudaInvertParam() ;
   Wil.dslash_type = QUDA_WILSON_DSLASH ;
-  Wil.kappa = 1/(2.*(4.-Wil.m5)) ;
-  Wil.mass = -Wil.m5 ;
+  Wil.kappa = 1/(2.*(4.-inv_param.m5)) ;
+  Wil.mass = -inv_param.m5 ;
 
-  void *in  = (void*)sol ;
-  void *out = (void*)tmp1 ;
+  void *in  = (void*)sol , *out = (void*)tmp ;
   
   MatQuda( out , in , &Wil ) ;
 
-  const double cfac1 = 0.5*(Wil.c_5[0])/Wil.kappa ;
+  const std::complex<T> cfac1 = 0.5*(inv_param.c_5[0])/Wil.kappa ;
 
   size_t i ;
 #pragma omp parallel for private(i)
   for( i = 0 ; i < fermsize; i++ ) {
-    sol[i] = cfac1*tmp1[i] - sol[i] ;
+    sol[i] = cfac1*tmp[i] - sol[i] ;
+  }
+  delete [] tmp ;
+}
+
+// does 0.5*(1+\gamma_5) in the NR basis that we seemingly have to use
+template <class T>
+static void
+chiralProjectPlus( const size_t fermsize,
+		   const void *in,
+		   std::complex<T> tmp[] )
+{
+  std::complex<T> *ptin = (std::complex<T>*)in ;
+  size_t i ;
+#pragma omp parallel for private(i) collapse(2)
+  for( i = 0 ; i < fermsize/(12) ; i++ ) {
+    for( int c = 0 ; c < 3 ; c++ ) {
+      tmp[ c +     12*i ] = 0.5*( ptin[ c +     12*i ] - ptin[ c + 6 + 12*i ] ) ;
+      tmp[ c + 3 + 12*i ] = 0.5*( ptin[ c + 3 + 12*i ] - ptin[ c + 9 + 12*i ] ) ;
+      tmp[ c + 6 + 12*i ] = 0.5*( ptin[ c + 6 + 12*i ] - ptin[ c + 0 + 12*i ] ) ;
+      tmp[ c + 9 + 12*i ] = 0.5*( ptin[ c + 9 + 12*i ] - ptin[ c + 3 + 12*i ] ) ;
+    }
   }
 }
 
-  template <class T>
-  static void
-  chiralProjectPlus( const int fermsize,
-		     const void *in,
-		     T tmp1[] )
-  {
-
-  }
-
-  template <class T>
-  static void
-  chiralProjectMinus( const int fermsize,
-		      const void *in,
-		      T tmp1[] )
-  {
-
-  }
-
-  template <class T>
+// chiminus = 0.5*(1-\gamma_5)
+template <class T>
 static void
-solve_DWF( void *in,
-	   void *out ,
-	   QudaInvertParam inv_param,
-	   const int Ls )
+chiralProjectMinus( const size_t fermsize,
+                    const void *in,
+		    std::complex<T> tmp[] )
 {
-  const int fullsize = LayoutInfo::rank_latt_nsites ;
-  const int fermsize = fullsize*3*4*2 ;
-  const int half_fermsize = fermsize/2 ;
-  T *spinorIn  = new T[ Ls*fermsize ] ;
-  T *spinorOut = new T[ Ls*fermsize ] ;
+  std::complex<T> *ptin = (std::complex<T>*)in ;
+  size_t i ;
+#pragma omp parallel for private(i)
+  for( i = 0 ; i < fermsize/(12) ; i++ ) {
+    for( int c = 0 ; c < 3 ; c++ ) {
+      tmp[ c +     12*i ] = 0.5*( ptin[ c +     12*i ] + ptin[ c + 6 + 12*i ] ) ;
+      tmp[ c + 3 + 12*i ] = 0.5*( ptin[ c + 3 + 12*i ] + ptin[ c + 9 + 12*i ] ) ;
+      tmp[ c + 6 + 12*i ] = 0.5*( ptin[ c + 6 + 12*i ] + ptin[ c + 0 + 12*i ] ) ;
+      tmp[ c + 9 + 12*i ] = 0.5*( ptin[ c + 9 + 12*i ] + ptin[ c + 3 + 12*i ] ) ;
+    }
+  }
+}
 
-  memset(reinterpret_cast<char*>(spinorIn) , 0, fermsize*Ls*sizeof(T));
-  memset(reinterpret_cast<char*>(spinorOut), 0, fermsize*Ls*sizeof(T));
+template <class T>
+static void
+solve_DWF( void *out ,
+	   void *in ,
+	   QudaInvertParam inv_param)
+{
+  const int Ls = inv_param.Ls ;
+  const int fullsize = LayoutInfo::getRankLatticeNumSites() ; //rank_latt_nsites ;
+  const size_t fermsize = fullsize*3*4*2 ;
+  const size_t half_fermsize = fermsize/2 ;
+  std::complex<T> *spinorIn  = new std::complex<T>[ Ls*fermsize ] ;
+  std::complex<T> *spinorOut = new std::complex<T>[ Ls*fermsize ] ;
 
-  // vhiral project
-  T tmp1[ fermsize ] ;
-  chiralProjectPlus( fermsize, in , tmp1 ) ;
-  DirtyWilson4D( tmp1 ) ;
+  memset(reinterpret_cast<char*>(spinorIn) , 0, fermsize*Ls*sizeof(std::complex<T>));
+  memset(reinterpret_cast<char*>(spinorOut), 0, fermsize*Ls*sizeof(std::complex<T>));
 
-  T tmp2[ fermsize ] ;
-  chiralProjectMinus( fermsize, in , tmp2 ) ;
-  DirtyWilson4D( tmp2 ) ;
+  // chiral project
+  std::complex<T> *tmp1 = new std::complex<T>[ fermsize ] ;
+  chiralProjectPlus<T>( fermsize, in , tmp1 ) ;
+  DirtyWilson4D<T>( fermsize , inv_param , tmp1 ) ;
+
+  std::complex<T> *tmp2 = new std::complex<T>[ fermsize ] ;
+  chiralProjectMinus<T>( fermsize, in , tmp2 ) ;
+  DirtyWilson4D<T>( fermsize , inv_param , tmp2 ) ;
 
   // copies for the checkerboarded sources
   memcpy(reinterpret_cast<char*>(&spinorIn[0]),
-	   reinterpret_cast<char*>(const_cast<T*>(&(tmp1[0]))),
-	   half_fermsize*sizeof(T));
+	 reinterpret_cast<char*>(const_cast<std::complex<T>*>(&(tmp1[0]))),
+	 half_fermsize*sizeof(std::complex<T>));
   memcpy(reinterpret_cast<char*>(&spinorIn[half_fermsize*Ls]),
-	 reinterpret_cast<char*>(const_cast<T*>(&(tmp1[half_fermsize]))),
-	 half_fermsize*sizeof(T));
+	 reinterpret_cast<char*>(const_cast<std::complex<T>*>(&(tmp1[half_fermsize]))),
+	 half_fermsize*sizeof(std::complex<T>));
   memcpy(reinterpret_cast<char*>(&spinorIn[half_fermsize*(Ls-1)]),
-	 reinterpret_cast<char*>(const_cast<T*>(&(tmp2[0]))),
-	 half_fermsize*sizeof(T));
+	 reinterpret_cast<char*>(const_cast<std::complex<T>*>(&(tmp2[0]))),
+	 half_fermsize*sizeof(std::complex<T>));
   memcpy(reinterpret_cast<char*>(&spinorIn[half_fermsize*(2*Ls-1)]),
-	 reinterpret_cast<char*>(const_cast<T*>(&(tmp2[half_fermsize]))),
-	 half_fermsize*sizeof(T));
+	 reinterpret_cast<char*>(const_cast<std::complex<T>*>(&(tmp2[half_fermsize]))),
+	 half_fermsize*sizeof(std::complex<T>));
   
-  invertQuda( reinterpret_cast<void*>(spinorOut), reinterpret_cast<void*>(spinorIn), &inv_param ) ;
+  invertQuda( reinterpret_cast<void*>(spinorOut),
+	      reinterpret_cast<void*>(spinorIn), &inv_param ) ;
   
   delete [] spinorIn ;
   
   // undo the solve
-  memcpy(reinterpret_cast<char*>(const_cast<T*>(&tmp1[0])),
+  memcpy(reinterpret_cast<char*>(const_cast<std::complex<T>*>(&tmp1[0])),
 	 reinterpret_cast<char*>(&spinorOut[0]),
-	 half_fermsize*sizeof(T));
-  memcpy(reinterpret_cast<char*>(const_cast<T*>(&(tmp1[half_fermsize]))),
+	 half_fermsize*sizeof(std::complex<T>));
+  memcpy(reinterpret_cast<char*>(const_cast<std::complex<T>*>(&(tmp1[half_fermsize]))),
 	 reinterpret_cast<char*>(&spinorOut[half_fermsize*Ls]),
-	 half_fermsize*sizeof(T));
-  memcpy(reinterpret_cast<char*>(const_cast<T*>(&(tmp2[0]))),
+	 half_fermsize*sizeof(std::complex<T>));
+  memcpy(reinterpret_cast<char*>(const_cast<std::complex<T>*>(&(tmp2[0]))),
 	 reinterpret_cast<char*>(&spinorOut[half_fermsize*(Ls-1)]),
-	 half_fermsize*sizeof(T));
-  memcpy(reinterpret_cast<char*>(const_cast<T*>(&(tmp2[half_fermsize]))),
+	 half_fermsize*sizeof(std::complex<T>));
+  memcpy(reinterpret_cast<char*>(const_cast<std::complex<T>*>(&(tmp2[half_fermsize]))),
 	 reinterpret_cast<char*>(&spinorOut[half_fermsize*(2*Ls-1)]),
-	 half_fermsize*sizeof(T));
+	 half_fermsize*sizeof(std::complex<T>));
 
   delete [] spinorOut ;
 
-  const T invTwoKappaB = inv_param.b_5[0]*( 4 - inv_param.m5 ) + 1.0;
-  const T twoKappaB = 1.0/invTwoKappaB;
+  const std::complex<T> invTwoKappaB = inv_param.b_5[0]*( 4 - inv_param.m5 ) + 1.0;
+  const std::complex<T> twoKappaB = 1.0/invTwoKappaB;
 
   // chiral projections
-  T *outptr = (T*)out ;
+  std::complex<T> *outptr = (std::complex<T>*)out ;
   int i ;
-#pragma omp parallel for private(i)
-  for( i = 0 ; i < fullsize ; i++ ) {
-    // TODO chiral projections here
+  // tmp = chiralprojecminus(tmp1) + chiralprojectplus(tmp2)
+#pragma omp parallel for private(i) collapse(2)
+  for( i = 0 ; i < fullsize/12 ; i++ ) {
+    for( int c = 0 ; c < 3 ; c++ ) {
+      outptr[ c + 0 + 12*i ] = (0.5*twoKappaB)*(   tmp1[ c + 0 + 12*i ] + tmp1[ c + 6 + 12*i ]
+						 + tmp2[ c + 0 + 12*i ] - tmp2[ c + 6 + 12*i ]) ;
+      outptr[ c + 3 + 12*i ] = (0.5*twoKappaB)*(   tmp1[ c + 3 + 12*i ] + tmp1[ c + 9 + 12*i ]
+						 + tmp2[ c + 3 + 12*i ] - tmp2[ c + 9 + 12*i ]) ;
+      outptr[ c + 6 + 12*i ] = (0.5*twoKappaB)*(   tmp1[ c + 6 + 12*i ] + tmp1[ c + 0 + 12*i ]
+						 + tmp2[ c + 6 + 12*i ] - tmp2[ c + 0 + 12*i ]) ;
+      outptr[ c + 9 + 12*i ] = (0.5*twoKappaB)*(   tmp1[ c + 9 + 12*i ] + tmp1[ c + 3 + 12*i ]
+						 + tmp2[ c + 9 + 12*i ] - tmp2[ c + 3 + 12*i ]) ; 
+    }
   }
+  delete [] tmp1 ;
+  delete [] tmp2 ;
 }
   
 #endif
@@ -1017,12 +1053,9 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise,
       void *spinor_snk = (void *)(sinkBatchData[iSinkBatch].getDataPtr());
 
       #ifdef LAPH_DOMAIN_WALL
-
-
-
-      
+      solve_DWF<double>(spinor_snk, spinor_src, quda_inv_param) ;      
       #else
-      invertQuda(spinor_snk, spinor_src, &quda_inv_param);
+      invertQuda(spinor_snk, spinor_src, &quda_inv_param) ;
       #endif
       
       bulova.stop();

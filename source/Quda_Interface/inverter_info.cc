@@ -101,7 +101,7 @@ void InverterInfo::commonQudaInvertParam(QudaInvertParam &invParam) const {
   int ivalindex = 0, rvalindex = 0;
 #ifdef LAPH_DOMAIN_WALL
   invParam.Ls = xmlputQLInt("Ls", ivalues, ivalindex); ;
-  invParam.m5 = xmlputQLReal("M4", rvalues, rvalindex); ;
+  invParam.m5 = xmlputQLReal("m5", rvalues, rvalindex); ;
   const double b = xmlputQLReal("b5", rvalues, rvalindex); ;
   const double c = xmlputQLReal("c5", rvalues, rvalindex); ;
   for( int k = 0 ; k < invParam.Ls ; k++ ) {
