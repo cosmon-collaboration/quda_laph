@@ -4,13 +4,18 @@
 #include "io_fm_handler.h"
 #include "laph_stdio.h"
 #include "utils.h"
+#include "xml_handler.h"
+#include <map>
+#include <set>
 
-#define UINTSIZE (4)
-#define SIZETSIZE (8)
-#define ULONGLONG (8)
+#define UINTSIZE 4
+// #define SIZETSIZE    4
+#define SIZETSIZE 8
+#define ULONGLONG 8
 
 namespace LaphEnv {
 
+// *********************************************************************************
 // * *
 // *       class IOMap:    parallel random access input/output *
 // * *
@@ -817,5 +822,50 @@ void IOMap<K, V>::check_for_failure(bool errcond, const std::string &mesg,
   else
     throw mesg;
 }
+
+// **************************************************************
+// *                                                            *
+// *                         Outputter                          *
+// *                                                            *
+// **************************************************************
+
+// to use this routine, there must exist a routine
+//    void output(const D& data, TextFileWriter& tout)
+// outputs only the header XML and the record keys by default;
+// if "printdata" is true, then the data itself is output
+
+/*
+template <typename R, typename D>
+void IOMap<R,D>::outputContents(const std::string& logfile, bool printdata)
+{
+ check_for_failure(!ioh.isOpen(),"IOMap not open: cannot output contents");
+
+ std::string filename=getFileName();
+ std::string headerxml=getHeader();
+
+ TextFileWriter tout(logfile);
+ tout << "IOMap file name: "<<filename<<"\n";
+ tout << "header info:\n"<<headerxml<<"\n";
+
+ std::set<R> dbkeys;
+ getKeys(dbkeys);
+
+ for (typename std::set<R>::const_iterator
+            kt=dbkeys.begin();kt!=dbkeys.end();kt++){
+    tout << "Record Key:\n";
+    XmlBufferWriter xmlout;
+    kt->output(xmlout);
+    tout << xmlout.str() <<"\n";
+    if (printdata){
+       tout << "Record Data:\n";
+       D result;
+       get(*kt,result);
+       output(result,tout); tout <<"\n\n\n";}
+    }
+
+ tout.close();
+}
+*/
+// **************************************************************
 } // namespace LaphEnv
 #endif

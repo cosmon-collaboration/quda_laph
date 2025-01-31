@@ -1,93 +1,101 @@
 #ifndef NAMED_OBJ_H
 #define NAMED_OBJ_H
 
+#include "xml_handler.h"
 #include <map>
+#include <memory>
+#include <set>
+#include <string>
 
 namespace LaphEnv {
 
-//                                NamedObjMap *
-//   This is a named object map that allows the user to have persistent data in
-// 
-//   memory between the different tasks.  The ID keys for the map must be of *
-//   type string, and the values can be of any type.  Information about the *
-//   data can be stored in an XMLHandler which accompanies each data object. *
-//   "NamedObjMap" is a singleton. *
-// 
-//   Insertion into the NamedObjMap does a COPY on the heap, so any original *
-//   data structures or variables used for insertion can be destroyed without *
-//   affected the data in the NamedObjMap.  All "get" routines return a *
-//   reference to the data. *
-//
-//   In order to accommodate all different kinds of values to store in the *
-//   the named object map, the map stores base pointers.  If the user attempts
-// 
-//   to get from the map into an object of the wrong type, the dynamic_cast *
-//   of the base class pointer/reference to the derived class will throw a *
-//   "bad_cast" exception. *
-// 
-//   To create or insert a new entry of class T value into NamedObjMap with *
-//   string key "KeyName", use one of the following methods: *
-// 
-//       T& var = NamedObjMap::insert<T>("KeyName"); *
-//           --> inserts data with default constructor *
-//           --> fatal error if key is already in the map *
-//           --> can then use "var" to access the data *
-// 
-//       T data (value to copy into map) *
-//       T& var = NamedObjMap::insert<T>("KeyName",data); *
-//           --> copies "data: into the map *
-//           --> fatal error if key is already in the map *
-//           --> can then use "var" to access the data *
-// 
-//       T data (value to copy into map) *
-//       XMLHandler xmlinfo  (info about the data to copy into map) *
-//       T& var = NamedObjMap::insert<T>("KeyName",data,xmlinfo); *
-//           --> copies "data: into the map *
-//           --> copies xmlinfo into the map *
-//           --> fatal error if key is already in the map *
-//           --> can then use "var" to access the data *
-// 
-//   To check if a particular object of name "KeyName" is already in *
-//   TheNamedObjMap, use *
-// 
-//       NamedObjMap::query("KeyName") -> returns bool *
-// 
-//   To get the set of all key names in the map, use *
-// 
-//       set<string> ids_in_map=NamedObjMap::getIds(); *
-// 
-//   Accessing entries in the map are done using *
-// 
-//       T& var = NamedObjMap::getData<T>("KeyName"); *
-// --> fatal error if not in the map so check first *
-// 
-//       T* varptr; *
-//       NamedObjMap::getData("KeyName",varptr); *
-// 
-//       const T* constvarptr; *
-//       NamedObjMap::getData("KeyName",constvarptr); *
-// 
-//       XMLHandler xmlinfo; *
-//       NamedObjMap::getDataAndXMLInfo("KeyName",varptr,xmlinfo); *
-// 
-//       NamedObjMap::getDataAndXMLInfo("KeyName",constvarptr,xmlinfo); *
-//  *
-//       NamedObjMap::getXMLInfo("KeyName",xmlinfo); *
-// 
-//   Once you have a reference or a pointer to the data in the map, *
-//   you can access or change the data.  To change the XML info, *
-//   use *
-//       NamedObjMap::setXMLInfo("KeyName",xmlinfo); *
-// 
-//   To remove an entry in the map, use *
-// 
-//       NamedObjMap::erase("KeyName"); *
-//           --> deletes the data and metadata too *
-// 
-//   To remove all entries and clear the map, use *
-// 
-//       NamedObjMap::clear(); *
-// 
+// ********************************************************************************
+// * *
+// *                               NamedObjMap *
+// * *
+// *  This is a named object map that allows the user to have persistent data in
+// *
+// *  memory between the different tasks.  The ID keys for the map must be of *
+// *  type string, and the values can be of any type.  Information about the *
+// *  data can be stored in an XMLHandler which accompanies each data object. *
+// *  "NamedObjMap" is a singleton. *
+// * *
+// *  Insertion into the NamedObjMap does a COPY on the heap, so any original *
+// *  data structures or variables used for insertion can be destroyed without *
+// *  affected the data in the NamedObjMap.  All "get" routines return a *
+// *  reference to the data. *
+// * *
+// *  In order to accommodate all different kinds of values to store in the *
+// *  the named object map, the map stores base pointers.  If the user attempts
+// *
+// *  to get from the map into an object of the wrong type, the dynamic_cast *
+// *  of the base class pointer/reference to the derived class will throw a *
+// *  "bad_cast" exception. *
+// * *
+// *  To create or insert a new entry of class T value into NamedObjMap with *
+// *  string key "KeyName", use one of the following methods: *
+// * *
+// *      T& var = NamedObjMap::insert<T>("KeyName"); *
+// *          --> inserts data with default constructor *
+// *          --> fatal error if key is already in the map *
+// *          --> can then use "var" to access the data *
+// * *
+// *      T data (value to copy into map) *
+// *      T& var = NamedObjMap::insert<T>("KeyName",data); *
+// *          --> copies "data: into the map *
+// *          --> fatal error if key is already in the map *
+// *          --> can then use "var" to access the data *
+// * *
+// *      T data (value to copy into map) *
+// *      XMLHandler xmlinfo  (info about the data to copy into map) *
+// *      T& var = NamedObjMap::insert<T>("KeyName",data,xmlinfo); *
+// *          --> copies "data: into the map *
+// *          --> copies xmlinfo into the map *
+// *          --> fatal error if key is already in the map *
+// *          --> can then use "var" to access the data *
+// * *
+// *  To check if a particular object of name "KeyName" is already in *
+// *  TheNamedObjMap, use *
+// * *
+// *      NamedObjMap::query("KeyName") -> returns bool *
+// * *
+// *  To get the set of all key names in the map, use *
+// * *
+// *      set<string> ids_in_map=NamedObjMap::getIds(); *
+// * *
+// *  Accessing entries in the map are done using *
+// * *
+// *      T& var = NamedObjMap::getData<T>("KeyName"); *
+// *          --> fatal error if not in the map so check first *
+// * *
+// *      T* varptr; *
+// *      NamedObjMap::getData("KeyName",varptr); *
+// * *
+// *      const T* constvarptr; *
+// *      NamedObjMap::getData("KeyName",constvarptr); *
+// * *
+// *      XMLHandler xmlinfo; *
+// *      NamedObjMap::getDataAndXMLInfo("KeyName",varptr,xmlinfo); *
+// * *
+// *      NamedObjMap::getDataAndXMLInfo("KeyName",constvarptr,xmlinfo); *
+// * *
+// *      NamedObjMap::getXMLInfo("KeyName",xmlinfo); *
+// * *
+// *  Once you have a reference or a pointer to the data in the map, *
+// *  you can access or change the data.  To change the XML info, *
+// *  use *
+// *      NamedObjMap::setXMLInfo("KeyName",xmlinfo); *
+// * *
+// *  To remove an entry in the map, use *
+// * *
+// *      NamedObjMap::erase("KeyName"); *
+// *          --> deletes the data and metadata too *
+// * *
+// *  To remove all entries and clear the map, use *
+// * *
+// *      NamedObjMap::clear(); *
+// * *
+// ********************************************************************************
 
 class NamedObjBase {
   NamedObjBase() {}
@@ -281,5 +289,7 @@ private:
     return *(it->second);
   }
 };
+
+// *************************************************************************
 } // namespace LaphEnv
 #endif

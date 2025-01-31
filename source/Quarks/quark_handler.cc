@@ -867,7 +867,7 @@ solve_DWF( void *out ,
 	   QudaInvertParam inv_param)
 {
   const int Ls = inv_param.Ls ;
-  const int fullsize = LayoutInfo::getRankLatticeNumSites() ; //rank_latt_nsites ;
+  const int fullsize = LayoutInfo::getRankLatticeNumSites() ;
   const size_t fermsize = fullsize*3*4*2 ;
   const size_t half_fermsize = fermsize/2 ;
   std::complex<T> *spinorIn  = new std::complex<T>[ Ls*fermsize ] ;
@@ -876,15 +876,27 @@ solve_DWF( void *out ,
   memset(reinterpret_cast<char*>(spinorIn) , 0, fermsize*Ls*sizeof(std::complex<T>));
   memset(reinterpret_cast<char*>(spinorOut), 0, fermsize*Ls*sizeof(std::complex<T>));
 
+  std::cout<<"Defect correction 1"<<std::endl ;
+  
   // chiral project
   std::complex<T> *tmp1 = new std::complex<T>[ fermsize ] ;
+
+  std::cout<<"Chiplus"<<std::endl ;
   chiralProjectPlus<T>( fermsize, in , tmp1 ) ;
+  std::cout<<"Dirty Wilson1"<<std::endl ;
   DirtyWilson4D<T>( fermsize , inv_param , tmp1 ) ;
 
+  std::cout<<"Defect correction 2"<<std::endl ;
+  
   std::complex<T> *tmp2 = new std::complex<T>[ fermsize ] ;
+
+  std::cout<<"Chiminus"<<std::endl ;
   chiralProjectMinus<T>( fermsize, in , tmp2 ) ;
+  std::cout<<"Dirty Wilson2"<<std::endl ;
   DirtyWilson4D<T>( fermsize , inv_param , tmp2 ) ;
 
+  std::cout<<"Memcpys in"<<std::endl ;
+  
   // copies for the checkerboarded sources
   memcpy(reinterpret_cast<char*>(&spinorIn[0]),
 	 reinterpret_cast<char*>(const_cast<std::complex<T>*>(&(tmp1[0]))),
@@ -898,10 +910,11 @@ solve_DWF( void *out ,
   memcpy(reinterpret_cast<char*>(&spinorIn[half_fermsize*(2*Ls-1)]),
 	 reinterpret_cast<char*>(const_cast<std::complex<T>*>(&(tmp2[half_fermsize]))),
 	 half_fermsize*sizeof(std::complex<T>));
-  
+
+  std::cout<<"Solve"<<std::endl ;
   invertQuda( reinterpret_cast<void*>(spinorOut),
 	      reinterpret_cast<void*>(spinorIn), &inv_param ) ;
-  
+  std::cout<<"Solve"<<std::endl ;
   delete [] spinorIn ;
   
   // undo the solve
@@ -921,8 +934,10 @@ solve_DWF( void *out ,
   delete [] spinorOut ;
 
   const std::complex<T> invTwoKappaB = inv_param.b_5[0]*( 4 - inv_param.m5 ) + 1.0;
-  const std::complex<T> twoKappaB = 1.0/invTwoKappaB;
+  const T twoKappaB = 1.0/invTwoKappaB.real();
 
+  std::cout<<"Reproj"<<std::endl ;
+  
   // chiral projections
   std::complex<T> *outptr = (std::complex<T>*)out ;
   int i ;

@@ -2,183 +2,195 @@
 #define IO_FM_HANDLER_H
 
 #include "array.h"
+#include <list>
+#include <vector>
+
 #include "byte_handler.h"
 #include "latt_field.h"
 #include "layout_info.h"
+#include <complex>
 #include <fstream>
+#include <unistd.h>
 
 #ifdef ARCH_PARALLEL
-   #include <mpi.h>
+#include <mpi.h>
 #endif
+
+typedef std::complex<double> cmplx;
+typedef std::complex<float> fcmplx;
 
 namespace LaphEnv {
 
-//        class IOFMHandler:    parallel random access input/output *
-// 
-//    Author: Colin Morningstar (Carnegie Mellon University) *
-// 
-//    This class attempts to make serial/parallel input/output in local and *
-//    global mode easier to achieve.  This is a low-level class which has *
-//    the functionality of fstreams except it uses MPI-IO: this class is meant
-// 
-//    to be used by IOMap. For example, this class maintains a checksum if *
-//    desired, but it does not write the checksums in the file.  Instead, *
-//    IOMap can be set to store checksums. The FM stands for "fstreams or
+// *********************************************************************************
+// * *
+// *       class IOFMHandler:    parallel random access input/output *
+// * *
+// *   Author: Colin Morningstar (Carnegie Mellon University) *
+// * *
+// *   This class attempts to make serial/parallel input/output in local and *
+// *   global mode easier to achieve.  This is a low-level class which has *
+// *   the functionality of fstreams except it uses MPI-IO: this class is meant
+// *
+// *   to be used by IOMap. For example, this class maintains a checksum if *
+// *   desired, but it does not write the checksums in the file.  Instead, *
+// *   IOMap can be set to store checksums. The FM stands for "fstreams or
 // mpi-io".*
-// 
-//    Some features of this class are as follows: (a) in a parallel
-// rchitecture, *
-//    it uses MPI-IO so that input/output is parallel and efficient; (b) it *
-//    allows the user to choose between big-endian and little-endian format; *
-//    (c) it allows the user to turn check sums on or off; (d) MPI-IO striping
-// 
-//    can be used in a parallel architecture; (e) objects are constructed and *
-//    subsequently operate in either global or local mode.  Currently, only *
-//    blocking I/O operations are supported, but it would be simple to
+// * *
+// *   Some features of this class are as follows: (a) in a parallel
+// architecture, *
+// *   it uses MPI-IO so that input/output is parallel and efficient; (b) it *
+// *   allows the user to choose between big-endian and little-endian format; *
+// *   (c) it allows the user to turn check sums on or off; (d) MPI-IO striping
+// *
+// *   can be used in a parallel architecture; (e) objects are constructed and *
+// *   subsequently operate in either global or local mode.  Currently, only *
+// *   blocking I/O operations are supported, but it would be simple to
 // implement  *
-//    some of MPI-IO's non-blocking operations. *
-// 
-//    An object of class IOFMHandler must be defined as global or local in the
-// 
-//    constructor, and this property cannot be changed.  If global, then it is
-// 
-//    assumed that an object is created on every rank.  In global mode, lattice
-// 
-//    and other distributed data can be read and written, and common data is *
-//    written and read according to how MPI-IO does common read/writes.  Only *
-//    one copy is written to file because the data is assumed to be common or *
-//    the same on all ranks.  After a common read, the data will be available *
-//    on all ranks.  In local mode, the object is assumed to exist only on the
-//
-//    current rank. Different ranks will write to different files.  Reads can *
-//    occur from different files. Only non-distributed data can be read and *
-//    written.  Read/writes are done through the current rank, and no data is *
-//    broadcast to other ranks. *
-// 
-//    Files written by this class will start with a single character 'B' or 'L'
-// 
-//    to indicate endian-ness.  Then an ID string is output, which always has *
-//    the length "ID_string_length"=32 (spaces are padded if needed).  Files
+// *   some of MPI-IO's non-blocking operations. *
+// * *
+// *   An object of class IOFMHandler must be defined as global or local in the
+// *
+// *   constructor, and this property cannot be changed.  If global, then it is
+// *
+// *   assumed that an object is created on every rank.  In global mode, lattice
+// *
+// *   and other distributed data can be read and written, and common data is *
+// *   written and read according to how MPI-IO does common read/writes.  Only *
+// *   one copy is written to file because the data is assumed to be common or *
+// *   the same on all ranks.  After a common read, the data will be available *
+// *   on all ranks.  In local mode, the object is assumed to exist only on the
+// *
+// *   current rank. Different ranks will write to different files.  Reads can *
+// *   occur from different files. Only non-distributed data can be read and *
+// *   written.  Read/writes are done through the current rank, and no data is *
+// *   broadcast to other ranks. *
+// * *
+// *   Files written by this class will start with a single character 'B' or 'L'
+// *
+// *   to indicate endian-ness.  Then an ID string is output, which always has *
+// *   the length "ID_string_length"=32 (spaces are padded if needed).  Files
 // read *
-//    by this class expect this starting behavior.  An error occurs if the *
-//    ID string given in the open command on an existing file does not match *
-//    that in the file. *
-// 
-//    All errors are considered fatal in this class, so the end user need not *
-//    perform any error checking.  The ID string is useful for ensuring that *
-//    the file contains the kind of information that the user is expecting. *
-// 
-//    Files can be opened in one of four modes: *
-//     (1) ReadOnly  -- fails if the file does not exist or read not allowed *
-//      (2) ReadWriteFailIfExists --  fails if the file exists *
-//      (3) ReadWriteEraseIfExists  -- erases the file if it exists *
-//      (4) ReadWriteUpdateIfExists  -- updates existing file or creates new *
-//    Modes 2,3,4 will create a new file if it does not exist.  When creating *
-//    a new file, the endian format choices are 'B', 'L', or 'N' (native). *
-//    Random access to the file is employed. *
-// 
-//    There are separate open routines for the different modes, or you can *
-//    use the OpenMode enum in the general open routine.  Alternatively, you *
-//   can use iostream openmodes as follows: *
-//      ReadOnly                  =   ios::in *
-//       ReadWriteFailIfExists     =   ios::in | ios::out *
-//       ReadWriteEraseIfExists    =   ios::in | ios::out | ios::trunc *
-//
-//    There are seek and tell members for moving around in the file.  It is an
-// 
-//    error to seek before the start of the data, but you can seek past the end
-// 
-//    of the file.  You can seek relative to the start of the data (33
+// *   by this class expect this starting behavior.  An error occurs if the *
+// *   ID string given in the open command on an existing file does not match *
+// *   that in the file. *
+// * *
+// *   All errors are considered fatal in this class, so the end user need not *
+// *   perform any error checking.  The ID string is useful for ensuring that *
+// *   the file contains the kind of information that the user is expecting. *
+// * *
+// *   Files can be opened in one of four modes: *
+// *     (1) ReadOnly  -- fails if the file does not exist or read not allowed *
+// *     (2) ReadWriteFailIfExists --  fails if the file exists *
+// *     (3) ReadWriteEraseIfExists  -- erases the file if it exists *
+// *     (4) ReadWriteUpdateIfExists  -- updates existing file or creates new *
+// *   Modes 2,3,4 will create a new file if it does not exist.  When creating *
+// *   a new file, the endian format choices are 'B', 'L', or 'N' (native). *
+// *   Random access to the file is employed. *
+// * *
+// *   There are separate open routines for the different modes, or you can *
+// *   use the OpenMode enum in the general open routine.  Alternatively, you *
+// *   can use iostream openmodes as follows: *
+// *      ReadOnly                  =   ios::in *
+// *      ReadWriteFailIfExists     =   ios::in | ios::out *
+// *      ReadWriteEraseIfExists    =   ios::in | ios::out | ios::trunc *
+// * *
+// *   There are seek and tell members for moving around in the file.  It is an
+// *
+// *   error to seek before the start of the data, but you can seek past the end
+// *
+// *   of the file.  You can seek relative to the start of the data (33
 // characters *
-//    past the start of the file), the current location, or the end of file. *
-//    Use negative offsets relative to the end of file to go backwards. *
-// 
-//    Input is done with read(..) commands, and output is done with write(..) *
-//    commands. For lattice objects, collective I/O is used (in global mode).
+// *   past the start of the file), the current location, or the end of file. *
+// *   Use negative offsets relative to the end of file to go backwards. *
+// * *
+// *   Input is done with read(..) commands, and output is done with write(..) *
+// *   commands. For lattice objects, collective I/O is used (in global mode).
 // For *
-//    non-lattice objects, the read() and write() commands are either done by *
-//    the primary rank (global mode) or the current rank (local mode). *
-//    The data types currently supported for read/write are *
-//
-//        - basic data types (int, bool, float, string, etc.) *
-//        - vector and Array of basic data types *
-//        - LattField objects *
-//        - vector of LattField objects *
-//  *
-//    The quantities above are contiguous in memory and regular (each element
-// 
-//    the same size) and these facts have been used to speed up I/O. *
-// 
-//    (a) For lattice objects, the read() and write() commands do collective
+// *   non-lattice objects, the read() and write() commands are either done by *
+// *   the primary rank (global mode) or the current rank (local mode). *
+// *   The data types currently supported for read/write are *
+// * *
+// *       - basic data types (int, bool, float, string, etc.) *
+// *       - vector and Array of basic data types *
+// *       - LattField objects *
+// *       - vector of LattField objects *
+// * *
+// *   The quantities above are contiguous in memory and regular (each element
+// is  *
+// *   the same size) and these facts have been used to speed up I/O. *
+// * *
+// *   (a) For lattice objects, the read() and write() commands do collective
 // I/O  *
-//    in MPI-IO. All ranks participate so all ranks must call the read/write *
-//    command.  Before the read/write call, ensure that all file pointers are
+// *   in MPI-IO. All ranks participate so all ranks must call the read/write *
+// *   command.  Before the read/write call, ensure that all file pointers are
 // set *
 // *   to the same point in the file (such as by a seek call by all ranks).
 // After *
-//    each read/write, all file pointers are advanced by the size of the *
-//    lattice object.  Only applies to global mode. *
-//
-//    (b) For reading/writing non-lattice objects in global mode, all ranks
+// *   each read/write, all file pointers are advanced by the size of the *
+// *   lattice object.  Only applies to global mode. *
+// * *
+// *   (b) For reading/writing non-lattice objects in global mode, all ranks
 // must  *
-//    call the read/write subroutine, but I/O is only done on the primary rank
-// 
-//    (or however MPI-IO does such input/output). For reads, the results are *
-//    broadcast to all ranks.  All file pointers are advanced by the size of
+// *   call the read/write subroutine, but I/O is only done on the primary rank
+// *
+// *   (or however MPI-IO does such input/output). For reads, the results are *
+// *   broadcast to all ranks.  All file pointers are advanced by the size of
 // the  *
-//    object after the I/O operation.  Before the read/write, it is safest to *
-//    have all ranks call a seek operation so that all file pointers are *
-//    initially pointing to the same location in the file. *
-//
-//    (c) Reading/writing non-lattice objects in "local" mode must be done *
-//    carefully.  Typically, a seek is called only on one rank, and the local *
-//    read/write is only called by the one rank.  The file pointer for that *
-//    one rank will be advanced afterwards by the size of the object. For local
-//
-//    reads, the results are NOT broadcast to all other ranks. *
-//    Simultaneous local writes to the same file can cause major problems with
-// 
-//    consistency!!  The "local" mode is more meant to be used during *
-//    simultaneous writes/reads to **different** files. *
-//    Use local mode cautiously, especially when writing data. *
-// 
-//    Examples of writing and reading: *
-// 
-//       IOFMHandler io;     <-- default is global mode *
-//       io.open(....); *
-//       int k=5;     io.seekFromStart(...); write(io,k); *
-//       float x=5.4; io.seekFromStart(...); write(io,x); *
-//       int j; float y;  io.seekFromStart(...); read(io,j,y); // in sequence *
-//       string str("ABC"); io.seekFromStart(...); write(io,str); *
-//       multi1d<float> g(1024); io.seekFromStart(...); write(io,g); *
-//       LattField zn(...);  io.seekFromStart(...); write(io,z); *
-// 
-//    When reading and writing distributed arrays, a column-major order is *
-//    assumed in the file (MPI_ORDER_FORTRAN), and column-major order of the *
-//    sublattice on each rank is assumed.  No ordering of the ranks is assumed.
-//
-//
-//    If check sums are turned on, objects of this class maintain a check sum.
-// 
-//    Doing an explicit seek resets the checksum; changing from a read to a *
-//    write or vice versa resets the checksum; or an explicit reset can also *
-//    be done.  The checksum is updated as bytes are read or written. *
-//    Successive reads or successive writes update the checksum. Checksums are
-// 
-//    NOT stored in the file.  IOMap uses IOFMHandler, and IOMap maintains *
-//    checksums in the files if desired. *
-// 
-//    Precision conversion takes place automatically for lattice field reads. *
-//    Lattice field writes can only take place using the current quda
+// *   object after the I/O operation.  Before the read/write, it is safest to *
+// *   have all ranks call a seek operation so that all file pointers are *
+// *   initially pointing to the same location in the file. *
+// * *
+// *   (c) Reading/writing non-lattice objects in "local" mode must be done *
+// *   carefully.  Typically, a seek is called only on one rank, and the local *
+// *   read/write is only called by the one rank.  The file pointer for that *
+// *   one rank will be advanced afterwards by the size of the object. For local
+// *
+// *   reads, the results are NOT broadcast to all other ranks. *
+// *   Simultaneous local writes to the same file can cause major problems with
+// *
+// *   consistency!!  The "local" mode is more meant to be used during *
+// *   simultaneous writes/reads to **different** files. *
+// *   Use local mode cautiously, especially when writing data. *
+// * *
+// *   Examples of writing and reading: *
+// * *
+// *      IOFMHandler io;     <-- default is global mode *
+// *      io.open(....); *
+// *      int k=5;     io.seekFromStart(...); write(io,k); *
+// *      float x=5.4; io.seekFromStart(...); write(io,x); *
+// *      int j; float y;  io.seekFromStart(...); read(io,j,y); // in sequence *
+// *      string str("ABC"); io.seekFromStart(...); write(io,str); *
+// *      multi1d<float> g(1024); io.seekFromStart(...); write(io,g); *
+// *      LattField zn(...);  io.seekFromStart(...); write(io,z); *
+// * *
+// *   When reading and writing distributed arrays, a column-major order is *
+// *   assumed in the file (MPI_ORDER_FORTRAN), and column-major order of the *
+// *   sublattice on each rank is assumed.  No ordering of the ranks is assumed.
+// *
+// * *
+// *   If check sums are turned on, objects of this class maintain a check sum.
+// *
+// *   Doing an explicit seek resets the checksum; changing from a read to a *
+// *   write or vice versa resets the checksum; or an explicit reset can also *
+// *   be done.  The checksum is updated as bytes are read or written. *
+// *   Successive reads or successive writes update the checksum. Checksums are
+// *
+// *   NOT stored in the file.  IOMap uses IOFMHandler, and IOMap maintains *
+// *   checksums in the files if desired. *
+// * *
+// *   Precision conversion takes place automatically for lattice field reads. *
+// *   Lattice field writes can only take place using the current quda
 // precision.  *
-// 
-//    For local read/writes, create an IOFMHandler object on one processor in *
-//    local mode: *
-// 
-//      bool global_mode=false; *
-//       IOFMHandler localhandler(global_mode);    <-  local write *
-// 
-//    Use local I/O **very carefully**. *
+// * *
+// *   For local read/writes, create an IOFMHandler object on one processor in *
+// *   local mode: *
+// * *
+// *      bool global_mode=false; *
+// *      IOFMHandler localhandler(global_mode);    <-  local write *
+// * *
+// *   Use local I/O **very carefully**. *
+// * *
+// *********************************************************************************
 
 //  IOFMHandler class is defined later in this file, after the
 //  helper class DistArrayViewInfo.
@@ -191,18 +203,20 @@ typedef MPI_Offset IOH_int;
 #error "Either ARCH_PARALLEL or ARCH_SERIAL must be defined"
 #endif
 
-//  DistArrayViewInfo objects contain info about multi-dimensional arrays
-//  distributed across the MPI ranks.  Blocking assumed, column major.
-//  Assumed distributed in a regular way...same size on each rank.
-//  Distribution on ranks is column major.  This class is mainly
-//  used by IOFMHandler for creating file views for MPI-IO. It supports
-//  entire global arrays, and single slices of the most major index
-//  (the right-most index).  The end user does not need to know
-//  anything about this class.
-//  The main purpose of this class is to create an appropriate "filetype"
-//  to pass to MPI-IO.  The routine  MPI_Type_create_subarray is used.
-//  Warning:  This class stores an MPI quantity, so make sure all
-//  destructors get called before MPI_finalize().   */
+/*  DistArrayViewInfo objects contain info about multi-dimensional arrays
+    distributed across the MPI ranks.  Blocking assumed, column major.
+    Assumed distributed in a regular way...same size on each rank.
+    Distribution on ranks is column major.  This class is mainly
+    used by IOFMHandler for creating file views for MPI-IO. It supports
+    entire global arrays, and single slices of the most major index
+    (the right-most index).  The end user does not need to know
+    anything about this class.
+
+    The main purpose of this class is to create an appropriate "filetype"
+    to pass to MPI-IO.  The routine  MPI_Type_create_subarray is used.
+
+    Warning:  This class stores an MPI quantity, so make sure all
+    destructors get called before MPI_finalize().   */
 
 #ifdef ARCH_PARALLEL
 //   parallel version
@@ -366,7 +380,11 @@ private:
 
 #endif
 
-//          Now for the main event:  IOFMHandler           *
+// ***********************************************************
+// *                                                         *
+// *          Now for the main event:  IOFMHandler           *
+// *                                                         *
+// ***********************************************************
 
 class IOFMHandler {
 
@@ -376,7 +394,7 @@ class IOFMHandler {
   MPI_File fh;    // the MPI-IO file handler
   MPI_Info finfo; // MPI-IO file hints
 #else
-  #error "Either ARCH_PARALLEL or ARCH_SERIAL must be defined"
+#error "Either ARCH_PARALLEL or ARCH_SERIAL must be defined"
 #endif
 
   bool read_only;
@@ -689,8 +707,8 @@ private:
     explicit BasicType(float s) {}
     explicit BasicType(double s) {}
     explicit BasicType(bool s) {}
-    explicit BasicType(std::complex<double> s) {}
-    explicit BasicType(std::complex<float> s) {}
+    explicit BasicType(cmplx s) {}
+    explicit BasicType(fcmplx s) {}
   };
 };
 
@@ -897,11 +915,11 @@ template <> inline size_t numbytes(IOFMHandler &io, const bool &data) {
   return io.numbytes(data);
 }
 
-template <> inline size_t numbytes(IOFMHandler &io, const std::complex<double> &data) {
+template <> inline size_t numbytes(IOFMHandler &io, const cmplx &data) {
   return io.numbytes(data);
 }
 
-template <> inline size_t numbytes(IOFMHandler &io, const std::complex<float> &data) {
+template <> inline size_t numbytes(IOFMHandler &io, const fcmplx &data) {
   return io.numbytes(data);
 }
 
@@ -921,5 +939,7 @@ inline size_t numbytes(IOFMHandler &io, const LattField &data) {
 inline size_t numbytes(IOFMHandler &io, const std::vector<LattField> &data) {
   return io.numbytes(data);
 }
+
+// **************************************************************
 } // namespace LaphEnv
 #endif

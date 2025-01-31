@@ -63,11 +63,15 @@ public:
   const std::vector<double> &getRValues() const { return rvalues; }
 
 private:
+#ifdef LAPH_DOMAIN_WALL
+  void set_info_domain_wall(XMLHandler &xmlr);
+  void output_domain_wall(XMLHandler &xmlout) const;
+  void setQudaInvertParam_domain_wall(QudaInvertParam &invParam) const;
+#else
   void set_info_wilson_clover(XMLHandler &xmlr);
-
   void output_wilson_clover(XMLHandler &xmlout) const;
-
   void setQudaInvertParam_wilson_clover(QudaInvertParam &invParam) const;
+#endif
 };
 } // namespace LaphEnv
 #endif

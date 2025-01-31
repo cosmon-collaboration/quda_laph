@@ -3,7 +3,12 @@
 
 #include "filelist_info.h"
 #include "io_map.h"
+#include "laph_stdio.h"
 #include "named_obj_map.h"
+#include "utils.h"
+#include "xml_handler.h"
+#include <set>
+#include <sstream>
 
 namespace LaphEnv {
 

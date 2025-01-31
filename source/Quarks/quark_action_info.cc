@@ -17,8 +17,13 @@ QuarkActionInfo::QuarkActionInfo(const XMLHandler &xml_in) {
   XMLHandler xmlr(xml_in, "QuarkActionInfo");
   std::string name;
   xmlread(xmlr, "Name", name, "QuarkActionInfo");
+#ifdef LAPH_DOMAIN_WALL
+  if (name == "DOMAIN_WALL") {    
+    set_info_domain_wall(xmlr);
+#else
   if (name == "WILSON_CLOVER") {
     set_info_wilson_clover(xmlr);
+#endif
   } else {
     xmlreadfail(xmlr, "QuarkActionInfo", "Unsupported name in QuarkActionInfo");
   }
@@ -68,31 +73,126 @@ std::string QuarkActionInfo::output(const int indent) const {
 }
 
 void QuarkActionInfo::output(XMLHandler &xmlout) const {
+#ifdef LAPH_DOMAIN_WALL
+  if (svalues[0] == "DOMAIN_WALL") {
+    output_domain_wall(xmlout);
+  }
+#else
   if (svalues[0] == "WILSON_CLOVER") {
     output_wilson_clover(xmlout);
   }
+#endif
 }
 
 void QuarkActionInfo::setQudaInvertParam(QudaInvertParam &invParam) const {
+#ifdef LAPH_DOMAIN_WALL
+  if (svalues[0] == "DOMAIN_WALL") {
+    setQudaInvertParam_domain_wall(invParam);
+#else
   if (svalues[0] == "WILSON_CLOVER") {
     setQudaInvertParam_wilson_clover(invParam);
+#endif
+  } else {
+    exit(1) ;
   }
 }
 
-//    rvalues[0] =  factor to multiply solution by (if want
-//                   normalization different from quda)
-//    rvalues[1]= mass
-//    rvalues[2]= kappa
-//    rvalues[3]= anisotropy
-//    rvalues[4]= clover coefficient space-space
-//    rvalues[5]= clover coefficient space-time
-//    rvalues[6]= tadpole coefficient
+#ifdef LAPH_DOMAIN_WALL
+ enum { MONIKER , DWF_MASS , DWF_LS , DWF_M5 , DWF_B5 , DWF_C5 } ;
+ enum { FLAVOR_IDX , TIMEBC_IDX } ;
 
-//    ivalues[0]= 0 or 1   flavor
-//                   0 = light u,d  1 = strange
-//    ivalues[1]= 0 or 1   temporal boundary conditions
-//                   0 =antiperiodic   1 = periodic
+ void QuarkActionInfo::set_info_domain_wall(XMLHandler &xmlr) {
+  svalues.resize(1);
+  ivalues.resize(2);
+  rvalues.resize(6);  
+  svalues[0] = "DOMAIN_WALL";
+  if (xml_tag_count(xmlr, "Mass") == 1) {
+    xmlread(xmlr, "Mass", rvalues[ DWF_MASS ], "QuarkActionInfo");
+  }
+  if (xml_tag_count(xmlr, "Ls") == 1) {
+    xmlread(xmlr, "Ls", rvalues[ DWF_LS ], "QuarkActionInfo");
+  }  
+  if (xml_tag_count(xmlr, "m5") == 1) {
+    xmlread(xmlr, "m5", rvalues[ DWF_M5 ], "QuarkActionInfo");
+  }
+  if (xml_tag_count(xmlr, "b5") == 1) {
+    xmlread(xmlr, "b5", rvalues[ DWF_B5 ], "QuarkActionInfo");
+  }
+  if (xml_tag_count(xmlr, "c5") == 1) {
+    xmlread(xmlr, "c5", rvalues[ DWF_C5 ], "QuarkActionInfo");
+  }
+  
+  // usual shit pretty shortsighted to just allow strange or ud
+  std::string flavor ;
+  xmlread(xmlr, "Flavor", flavor, "QuarkActionInfo");
+  if ((flavor == "light") || (flavor == "ud") || (flavor == "u") ||
+      (flavor == "d") || (flavor == "l")) {
+    ivalues[ FLAVOR_IDX ] = 0;
+  } else if ((flavor == "s") || (flavor == "strange")) {
+    ivalues[ FLAVOR_IDX ] = 1;
+  } else {
+    xmlreadfail(xmlr, "QuarkActionInfo", "Invalid flavor");
+  }
+  std::cout<<"In this fucking bullshit set domain wall ---> "<<ivalues[FLAVOR_IDX]<<std::endl ;
+  ivalues[ TIMEBC_IDX ] = 0;
+  std::string timebc;
+  if (xmlreadif(xmlr, "TimeBC", timebc, "QuarkActionInfo")) {
+    if (timebc == "periodic") {
+      ivalues[TIMEBC_IDX] = 1;
+    } else if (timebc == "antiperiodic") {
+      ivalues[TIMEBC_IDX] = 0;
+    } else {
+      xmlreadfail(xmlr, "QuarkActionInfo",
+                  "Invalid temporal boundary condition");
+    }
+  }
+  std::cout<<"In this fucking bullshit set domain wall ---> "<<ivalues[TIMEBC_IDX]<<std::endl ;
+ }
 
+ void QuarkActionInfo::output_domain_wall(XMLHandler &xmlout) const {
+
+   std::cout<<"In this fucking bullshit output wall"<<std::endl ;
+   
+  xmlout.set_root("QuarkActionInfo");
+  std::string flavor = (ivalues[FLAVOR_IDX] == 0) ? "ud" : "s";
+  xmlout.put_child("Name", "DOMAIN_WALL");
+  xmlout.put_child("Flavor", flavor);
+  xmlout.put_child("Mass", make_string(rvalues[DWF_MASS]));
+  xmlout.put_child("Ls", make_string(rvalues[DWF_LS]));
+  xmlout.put_child("m5", make_string(rvalues[DWF_M5]));
+  xmlout.put_child("b5", make_string(rvalues[DWF_B5]));
+  xmlout.put_child("c5", make_string(rvalues[DWF_C5]));
+  std::string timebc = (ivalues[TIMEBC_IDX] == 0) ? "antiperiodic" : "periodic";
+  xmlout.put_child("TimeBC", timebc);
+}
+
+// Use Dirac-Pauli spin basis
+void QuarkActionInfo::setQudaInvertParam_domain_wall(
+     QudaInvertParam &invParam) const {
+  invParam.gamma_basis = QUDA_DIRAC_PAULI_GAMMA_BASIS;
+  invParam.dirac_order = QUDA_DIRAC_ORDER;
+  invParam.dslash_type = QUDA_MOBIUS_DWF_DSLASH;
+  invParam.mass_normalization = QUDA_MASS_NORMALIZATION;
+  invParam.mass  =  rvalues[DWF_MASS];
+  invParam.Ls    =  rvalues[DWF_LS];
+  invParam.m5    = -rvalues[DWF_M5];
+  invParam.kappa = 1./(2*(4.-rvalues[DWF_M5])+1) ;
+  for( int k = 0 ; k < invParam.Ls ; k++ ) {
+    invParam.b_5[k] = rvalues[DWF_B5] ;
+    invParam.c_5[k] = rvalues[DWF_C5] ;
+  }
+  invParam.clover_cpu_prec = QudaInfo::get_cpu_prec();
+  invParam.clover_cuda_prec = QudaInfo::get_cuda_prec();
+  invParam.clover_cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
+  invParam.clover_cuda_prec_refinement_sloppy = QudaInfo::get_cuda_prec_sloppy();
+  invParam.clover_cuda_prec_precondition = QudaInfo::get_cuda_prec_sloppy();
+  invParam.clover_cuda_prec_eigensolver = QudaInfo::get_cuda_prec_sloppy();
+  invParam.clover_location = QUDA_CUDA_FIELD_LOCATION;
+  invParam.struct_size = sizeof(invParam);
+}
+
+#else
+ 
 void QuarkActionInfo::set_info_wilson_clover(XMLHandler &xmlr) {
   svalues.resize(1);
   ivalues.resize(2);
@@ -201,5 +301,5 @@ void QuarkActionInfo::setQudaInvertParam_wilson_clover(
   invParam.clover_location = QUDA_CUDA_FIELD_LOCATION;
   invParam.struct_size = sizeof(invParam);
 }
-
+#endif
 } // namespace LaphEnv

@@ -1,12 +1,15 @@
 #include "QudaLaphIncludes.h"
 
-#include "perambulator_handler.h"
-#include "field_ops.h"
 #include "multi_compare.h"
+#include "field_ops.h"
+#include "perambulator_handler.h"
+#include "data_io_handler.h"
 
 #include <cassert>
 
 namespace LaphEnv {
+
+  
 
 void PerambulatorHandler::RecordKey::output(XMLHandler &xmlw) const {
   xmlw.set_root("RecordKey");
@@ -69,6 +72,7 @@ PerambulatorHandler::PerambulatorHandler(
     const std::string &smeared_quark_filestub, const bool upper_spin_components_only,
     const Mode in_mode, const std::string &gauge_str)
     : invertPtr(0), preconditioner(0), DHputPtr(0), DHgetPtr(0) {
+  std::cout<<"Set info?"<<std::endl ;
   set_info(gaugeinfo, gluonsmear, quarksmear, quark, flist,
            smeared_quark_filestub, upper_spin_components_only, gauge_str,
            in_mode);
@@ -83,6 +87,7 @@ void PerambulatorHandler::setInfo(const GaugeConfigurationInfo &gaugeinfo,
                                   const bool upper_spin_components_only,
                                   const Mode in_mode, const std::string &gauge_str) {
   clear();
+  std::cout<<"SetInfo?"<<std::endl ;
   set_info(gaugeinfo, gluonsmear, quarksmear, quark, flist,
            smeared_quark_filestub, upper_spin_components_only, gauge_str,
            in_mode);
@@ -99,18 +104,25 @@ void PerambulatorHandler::set_info(
     const std::string &gauge_str,
     const Mode in_mode) {
   try {
+    std::cout<<"Alloc1"<<std::endl ;
     uPtr = new GaugeConfigurationInfo(gaugeinfo);
+    std::cout<<"Alloc2"<<std::endl ;
     gSmearPtr = new GluonSmearingInfo(gluonsmear);
+    std::cout<<"Alloc3"<<std::endl ;
     qSmearPtr = new QuarkSmearingInfo(quarksmear);
+    std::cout<<"Alloc4"<<std::endl ;
     qactionPtr = new QuarkActionInfo(quark);
+    std::cout<<"Alloc5"<<std::endl ;
     fPtr = new FileListInfo(flist);
     Nspin = (upper_spin_components_only) ? 2 : 4;
     mode = in_mode;
+    std::cout<<"Alloc6"<<std::endl ;
     if (mode != ReadOnly) {
       DHputPtr = new DataPutHandlerMF<PerambulatorHandler, FileKey, RecordKey,
                                       DataType>(
           *this, *fPtr, "Laph--QuarkPeramb", "PerambulatorHandlerDataFile");
     }
+    std::cout<<"Alloc7"<<std::endl ;
     if (mode != Compute) {
       DHgetPtr = new DataGetHandlerMF<PerambulatorHandler, FileKey, RecordKey,
                                       DataType>(
@@ -121,6 +133,7 @@ void PerambulatorHandler::set_info(
         make_strf("allocation problem in PerambulatorHandler: %s", xp.what()));
   }
 
+  std::cout<<"Connect ..."<<std::endl ;
   if (mode == Compute) {
     connectGaugeConfigurationHandler();
   }
@@ -768,8 +781,13 @@ void PerambulatorHandler::computePerambulators(const int src_time,
         void *spinor_src = (void *)(ferm_src.getDataPtr());
         void *spinor_snk = (void *)(sinkBatchData[iSinkBatch].getDataPtr());
 
-        invertQuda(spinor_snk, spinor_src, &quda_inv_param);
-
+	// why the fuck is this duplicated???
+        #ifdef LAPH_DOMAIN_WALL
+	
+	#else
+	invertQuda(spinor_snk, spinor_src, &quda_inv_param);
+	#endif
+	
         bulova.stop();
         double addinvtime = bulova.getTimeInSeconds();
         invtime += addinvtime;

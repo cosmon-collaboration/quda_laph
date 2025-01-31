@@ -11,14 +11,17 @@ InverterInfo::InverterInfo(const XMLHandler &xml_in) {
   XMLHandler xmlr(xml_in, "InverterInfo");
   std::string name;
   xmlread(xmlr, "Name", name, "InverterInfo");
+
   if (name == "CGNR") {
     set_info_cgnr(xmlr);
+#ifndef LAPH_DOMAIN_WALL
   } else if (name == "BICGSTAB") {
     set_info_bicgstab(xmlr);
   } else if (name == "GCR") {
     set_info_gcr(xmlr);
   } else if (name == "GCR_MULTIGRID") {
     set_info_gcr_multigrid(xmlr);
+#endif
   } else {
     xmlreadfail(xmlr, "InverterInfo", "Unsupported name in InverterInfo");
   }
@@ -99,21 +102,17 @@ void InverterInfo::setQudaInvertParam(
 // these are always the same
 void InverterInfo::commonQudaInvertParam(QudaInvertParam &invParam) const {
   int ivalindex = 0, rvalindex = 0;
-#ifdef LAPH_DOMAIN_WALL
-  invParam.Ls = xmlputQLInt("Ls", ivalues, ivalindex); ;
-  invParam.m5 = xmlputQLReal("m5", rvalues, rvalindex); ;
-  const double b = xmlputQLReal("b5", rvalues, rvalindex); ;
-  const double c = xmlputQLReal("c5", rvalues, rvalindex); ;
-  for( int k = 0 ; k < invParam.Ls ; k++ ) {
-    invParam.b_5[k] = b ;
-    invParam.c_5[k] = c ;
-  }
-#endif
   invParam.cpu_prec = QudaInfo::get_cpu_prec();
   invParam.cuda_prec = QudaInfo::get_cuda_prec();
+#ifdef LAPH_DOMAIN_WALL
+  invParam.dslash_type   = QUDA_MOBIUS_DWF_DSLASH ;
+#else
+  invParam.dslash_type   = QUDA_CLOVER_WILSON_DSLASH ;
+#endif
   invParam.solution_type = QUDA_MAT_SOLUTION;
-  invParam.solve_type = QUDA_DIRECT_PC_SOLVE;
-  invParam.matpc_type = QUDA_MATPC_EVEN_EVEN;
+  invParam.gamma_basis   = QUDA_DIRAC_PAULI_GAMMA_BASIS ;
+  invParam.solve_type    = QUDA_DIRECT_PC_SOLVE;
+  invParam.matpc_type    = QUDA_MATPC_EVEN_EVEN;
   invParam.tol = xmlputQLReal("Tolerance", rvalues, rvalindex);
   invParam.reliable_delta = 0.01;
   invParam.maxiter = xmlputQLInt("MaxIterations", ivalues, ivalindex);
@@ -150,7 +149,6 @@ void InverterInfo::set_info_cgnr(XMLHandler &xmlr) {
   xmlsetQLReal(xmlr, "Tolerance", rvalues, rvalindex, true, 1e-10);
   xmlsetQLInt(xmlr, "MaxIterations", ivalues, ivalindex, true, 10000);
 }
-
 void InverterInfo::output_cgnr(XMLHandler &xmlout) const {
   xmlout.set_root("InverterInfo");
   xmlout.put_child("Name", "CGNR");
@@ -579,8 +577,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
   mg_inv_param.solve_type = QUDA_DIRECT_SOLVE;
   mg_inv_param.matpc_type = QUDA_MATPC_EVEN_EVEN;
   mg_inv_param.inv_type = QUDA_GCR_INVERTER;
-  mg_inv_param.gamma_basis =
-      QUDA_DEGRAND_ROSSI_GAMMA_BASIS; // Must use this basis here
+  mg_inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS; // Must use this basis here
   mg_inv_param.tol = invParam.tol;
   mg_inv_param.reliable_delta = 0.01;
   mg_inv_param.maxiter = invParam.maxiter;

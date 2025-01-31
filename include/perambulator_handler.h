@@ -287,15 +287,11 @@ public:
 
   int getTimeExtent() const;
 
-  // void getHeader(XMLHandler& xmlout) const;
-
   void getFileMap(XMLHandler &xmlout) const;
 
   void outputSuffixMap();
 
   std::map<int, FileKey> getSuffixMap() const;
-
-  // void outputSuffixMap(TextFileWriter& fout);
 
   void setInverter(const InverterInfo &invinfo);
 
