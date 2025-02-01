@@ -5,8 +5,9 @@ namespace LaphEnv {
 
 // For all fermion actions, we must have
 //
-//    ivalues[0]= 0 or 1   flavor
+//    ivalues[0]= 0 or 1 or 2 or 3 flavor
 //                   0 = light u,d  1 = strange
+//                   2 = charm      3 = bottom
 //    ivalues[1]= 0 or 1   temporal boundary conditions
 //                   0 =antiperiodic   1 = periodic
 //
@@ -97,9 +98,42 @@ void QuarkActionInfo::setQudaInvertParam(QudaInvertParam &invParam) const {
   }
 }
 
+enum { FLAVOR_IDX , TIMEBC_IDX } ;
+
+// get the flavor and temporal bc
+void QuarkActionInfo::readflavortbc( XMLHandler &xmlr )
+{
+  // expanded for charm and bottom because why the hell not?
+  std::string flavor ;
+  xmlread(xmlr, "Flavor", flavor, "QuarkActionInfo");
+  if ((flavor == "light") || (flavor == "ud") || (flavor == "u") ||
+      (flavor == "d") || (flavor == "l")) {
+    ivalues[ FLAVOR_IDX ] = 0;
+  } else if ((flavor == "s") || (flavor == "strange")) {
+    ivalues[ FLAVOR_IDX ] = 1;
+  } else if ((flavor == "c") || (flavor == "charm")) {
+    ivalues[ FLAVOR_IDX ] = 2;
+  } else if ((flavor == "b") || (flavor == "bottom")) {
+    ivalues[ FLAVOR_IDX ] = 3;
+  } else {
+    xmlreadfail(xmlr, "QuarkActionInfo", "Invalid flavor");
+  }
+  ivalues[ TIMEBC_IDX ] = 0;
+  std::string timebc;
+  if (xmlreadif(xmlr, "TimeBC", timebc, "QuarkActionInfo")) {
+    if (timebc == "periodic") {
+      ivalues[TIMEBC_IDX] = 1;
+    } else if (timebc == "antiperiodic") {
+      ivalues[TIMEBC_IDX] = 0;
+    } else {
+      xmlreadfail(xmlr, "QuarkActionInfo",
+                  "Invalid temporal boundary condition");
+    }
+  }
+}
+
 #ifdef LAPH_DOMAIN_WALL
- enum { MONIKER , DWF_MASS , DWF_LS , DWF_M5 , DWF_B5 , DWF_C5 } ;
- enum { FLAVOR_IDX , TIMEBC_IDX } ;
+ enum { NORM , DWF_MASS , DWF_LS , DWF_M5 , DWF_B5 , DWF_C5 } ;
 
  void QuarkActionInfo::set_info_domain_wall(XMLHandler &xmlr) {
   svalues.resize(1);
@@ -121,40 +155,18 @@ void QuarkActionInfo::setQudaInvertParam(QudaInvertParam &invParam) const {
   if (xml_tag_count(xmlr, "c5") == 1) {
     xmlread(xmlr, "c5", rvalues[ DWF_C5 ], "QuarkActionInfo");
   }
-  
-  // usual shit pretty shortsighted to just allow strange or ud
-  std::string flavor ;
-  xmlread(xmlr, "Flavor", flavor, "QuarkActionInfo");
-  if ((flavor == "light") || (flavor == "ud") || (flavor == "u") ||
-      (flavor == "d") || (flavor == "l")) {
-    ivalues[ FLAVOR_IDX ] = 0;
-  } else if ((flavor == "s") || (flavor == "strange")) {
-    ivalues[ FLAVOR_IDX ] = 1;
-  } else {
-    xmlreadfail(xmlr, "QuarkActionInfo", "Invalid flavor");
-  }
-  std::cout<<"In this fucking bullshit set domain wall ---> "<<ivalues[FLAVOR_IDX]<<std::endl ;
-  ivalues[ TIMEBC_IDX ] = 0;
-  std::string timebc;
-  if (xmlreadif(xmlr, "TimeBC", timebc, "QuarkActionInfo")) {
-    if (timebc == "periodic") {
-      ivalues[TIMEBC_IDX] = 1;
-    } else if (timebc == "antiperiodic") {
-      ivalues[TIMEBC_IDX] = 0;
-    } else {
-      xmlreadfail(xmlr, "QuarkActionInfo",
-                  "Invalid temporal boundary condition");
-    }
-  }
-  std::cout<<"In this fucking bullshit set domain wall ---> "<<ivalues[TIMEBC_IDX]<<std::endl ;
+  readflavortbc( xmlr ) ;
  }
 
- void QuarkActionInfo::output_domain_wall(XMLHandler &xmlout) const {
-
-   std::cout<<"In this fucking bullshit output wall"<<std::endl ;
-   
+void QuarkActionInfo::output_domain_wall(XMLHandler &xmlout) const {
   xmlout.set_root("QuarkActionInfo");
-  std::string flavor = (ivalues[FLAVOR_IDX] == 0) ? "ud" : "s";
+  std::string flavor ;
+  switch( ivalues[0] ) {
+  case 0 : flavor = "ud" ; break ;
+  case 1 : flavor = "s" ; break ;
+  case 2 : flavor = "c" ; break ;
+  case 3 : flavor = "b" ; break ;
+  }
   xmlout.put_child("Name", "DOMAIN_WALL");
   xmlout.put_child("Flavor", flavor);
   xmlout.put_child("Mass", make_string(rvalues[DWF_MASS]));
@@ -172,7 +184,7 @@ void QuarkActionInfo::setQudaInvertParam_domain_wall(
   invParam.gamma_basis = QUDA_DIRAC_PAULI_GAMMA_BASIS;
   invParam.dirac_order = QUDA_DIRAC_ORDER;
   invParam.dslash_type = QUDA_MOBIUS_DWF_DSLASH;
-  invParam.mass_normalization = QUDA_MASS_NORMALIZATION;
+  invParam.mass_normalization = QUDA_KAPPA_NORMALIZATION;
   invParam.mass  =  rvalues[DWF_MASS];
   invParam.Ls    =  rvalues[DWF_LS];
   invParam.m5    = -rvalues[DWF_M5];
@@ -231,33 +243,19 @@ void QuarkActionInfo::set_info_wilson_clover(XMLHandler &xmlr) {
   }
   rvalues[6] = 1.0;
   xmlreadif(xmlr, "Tadpole", rvalues[6], "QuarkActionInfo");
-  std::string flavor;
-  xmlread(xmlr, "Flavor", flavor, "QuarkActionInfo");
-  if ((flavor == "light") || (flavor == "ud") || (flavor == "u") ||
-      (flavor == "d") || (flavor == "l")) {
-    ivalues[0] = 0;
-  } else if ((flavor == "s") || (flavor == "strange")) {
-    ivalues[0] = 1;
-  } else {
-    xmlreadfail(xmlr, "QuarkActionInfo", "Invalid flavor");
-  }
-  ivalues[1] = 0;
-  std::string timebc;
-  if (xmlreadif(xmlr, "TimeBC", timebc, "QuarkActionInfo")) {
-    if (timebc == "periodic") {
-      ivalues[1] = 1;
-    } else if (timebc == "antiperiodic") {
-      ivalues[1] = 0;
-    } else {
-      xmlreadfail(xmlr, "QuarkActionInfo",
-                  "Invalid temporal boundary condition");
-    }
-  }
+
+  readflavortbc( xmlr ) ;
 }
 
 void QuarkActionInfo::output_wilson_clover(XMLHandler &xmlout) const {
   xmlout.set_root("QuarkActionInfo");
-  std::string flavor = (ivalues[0] == 0) ? "ud" : "s";
+  std::string flavor ;
+  switch( ivalues[0] ) {
+  case 0 : flavor = "ud" ; break ;
+  case 1 : flavor = "s" ; break ;
+  case 2 : flavor = "c" ; break ;
+  case 3 : flavor = "b" ; break ;
+  }
   xmlout.put_child("Name", "WILSON_CLOVER");
   xmlout.put_child("Flavor", flavor);
   xmlout.put_child("Mass", make_string(rvalues[1]));

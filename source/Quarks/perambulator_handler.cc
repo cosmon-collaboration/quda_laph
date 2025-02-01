@@ -4,12 +4,10 @@
 #include "field_ops.h"
 #include "perambulator_handler.h"
 #include "data_io_handler.h"
-
+#include "DWF.h"
 #include <cassert>
 
 namespace LaphEnv {
-
-  
 
 void PerambulatorHandler::RecordKey::output(XMLHandler &xmlw) const {
   xmlw.set_root("RecordKey");
@@ -72,7 +70,6 @@ PerambulatorHandler::PerambulatorHandler(
     const std::string &smeared_quark_filestub, const bool upper_spin_components_only,
     const Mode in_mode, const std::string &gauge_str)
     : invertPtr(0), preconditioner(0), DHputPtr(0), DHgetPtr(0) {
-  std::cout<<"Set info?"<<std::endl ;
   set_info(gaugeinfo, gluonsmear, quarksmear, quark, flist,
            smeared_quark_filestub, upper_spin_components_only, gauge_str,
            in_mode);
@@ -87,7 +84,6 @@ void PerambulatorHandler::setInfo(const GaugeConfigurationInfo &gaugeinfo,
                                   const bool upper_spin_components_only,
                                   const Mode in_mode, const std::string &gauge_str) {
   clear();
-  std::cout<<"SetInfo?"<<std::endl ;
   set_info(gaugeinfo, gluonsmear, quarksmear, quark, flist,
            smeared_quark_filestub, upper_spin_components_only, gauge_str,
            in_mode);
@@ -104,25 +100,18 @@ void PerambulatorHandler::set_info(
     const std::string &gauge_str,
     const Mode in_mode) {
   try {
-    std::cout<<"Alloc1"<<std::endl ;
     uPtr = new GaugeConfigurationInfo(gaugeinfo);
-    std::cout<<"Alloc2"<<std::endl ;
     gSmearPtr = new GluonSmearingInfo(gluonsmear);
-    std::cout<<"Alloc3"<<std::endl ;
     qSmearPtr = new QuarkSmearingInfo(quarksmear);
-    std::cout<<"Alloc4"<<std::endl ;
     qactionPtr = new QuarkActionInfo(quark);
-    std::cout<<"Alloc5"<<std::endl ;
     fPtr = new FileListInfo(flist);
     Nspin = (upper_spin_components_only) ? 2 : 4;
     mode = in_mode;
-    std::cout<<"Alloc6"<<std::endl ;
     if (mode != ReadOnly) {
       DHputPtr = new DataPutHandlerMF<PerambulatorHandler, FileKey, RecordKey,
                                       DataType>(
           *this, *fPtr, "Laph--QuarkPeramb", "PerambulatorHandlerDataFile");
     }
-    std::cout<<"Alloc7"<<std::endl ;
     if (mode != Compute) {
       DHgetPtr = new DataGetHandlerMF<PerambulatorHandler, FileKey, RecordKey,
                                       DataType>(
@@ -132,8 +121,6 @@ void PerambulatorHandler::set_info(
     errorLaph(
         make_strf("allocation problem in PerambulatorHandler: %s", xp.what()));
   }
-
-  std::cout<<"Connect ..."<<std::endl ;
   if (mode == Compute) {
     connectGaugeConfigurationHandler();
   }
@@ -710,8 +697,12 @@ void PerambulatorHandler::computePerambulators(const int src_time,
   const uint nSinkLaphBatch = perambComps.nSinkLaphBatch;
   const uint nSinkQudaBatch = perambComps.nSinkQudaBatch;
   const uint nEigQudaBatch = perambComps.nEigQudaBatch;
+#ifdef LAPH_DOMAIN_WALL
+  const double soln_rescale = 1 ;
+#else
   const double soln_rescale = qactionPtr->getSolutionRescaleFactor();
-
+#endif
+  
   // allocate space for batched solutions and make pointers suitable for quda
   int iSinkBatch = 0;
   std::vector<int> sinkBatchInds(nSinkLaphBatch);
@@ -724,6 +715,9 @@ void PerambulatorHandler::computePerambulators(const int src_time,
   void **sinks_ptr = (void **)sinkList.data();
   void **evs_ptr = (void **)evList.data();
 
+#ifdef LAPH_DOMAIN_WALL
+  const bool dp = (sinkBatchData[0].bytesPerWord() == sizeof(std::complex<double>));
+#endif
   bulova.stop();
   double srctime = bulova.getTimeInSeconds();
   double invtime = 0.0;
@@ -781,9 +775,12 @@ void PerambulatorHandler::computePerambulators(const int src_time,
         void *spinor_src = (void *)(ferm_src.getDataPtr());
         void *spinor_snk = (void *)(sinkBatchData[iSinkBatch].getDataPtr());
 
-	// why the fuck is this duplicated???
         #ifdef LAPH_DOMAIN_WALL
-	
+	if( dp ) {
+	  solve_DWF<double>(spinor_snk, spinor_src, &quda_inv_param);
+	} else {
+	  solve_DWF<float>(spinor_snk, spinor_src, &quda_inv_param);
+	}
 	#else
 	invertQuda(spinor_snk, spinor_src, &quda_inv_param);
 	#endif
@@ -805,12 +802,14 @@ void PerambulatorHandler::computePerambulators(const int src_time,
         // additional checks of the solution
 
         if (extra_soln_check) {
+	  #ifndef LAPH_DOMAIN_WALL
           printLaph(
               "Performing additional check on solution using quda::MatQuda");
           LattField sol_check(FieldSiteType::ColorSpinVector);
           void *sol_checkptr = sol_check.getDataPtr();
           MatQuda(sol_checkptr, spinor_snk, &quda_inv_param);
           compare_latt_fields(sol_check, ferm_src);
+	  #endif
         }
 
         if ((quda_inv_param.iter > 0) &&
@@ -838,18 +837,22 @@ void PerambulatorHandler::computePerambulators(const int src_time,
         __complex__ double *qudaResPtr =
             (__complex__ double *)(&qudaRes(0, 0, 0, 0));
 
+	// only care about the 4D guy now
+	QudaInvertParam tmp = quda_inv_param ;
+	tmp.Ls = 1 ;
+	
         // do the projections
         printLaph("projecting batch of solutions onto LapH eigenvectors");
         laphSinkProject(qudaResPtr, sinks_ptr, nSinks, nSinksBatch, evs_ptr,
-                        nEigs, nEigQudaBatch, &quda_inv_param,
+                        nEigs, nEigQudaBatch, &tmp,
                         LayoutInfo::getRankLattExtents().data());
-
+	
         bulova.stop();
         double addevprojtime = bulova.getTimeInSeconds();
         printLaph(make_str(" this batch of projections onto Laph evs took ",
                            addevprojtime, " seconds"));
         evprojtime += addevprojtime;
-
+	
         // rearrange data then output to file
         bulova.reset();
         bulova.start();
@@ -867,7 +870,7 @@ void PerambulatorHandler::computePerambulators(const int src_time,
                                     sinkBatchInds[iSink], iSpin + 1, t));
                 for (int n = 0; n < nEigs; n++) {
                   printLaph(
-                      make_strf("coef for eigenlevel %d = (%14.8f, %14.8f)", n,
+                      make_strf("coef for eigenlevel %d = (%1.12e, %1.12e)", n,
                                 real(quark_sink[n]), imag(quark_sink[n])));
                 }
               }

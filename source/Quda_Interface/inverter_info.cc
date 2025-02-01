@@ -90,12 +90,14 @@ void InverterInfo::setQudaInvertParam(
   qactioninfo.setQudaInvertParam(invParam);
   if (svalues[0] == "CGNR") {
     setQudaInvertParam_cgnr(invParam);
+#ifndef LAPH_DOMAIN_WALL    
   } else if (svalues[0] == "BICGSTAB") {
     setQudaInvertParam_bicgstab(invParam);
   } else if (svalues[0] == "GCR") {
     setQudaInvertParam_gcr(invParam);
   } else if (svalues[0] == "GCR_MULTIGRID") {
     setQudaInvertParam_gcr_multigrid(invParam, qactioninfo);
+#endif
   }
 }
 
@@ -156,10 +158,10 @@ void InverterInfo::output_cgnr(XMLHandler &xmlout) const {
   xmlout.put_child(xmloutputQLReal("Tolerance", rvalues, rvalindex));
   xmlout.put_child(xmloutputQLInt("MaxIterations", ivalues, ivalindex));
 }
-
 void InverterInfo::setQudaInvertParam_cgnr(QudaInvertParam &invParam) const {
   commonQudaInvertParam(invParam);
-  invParam.inv_type = QUDA_CGNR_INVERTER;
+  invParam.inv_type = QUDA_CG_INVERTER;
+  invParam.solve_type = QUDA_NORMOP_PC_SOLVE;
   invParam.struct_size = sizeof(invParam);
 }
 
@@ -524,7 +526,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
   ++ivalindex;
   const bool minimize_mem = (ivalues[ivalindex]) ? true : false;
   ++ivalindex;
-  const bool setup_verify = (ivalues[ivalindex]) ? true : false;
+  //const bool setup_verify = (ivalues[ivalindex]) ? true : false;
   ++ivalindex;
 
   double setup_tolerance = 1e-10; // so setup will continue to max iteration
@@ -543,7 +545,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
   invParam.pipeline = 0;
   invParam.dagger = QUDA_DAG_NO;
   invParam.verbosity = getVerbosity();
-  invParam.verbosity_precondition = getVerbosity();
+  invParam.verbosity_precondition = QUDA_SUMMARIZE ; //getVerbosity();
   invParam.compute_true_res = QUDA_BOOLEAN_FALSE ; //true;
   invParam.preserve_source = QUDA_PRESERVE_SOURCE_NO;
   invParam.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
@@ -584,33 +586,38 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
   mg_inv_param.gcrNkrylov = invParam.gcrNkrylov;
   mg_inv_param.pipeline = 0;
   mg_inv_param.dagger = QUDA_DAG_NO;
-  mg_inv_param.verbosity = getVerbosity();
-  mg_inv_param.compute_true_res = true;
+  mg_inv_param.verbosity = QUDA_SUMMARIZE ; //getVerbosity();
+  mg_inv_param.compute_true_res = false ; //true;
   mg_inv_param.preserve_source = QUDA_PRESERVE_SOURCE_NO;
   mg_inv_param.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
   mg_inv_param.cuda_prec_refinement_sloppy = QudaInfo::get_cuda_prec_sloppy();
   mg_inv_param.cuda_prec_precondition = QUDA_HALF_PRECISION;
   mg_inv_param.cuda_prec_eigensolver = QudaInfo::get_cuda_prec_sloppy();
+
+  mg_inv_param.clover_cpu_prec = QudaInfo::get_cpu_prec();
+  mg_inv_param.clover_cuda_prec = QudaInfo::get_cuda_prec();
+  mg_inv_param.clover_cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
+  mg_inv_param.clover_cuda_prec_refinement_sloppy = QudaInfo::get_cuda_prec_sloppy();
+  mg_inv_param.clover_cuda_prec_precondition = QUDA_HALF_PRECISION ;
+  mg_inv_param.clover_order = QUDA_PACKED_CLOVER_ORDER ;
+  
   mg_inv_param.struct_size = sizeof(mg_inv_param);
 
   mg_param.n_level = nlevels;
   mg_param.setup_type = QUDA_NULL_VECTOR_SETUP;
   mg_param.compute_null_vector = (load_null_vectors)
-                                     ? QUDA_COMPUTE_NULL_VECTOR_NO
-                                     : QUDA_COMPUTE_NULL_VECTOR_YES;
+    ? QUDA_COMPUTE_NULL_VECTOR_NO
+    : QUDA_COMPUTE_NULL_VECTOR_YES;
   mg_param.generate_all_levels =
-      (generate_all) ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE;
-  mg_param.pre_orthonormalize =
-      (pre_ortho_setup) ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE;
-  mg_param.post_orthonormalize =
-      (post_orth_setup) ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE;
-  mg_param.setup_minimize_memory =
-      (minimize_mem) ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE;
-  mg_param.run_verify = (setup_verify) ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE;
+    (generate_all) ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE;
+  mg_param.pre_orthonormalize = (pre_ortho_setup) ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE;
+  mg_param.post_orthonormalize = (post_orth_setup) ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE;
+  mg_param.setup_minimize_memory = (minimize_mem) ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE;
+  mg_param.run_verify = QUDA_BOOLEAN_FALSE ;
 
   for (int level = 0; level < nlevels; ++level) {
 
-    mg_param.setup_inv_type[level] = QUDA_CGNR_INVERTER;
+    mg_param.setup_inv_type[level] = QUDA_CG_INVERTER;
     mg_param.num_setup_iter[level] = 1;
     mg_param.setup_tol[level] = setup_tolerance;
     mg_param.setup_maxiter[level] = setup_solver_numsteps[level];
@@ -618,16 +625,16 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
     mg_param.n_vec_batch[level] = 1;
 
     mg_param.coarse_solver[level] =
-        (level < (nlevels - 1)) ? QUDA_GCR_INVERTER : QUDA_CA_GCR_INVERTER;
+      (level < (nlevels - 1)) ? QUDA_GCR_INVERTER : QUDA_CA_GCR_INVERTER;
     mg_param.coarse_grid_solution_type[level] = QUDA_MATPC_SOLUTION;
     mg_param.coarse_solver_tol[level] = coarse_solver_tol[level];
     mg_param.coarse_solver_maxiter[level] = coarse_solver_maxiter[level];
 
-    mg_param.coarse_solver_ca_basis[level] = QUDA_CHEBYSHEV_BASIS;
+    //mg_param.coarse_solver_ca_basis[level] = QUDA_CHEBYSHEV_BASIS;
     mg_param.coarse_solver_ca_basis_size[level] = 4;
-    mg_param.coarse_solver_ca_lambda_min[level] = 0.0;
-    mg_param.coarse_solver_ca_lambda_max[level] =
-        -1.0; // determine max by power method
+    //mg_param.coarse_solver_ca_lambda_min[level] = 0.0;
+    //mg_param.coarse_solver_ca_lambda_max[level] =
+    //   -1.0; // determine max by power method
 
     for (int dir = 0; dir < LayoutInfo::Ndim; ++dir) {
       mg_param.geo_block_size[level][dir] = blockextents[level][dir];
@@ -639,9 +646,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
     mg_param.smoother_solve_type[level] = QUDA_DIRECT_PC_SOLVE;
     mg_param.smoother_tol[level] = smoother_tol;
     mg_param.smoother_halo_precision[level] = QUDA_HALF_PRECISION ;
-    mg_param.smoother_solver_ca_basis[level] = QUDA_POWER_BASIS;
-    mg_param.smoother_solver_ca_lambda_min[level] = 0.0;
-    mg_param.smoother_solver_ca_lambda_max[level] = -1.0;
+
     mg_param.nu_pre[level] = presmooth_num[level];
     mg_param.nu_post[level] = postsmooth_num[level];
     mg_param.omega[level] = 1.0;
@@ -651,30 +656,29 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
     mg_param.verbosity[level] = QUDA_SUMMARIZE;
     mg_param.global_reduction[level] = QUDA_BOOLEAN_YES;
     mg_param.use_eig_solver[level] = QUDA_BOOLEAN_FALSE;
-
-    mg_param.setup_use_mma[level] = QUDA_BOOLEAN_TRUE;
-    //mg_param.dslash_use_mma[level] = QUDA_BOOLEAN_TRUE;
+    mg_param.smoother_schwarz_type[level] = QUDA_INVALID_SCHWARZ ;
 
     strcpy(mg_param.vec_infile[level], "");
     strcpy(mg_param.vec_outfile[level], "");
-    mg_param.n_block_ortho[level] = 2;
-    mg_param.block_ortho_two_pass[level] = QUDA_BOOLEAN_TRUE;
-    mg_param.transfer_type[level] = QUDA_TRANSFER_AGGREGATE;
 
+    mg_param.run_oblique_proj_check = QUDA_BOOLEAN_NO ;
     if ((level < (nlevels - 1)) || (!coarsest_deflate)) {
       mg_param.eig_param[level] = nullptr;
     } else {
+      mg_param.preserve_deflation = QUDA_BOOLEAN_TRUE ;
+      mg_param.run_low_mode_check = QUDA_BOOLEAN_NO ;
       initDeflationParam_gcr_multigrid();
+      
       mg_param.use_eig_solver[level] = QUDA_BOOLEAN_TRUE;
       mg_param.vec_load[level] = QUDA_BOOLEAN_FALSE;
       mg_param.vec_store[level] = QUDA_BOOLEAN_FALSE;
       QudaEigParam &coarse_deflate_param(QudaMGInfoPtr->coarse_deflate_param);
       coarse_deflate_param.use_poly_acc =
-          (deflate_chebyshev > 1) ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE;
+	(deflate_chebyshev > 1) ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE;
       coarse_deflate_param.poly_deg = deflate_chebyshev;
       coarse_deflate_param.a_min = deflate_cutoff;
       coarse_deflate_param.n_ev = deflate_nvectors + 1;
-      coarse_deflate_param.n_kr = (3 * deflate_nvectors) / 2;
+      coarse_deflate_param.n_kr = (3*deflate_nvectors) / 2;
       coarse_deflate_param.n_ev_deflate = deflate_nvectors;
       coarse_deflate_param.n_conv = deflate_nvectors + 1;
       coarse_deflate_param.tol = deflate_tol;

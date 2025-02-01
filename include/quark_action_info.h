@@ -62,6 +62,8 @@ public:
 
   const std::vector<double> &getRValues() const { return rvalues; }
 
+  void readflavortbc( XMLHandler &xmlr ) ;
+
 private:
 #ifdef LAPH_DOMAIN_WALL
   void set_info_domain_wall(XMLHandler &xmlr);

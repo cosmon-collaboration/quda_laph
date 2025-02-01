@@ -4,10 +4,7 @@
 #include "array.h"
 #include "field_ops.h"
 #include "multi_compare.h"
-
-// STILL TO DO:  single asynchronous thread for output so can continue next
-// computations
-//                   while output occurs
+#include "DWF.h"
 
 namespace LaphEnv {
 
@@ -790,177 +787,6 @@ void QuarkHandler::computeSinks(const bool verbose,
                      " seconds\n\n"));
 }
 
-#ifdef LAPH_DOMAIN_WALL
-// code from witnesser sortof
-template <class T>
-static void
-DirtyWilson4D( const size_t fermsize,
-	       QudaInvertParam inv_param,
-	       std::complex<T> sol[] )
-{
-  std::complex<T> *tmp = new std::complex<T>[ fermsize ] ;
-  memcpy( tmp , sol , fermsize*sizeof(std::complex<T>) ) ;
-  
-  QudaInvertParam Wil = newQudaInvertParam() ;
-  Wil.dslash_type = QUDA_WILSON_DSLASH ;
-  Wil.kappa = 1/(2.*(4.-inv_param.m5)) ;
-  Wil.mass = -inv_param.m5 ;
-
-  void *in  = (void*)sol , *out = (void*)tmp ;
-  
-  MatQuda( out , in , &Wil ) ;
-
-  const std::complex<T> cfac1 = 0.5*(inv_param.c_5[0])/Wil.kappa ;
-
-  size_t i ;
-#pragma omp parallel for private(i)
-  for( i = 0 ; i < fermsize; i++ ) {
-    sol[i] = cfac1*tmp[i] - sol[i] ;
-  }
-  delete [] tmp ;
-}
-
-// does 0.5*(1+\gamma_5) in the NR basis that we seemingly have to use
-template <class T>
-static void
-chiralProjectPlus( const size_t fermsize,
-		   const void *in,
-		   std::complex<T> tmp[] )
-{
-  std::complex<T> *ptin = (std::complex<T>*)in ;
-  size_t i ;
-#pragma omp parallel for private(i) collapse(2)
-  for( i = 0 ; i < fermsize/(12) ; i++ ) {
-    for( int c = 0 ; c < 3 ; c++ ) {
-      tmp[ c +     12*i ] = 0.5*( ptin[ c +     12*i ] - ptin[ c + 6 + 12*i ] ) ;
-      tmp[ c + 3 + 12*i ] = 0.5*( ptin[ c + 3 + 12*i ] - ptin[ c + 9 + 12*i ] ) ;
-      tmp[ c + 6 + 12*i ] = 0.5*( ptin[ c + 6 + 12*i ] - ptin[ c + 0 + 12*i ] ) ;
-      tmp[ c + 9 + 12*i ] = 0.5*( ptin[ c + 9 + 12*i ] - ptin[ c + 3 + 12*i ] ) ;
-    }
-  }
-}
-
-// chiminus = 0.5*(1-\gamma_5)
-template <class T>
-static void
-chiralProjectMinus( const size_t fermsize,
-                    const void *in,
-		    std::complex<T> tmp[] )
-{
-  std::complex<T> *ptin = (std::complex<T>*)in ;
-  size_t i ;
-#pragma omp parallel for private(i)
-  for( i = 0 ; i < fermsize/(12) ; i++ ) {
-    for( int c = 0 ; c < 3 ; c++ ) {
-      tmp[ c +     12*i ] = 0.5*( ptin[ c +     12*i ] + ptin[ c + 6 + 12*i ] ) ;
-      tmp[ c + 3 + 12*i ] = 0.5*( ptin[ c + 3 + 12*i ] + ptin[ c + 9 + 12*i ] ) ;
-      tmp[ c + 6 + 12*i ] = 0.5*( ptin[ c + 6 + 12*i ] + ptin[ c + 0 + 12*i ] ) ;
-      tmp[ c + 9 + 12*i ] = 0.5*( ptin[ c + 9 + 12*i ] + ptin[ c + 3 + 12*i ] ) ;
-    }
-  }
-}
-
-template <class T>
-static void
-solve_DWF( void *out ,
-	   void *in ,
-	   QudaInvertParam inv_param)
-{
-  const int Ls = inv_param.Ls ;
-  const int fullsize = LayoutInfo::getRankLatticeNumSites() ;
-  const size_t fermsize = fullsize*3*4*2 ;
-  const size_t half_fermsize = fermsize/2 ;
-  std::complex<T> *spinorIn  = new std::complex<T>[ Ls*fermsize ] ;
-  std::complex<T> *spinorOut = new std::complex<T>[ Ls*fermsize ] ;
-
-  memset(reinterpret_cast<char*>(spinorIn) , 0, fermsize*Ls*sizeof(std::complex<T>));
-  memset(reinterpret_cast<char*>(spinorOut), 0, fermsize*Ls*sizeof(std::complex<T>));
-
-  std::cout<<"Defect correction 1"<<std::endl ;
-  
-  // chiral project
-  std::complex<T> *tmp1 = new std::complex<T>[ fermsize ] ;
-
-  std::cout<<"Chiplus"<<std::endl ;
-  chiralProjectPlus<T>( fermsize, in , tmp1 ) ;
-  std::cout<<"Dirty Wilson1"<<std::endl ;
-  DirtyWilson4D<T>( fermsize , inv_param , tmp1 ) ;
-
-  std::cout<<"Defect correction 2"<<std::endl ;
-  
-  std::complex<T> *tmp2 = new std::complex<T>[ fermsize ] ;
-
-  std::cout<<"Chiminus"<<std::endl ;
-  chiralProjectMinus<T>( fermsize, in , tmp2 ) ;
-  std::cout<<"Dirty Wilson2"<<std::endl ;
-  DirtyWilson4D<T>( fermsize , inv_param , tmp2 ) ;
-
-  std::cout<<"Memcpys in"<<std::endl ;
-  
-  // copies for the checkerboarded sources
-  memcpy(reinterpret_cast<char*>(&spinorIn[0]),
-	 reinterpret_cast<char*>(const_cast<std::complex<T>*>(&(tmp1[0]))),
-	 half_fermsize*sizeof(std::complex<T>));
-  memcpy(reinterpret_cast<char*>(&spinorIn[half_fermsize*Ls]),
-	 reinterpret_cast<char*>(const_cast<std::complex<T>*>(&(tmp1[half_fermsize]))),
-	 half_fermsize*sizeof(std::complex<T>));
-  memcpy(reinterpret_cast<char*>(&spinorIn[half_fermsize*(Ls-1)]),
-	 reinterpret_cast<char*>(const_cast<std::complex<T>*>(&(tmp2[0]))),
-	 half_fermsize*sizeof(std::complex<T>));
-  memcpy(reinterpret_cast<char*>(&spinorIn[half_fermsize*(2*Ls-1)]),
-	 reinterpret_cast<char*>(const_cast<std::complex<T>*>(&(tmp2[half_fermsize]))),
-	 half_fermsize*sizeof(std::complex<T>));
-
-  std::cout<<"Solve"<<std::endl ;
-  invertQuda( reinterpret_cast<void*>(spinorOut),
-	      reinterpret_cast<void*>(spinorIn), &inv_param ) ;
-  std::cout<<"Solve"<<std::endl ;
-  delete [] spinorIn ;
-  
-  // undo the solve
-  memcpy(reinterpret_cast<char*>(const_cast<std::complex<T>*>(&tmp1[0])),
-	 reinterpret_cast<char*>(&spinorOut[0]),
-	 half_fermsize*sizeof(std::complex<T>));
-  memcpy(reinterpret_cast<char*>(const_cast<std::complex<T>*>(&(tmp1[half_fermsize]))),
-	 reinterpret_cast<char*>(&spinorOut[half_fermsize*Ls]),
-	 half_fermsize*sizeof(std::complex<T>));
-  memcpy(reinterpret_cast<char*>(const_cast<std::complex<T>*>(&(tmp2[0]))),
-	 reinterpret_cast<char*>(&spinorOut[half_fermsize*(Ls-1)]),
-	 half_fermsize*sizeof(std::complex<T>));
-  memcpy(reinterpret_cast<char*>(const_cast<std::complex<T>*>(&(tmp2[half_fermsize]))),
-	 reinterpret_cast<char*>(&spinorOut[half_fermsize*(2*Ls-1)]),
-	 half_fermsize*sizeof(std::complex<T>));
-
-  delete [] spinorOut ;
-
-  const std::complex<T> invTwoKappaB = inv_param.b_5[0]*( 4 - inv_param.m5 ) + 1.0;
-  const T twoKappaB = 1.0/invTwoKappaB.real();
-
-  std::cout<<"Reproj"<<std::endl ;
-  
-  // chiral projections
-  std::complex<T> *outptr = (std::complex<T>*)out ;
-  int i ;
-  // tmp = chiralprojecminus(tmp1) + chiralprojectplus(tmp2)
-#pragma omp parallel for private(i) collapse(2)
-  for( i = 0 ; i < fullsize/12 ; i++ ) {
-    for( int c = 0 ; c < 3 ; c++ ) {
-      outptr[ c + 0 + 12*i ] = (0.5*twoKappaB)*(   tmp1[ c + 0 + 12*i ] + tmp1[ c + 6 + 12*i ]
-						 + tmp2[ c + 0 + 12*i ] - tmp2[ c + 6 + 12*i ]) ;
-      outptr[ c + 3 + 12*i ] = (0.5*twoKappaB)*(   tmp1[ c + 3 + 12*i ] + tmp1[ c + 9 + 12*i ]
-						 + tmp2[ c + 3 + 12*i ] - tmp2[ c + 9 + 12*i ]) ;
-      outptr[ c + 6 + 12*i ] = (0.5*twoKappaB)*(   tmp1[ c + 6 + 12*i ] + tmp1[ c + 0 + 12*i ]
-						 + tmp2[ c + 6 + 12*i ] - tmp2[ c + 0 + 12*i ]) ;
-      outptr[ c + 9 + 12*i ] = (0.5*twoKappaB)*(   tmp1[ c + 9 + 12*i ] + tmp1[ c + 3 + 12*i ]
-						 + tmp2[ c + 9 + 12*i ] - tmp2[ c + 3 + 12*i ]) ; 
-    }
-  }
-  delete [] tmp1 ;
-  delete [] tmp2 ;
-}
-  
-#endif
-
 //  do inversions for all spin-laph-eigenvector dilution indices
 //  but for one noise, one time projector index
 
@@ -1000,8 +826,12 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise,
       rho.generateLapHQuarkSourceForSink(Textent, Nspin, nEigs);
   // time dilution masks
   const std::list<int> &on_times = dilHandler->getOnTimes(time_proj_index);
+#ifdef LAPH_DOMAIN_WALL
+  const double soln_rescale = 1 ;
+#else
   const double soln_rescale = qactionPtr->getSolutionRescaleFactor();
-
+#endif
+  
   // allocate space for batched solutions and make pointers suitable for quda
   int iSinkBatch = 0;
   std::vector<int> sinkBatchInds(nSinkLaphBatch);
@@ -1013,6 +843,11 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise,
   }
   void **sinks_ptr = (void **)sinkList.data();
   void **evs_ptr = (void **)evList.data();
+
+#ifdef LAPH_DOMAIN_WALL
+    const bool dp =
+      (sinkBatchData[0].bytesPerWord() == sizeof(std::complex<double>));
+#endif
 
   // get the file key and open file for writing
 
@@ -1068,7 +903,11 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise,
       void *spinor_snk = (void *)(sinkBatchData[iSinkBatch].getDataPtr());
 
       #ifdef LAPH_DOMAIN_WALL
-      solve_DWF<double>(spinor_snk, spinor_src, quda_inv_param) ;      
+      if( dp ) {
+	solve_DWF<double>(spinor_snk, spinor_src, &quda_inv_param) ;
+      } else {
+	solve_DWF<float>(spinor_snk, spinor_src, &quda_inv_param) ;
+      }
       #else
       invertQuda(spinor_snk, spinor_src, &quda_inv_param) ;
       #endif
@@ -1122,11 +961,13 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo &noise,
                             nSinks); // quda laph reversing major order
       __complex__ double *qudaResPtr =
           (__complex__ double *)(&qudaRes(0, 0, 0, 0));
+      QudaInvertParam tmp = quda_inv_param ;
+      tmp.Ls = 1 ;
 
       // do the projections
       printLaph("projecting batch of solutions onto LapH eigenvectors");
       laphSinkProject(qudaResPtr, sinks_ptr, nSinks, nSinksBatch, evs_ptr,
-                      nEigs, nEigQudaBatch, &quda_inv_param,
+                      nEigs, nEigQudaBatch, &tmp,
                       LayoutInfo::getRankLattExtents().data());
 
       bulova.stop();

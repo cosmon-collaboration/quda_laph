@@ -1,6 +1,7 @@
 #ifndef BYTEORDER_H
 #define BYTEORDER_H
 
+#include <cstddef>
 #include <vector>
 
 namespace LaphEnv {

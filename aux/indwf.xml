@@ -1,0 +1,173 @@
+<QudaLaph>
+  <EchoXML/>
+  <LatticeLayoutInfo>
+     <XYZTExtents>24 24 24 48</XYZTExtents>
+  </LatticeLayoutInfo>
+  <QudaInfo>
+     <CPUPrecision>double</CPUPrecision>
+     <CUDAPrecision>double</CUDAPrecision>
+     <CUDASloppyPrecision>single</CUDASloppyPrecision>
+  </QudaInfo>
+  <Verbosity>none</Verbosity>
+  <Task>
+     <Name>SMEAR_GAUGE_FIELD</Name>
+     <GaugeConfigurationInfo>
+        <EnsembleName>CLS_A653</EnsembleName>
+        <FileFormat>CERN</FileFormat>
+        <ConfigType>WilsonImproved</ConfigType>
+        <FileName>/latticeQCD/raid4/laph/cls21_A653_r000/cfgs/A653r000n1</FileName>
+        <ConfigNumber>1</ConfigNumber>
+     </GaugeConfigurationInfo>
+     <GluonStoutSmearingInfo>
+        <LinkIterations>20</LinkIterations>
+        <LinkStapleWeight>0.1</LinkStapleWeight>
+     </GluonStoutSmearingInfo>
+     <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>
+  </Task>
+  <Task>
+     <Name>SMEAR_QUARK_FIELD</Name>
+     <GaugeConfigurationInfo>
+        <EnsembleName>CLS_A653</EnsembleName>
+        <FileFormat>CERN</FileFormat>
+        <ConfigType>WilsonImproved</ConfigType>
+        <FileName>/latticeQCD/raid4/laph/cls21_A653_r000/cfgs/A653r000n1</FileName>
+        <ConfigNumber>1</ConfigNumber>
+     </GaugeConfigurationInfo>
+     <GluonStoutSmearingInfo>
+        <LinkIterations>20</LinkIterations>
+        <LinkStapleWeight>0.1</LinkStapleWeight>
+     </GluonStoutSmearingInfo>
+     <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>
+     <QuarkLaphSmearingInfo>
+        <LaphSigmaCutoff>0.32</LaphSigmaCutoff>
+        <NumberLaphEigvecs> 32 </NumberLaphEigvecs>
+     </QuarkLaphSmearingInfo>
+     <SmearedQuarkFileStub>NOM_smeared_quark_field</SmearedQuarkFileStub>
+     <LaphEigenSolverInfo>
+        <ResidualTolerance>1.0e-11</ResidualTolerance>
+        <MaxIterations>200</MaxIterations>
+        <KrylovDimension>48</KrylovDimension>
+        <ChebyshevOrder>8</ChebyshevOrder>
+        <MaxEigenvalue>15.0</MaxEigenvalue>
+        <CutoffEigenvalue>0.5</CutoffEigenvalue>
+        <OutputVerbosity>2</OutputVerbosity>
+     </LaphEigenSolverInfo>
+  </Task>
+  <Task>
+     <Name>LAPH_QUARK_PERAMBULATORS</Name>
+     <QuarkPerambulatorInfo>
+        <GaugeConfigurationInfo>
+           <EnsembleName>CLS_A653</EnsembleName>
+           <FileFormat>CERN</FileFormat>
+           <ConfigType>WilsonImproved</ConfigType>
+           <FileName>/latticeQCD/raid4/laph/cls21_A653_r000/cfgs/A653r000n1</FileName>
+           <ConfigNumber>1</ConfigNumber>
+           <FermionTimeBC>antiperiodic</FermionTimeBC>
+        </GaugeConfigurationInfo>
+        <GluonStoutSmearingInfo>
+           <LinkIterations>20</LinkIterations>
+           <LinkStapleWeight>0.1</LinkStapleWeight>
+        </GluonStoutSmearingInfo>
+        <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>
+        <QuarkLaphSmearingInfo>
+           <LaphSigmaCutoff>0.32</LaphSigmaCutoff>
+           <NumberLaphEigvecs> 32 </NumberLaphEigvecs>
+        </QuarkLaphSmearingInfo>
+        <SmearedQuarkFileStub>NOM_smeared_quark_field</SmearedQuarkFileStub>
+        <QuarkActionInfo>
+           <Name>DOMAIN_WALL</Name>
+           <Flavor>ud</Flavor>
+           <Mass>0.05</Mass>
+	   <Ls>4</Ls>
+	   <m5>1.0</m5>
+	   <b5>2.0</b5>
+	   <c5>1.0</c5>
+           <TimeBC> antiperiodic </TimeBC>
+         </QuarkActionInfo>
+        <FileListInfo>
+           <FileNameStub>testperam</FileNameStub>
+           <MinFileNumber>0</MinFileNumber>
+           <MaxFileNumber>1000</MaxFileNumber>
+        </FileListInfo>
+	<InverterInfo>            
+          <Name>CGNR</Name> 
+          <Tolerance>1.0e-8</Tolerance>
+          <MaxIterations>35000</MaxIterations>
+        </InverterInfo>
+        <Verbosity>full</Verbosity> 
+     </QuarkPerambulatorInfo> 
+     <ComputationSet>
+        <NumSinksBeforeProject>  4 </NumSinksBeforeProject>
+        <NumSinksInProjectBatch> 4 </NumSinksInProjectBatch>
+        <NumEigsInProjectBatch>  4 </NumEigsInProjectBatch>
+        <Computation>
+           <SourceTime>8</SourceTime>
+           <SourceLaphEigvecIndices>24  27 28 </SourceLaphEigvecIndices>
+        </Computation>
+        <Computation>
+           <SourceTime>12</SourceTime>
+           <SourceLaphEigvecIndexMin>29</SourceLaphEigvecIndexMin>
+           <SourceLaphEigvecIndexMax>31</SourceLaphEigvecIndexMax>
+        </Computation>
+     </ComputationSet>
+  </Task> 
+  <Task>
+     <Name>LAPH_QUARK_PERAMBULATORS</Name>
+     <QuarkPerambulatorInfo>
+        <GaugeConfigurationInfo>
+           <EnsembleName>CLS_A653</EnsembleName>
+           <FileFormat>CERN</FileFormat>
+           <ConfigType>WilsonImproved</ConfigType>
+           <FileName>/latticeQCD/raid4/laph/cls21_A653_r000/cfgs/A653r000n1</FileName>
+           <ConfigNumber>1</ConfigNumber>
+           <FermionTimeBC>antiperiodic</FermionTimeBC>
+        </GaugeConfigurationInfo>
+        <GluonStoutSmearingInfo>
+           <LinkIterations>20</LinkIterations>
+           <LinkStapleWeight>0.1</LinkStapleWeight>
+        </GluonStoutSmearingInfo>
+        <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>
+        <QuarkLaphSmearingInfo>
+           <LaphSigmaCutoff>0.32</LaphSigmaCutoff>
+           <NumberLaphEigvecs> 32 </NumberLaphEigvecs>
+        </QuarkLaphSmearingInfo>
+        <SmearedQuarkFileStub>NOM_smeared_quark_field</SmearedQuarkFileStub>
+        <QuarkActionInfo>
+	  <Name>DOMAIN_WALL</Name>
+           <Flavor>ud</Flavor>
+           <Mass>0.05</Mass>
+	   <Ls>4</Ls>
+	   <m5>1.0</m5>
+	   <b5>2.0</b5>
+	   <c5>1.0</c5>
+           <TimeBC> antiperiodic </TimeBC>
+         </QuarkActionInfo>
+        <FileListInfo>
+           <FileNameStub>test</FileNameStub>
+           <MinFileNumber>0</MinFileNumber>
+           <MaxFileNumber>1000</MaxFileNumber>
+        </FileListInfo>
+	<InverterInfo>            
+           <Name>CGNR</Name> 
+           <Tolerance>1.0e-8</Tolerance>
+           <MaxIterations>35000</MaxIterations>
+        </InverterInfo>
+        <Verbosity>none</Verbosity>
+       <ExtraSolutionChecks/>
+     </QuarkPerambulatorInfo> 
+     <ComputationSet>
+        <NumSinksBeforeProject>  4 </NumSinksBeforeProject>
+        <NumSinksInProjectBatch> 4 </NumSinksInProjectBatch>
+        <NumEigsInProjectBatch>  4 </NumEigsInProjectBatch>
+        <Computation>
+           <SourceTime>8</SourceTime>
+           <SourceLaphEigvecIndices>12 17 25</SourceLaphEigvecIndices>
+        </Computation>
+        <Computation>
+           <SourceTime>12</SourceTime>
+           <SourceLaphEigvecIndexMin>26</SourceLaphEigvecIndexMin>
+           <SourceLaphEigvecIndexMax>28</SourceLaphEigvecIndexMax>
+        </Computation>
+     </ComputationSet>
+  </Task> 
+</QudaLaph>

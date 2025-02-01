@@ -142,7 +142,7 @@ void doLaphQuarkPerambulators(XMLHandler &xmltask) {
   // create handler
   PerambulatorHandler Q(gaugeinfo, gSmear, qSmear, quark, files,
                         smeared_quark_filestub, upper_spin_only, mode);
-
+  
   // read the set of computations (time sources, src eigvec indices)
   // as well as the batching parameters
   XMLHandler xmlcmp(xmltask, "ComputationSet");
