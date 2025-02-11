@@ -7,8 +7,8 @@ namespace LaphEnv {
 
 // For all fermion actions, we must have
 //
-//    ivalues[0]= 0 or 1   flavor
-//                   0 = light u,d  1 = strange
+//    ivalues[0]= 0,1, or 2   flavor
+//                   0 = light u,d  1 = strange, 2 = charm
 //    ivalues[1]= 0 or 1   temporal boundary conditions
 //                   0 =antiperiodic   1 = periodic
 //
@@ -101,7 +101,7 @@ void QuarkActionInfo::setQudaInvertParam(QudaInvertParam& invParam) const
 //    rvalues[6]= tadpole coefficient
 
 //    ivalues[0]= 0 or 1   flavor
-//                   0 = light u,d  1 = strange
+//                   0 = light u,d  1 = strange, 2 = charm
 //    ivalues[1]= 0 or 1   temporal boundary conditions
 //                   0 =antiperiodic   1 = periodic
 
@@ -143,6 +143,8 @@ void QuarkActionInfo::set_info_wilson_clover(XMLHandler& xmlr)
     ivalues[0]=0;}
  else if ((flavor=="s")||(flavor=="strange")){
     ivalues[0]=1;}
+ else if ((flavor=="c")||(flavor=="charm")){
+    ivalues[0]=2;}
  else{
     xmlreadfail(xmlr,"QuarkActionInfo","Invalid flavor");}
  ivalues[1]=0;
@@ -160,7 +162,11 @@ void QuarkActionInfo::set_info_wilson_clover(XMLHandler& xmlr)
 void QuarkActionInfo::output_wilson_clover(XMLHandler& xmlout) const
 {
  xmlout.set_root("QuarkActionInfo");
- string flavor=(ivalues[0]==0)?"ud":"s";
+ string flavor="ud";
+ if (ivalues[0]==1)
+	 flavor="s";
+ else 
+	 flavor="c"; 
  xmlout.put_child("Name","WILSON_CLOVER");
  xmlout.put_child("Flavor",flavor);
  xmlout.put_child("Mass",make_string(rvalues[1]));
