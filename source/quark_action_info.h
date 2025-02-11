@@ -19,7 +19,7 @@ namespace LaphEnv {
 // *                                                                  *
 // *    <QuarkActionInfo>                                             *
 // *       <Name> WILSON_CLOVER </Name>  (mandatory)                  *
-// *       <Flavor> ud </Flavor>  (or "s", or "c")                            *
+// *       <Flavor> ud </Flavor>  (or "s", or "c")                    *
 // *       <Mass> 0.321 </Mass> (or <Kappa>..</Kappa>)                *
 // *       <Anisotropy> 3.5 </Anisotropy> (default 1)                 *
 // *       <clovCoeffSS>2.0668577</clovCoeffSS>                       *
