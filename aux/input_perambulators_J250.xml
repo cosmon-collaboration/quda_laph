@@ -19,12 +19,13 @@
         <ConfigType>WilsonImproved</ConfigType>
         <FileName>/gpfs/alpine2/nph162/proj-shared/cls21_J250_r000/cfgs/J250r000n5</FileName>
         <ConfigNumber>5</ConfigNumber>
+        <FermionTimeBC>antiperiodic</FermionTimeBC>
      </GaugeConfigurationInfo>
      <GluonStoutSmearingInfo>
         <LinkIterations>36</LinkIterations>
         <LinkStapleWeight>0.1</LinkStapleWeight>
      </GluonStoutSmearingInfo>
-     <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>
+   <!--  <SmearedGaugeFileName>outputfilenameifdesired</SmearedGaugeFileName> -->
   </Task> 
 
   <Task>
@@ -35,19 +36,20 @@
         <ConfigType>WilsonImproved</ConfigType>
         <FileName>/gpfs/alpine2/nph162/proj-shared/cls21_J250_r000/cfgs/J250r000n5</FileName>
         <ConfigNumber>5</ConfigNumber>
+        <FermionTimeBC>antiperiodic</FermionTimeBC>
      </GaugeConfigurationInfo>
      <GluonStoutSmearingInfo>
         <LinkIterations>36</LinkIterations>
         <LinkStapleWeight>0.1</LinkStapleWeight>
      </GluonStoutSmearingInfo>
-     <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>
+    <!-- <SmearedGaugeFileName>/path/smg_field</SmearedGaugeFileName> (include if need to read from file) -->
      <QuarkLaphSmearingInfo>
         <LaphSigmaCutoff>0.295</LaphSigmaCutoff>
         <NumberLaphEigvecs>288</NumberLaphEigvecs>
      </QuarkLaphSmearingInfo>
-     <SmearedQuarkFileStub>NOM_smeared_quark_field</SmearedQuarkFileStub>
+    <!-- <SmearedQuarkFileStub>outputfilestubnameifdesired</SmearedQuarkFileStub> -->
      <LaphEigenSolverInfo>
-        <ResidualTolerance>1.0e-11</ResidualTolerance>
+        <ResidualTolerance>1.0e-12</ResidualTolerance>
         <MaxIterations>48</MaxIterations>
         <KrylovDimension>348</KrylovDimension>
         <ChebyshevOrder>28</ChebyshevOrder>
@@ -55,8 +57,9 @@
         <StartingVectorType>equal_components</StartingVectorType>
 	<!--  <CheckSolution>true</CheckSolution> -->
         <CutoffEigenvalue>0.10</CutoffEigenvalue>
-        <OutputVerbosity>0</OutputVerbosity>
-       </LaphEigenSolverInfo>
+     </LaphEigenSolverInfo>
+     <Verbosity>low</Verbosity>  <!-- optional -->
+     <PrintEigenvalues/>         <!-- optional -->
   </Task> 
 
   <Task>
@@ -74,12 +77,11 @@
            <LinkIterations>36</LinkIterations>
            <LinkStapleWeight>0.1</LinkStapleWeight>
         </GluonStoutSmearingInfo>
-        <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>
         <QuarkLaphSmearingInfo>
            <LaphSigmaCutoff>0.295</LaphSigmaCutoff>
            <NumberLaphEigvecs>288</NumberLaphEigvecs>
         </QuarkLaphSmearingInfo>
-        <SmearedQuarkFileStub>NOM_smeared_quark_field</SmearedQuarkFileStub>
+      <!--  <SmearedQuarkFileStub>/path/sq_field</SmearedQuarkFileStub> (include to read from file) -->
         <QuarkActionInfo>
            <Name> WILSON_CLOVER </Name>
            <Flavor> ud </Flavor>
@@ -123,12 +125,11 @@
               <GenerateAllLevels>true</GenerateAllLevels>     
               <PreOrthoNullVectors>true</PreOrthoNullVectors>                      
               <PostOrthoNullVectors>true</PostOrthoNullVectors>                    
-	      <SetupMinimizeMemory>false</SetupMinimizeMemory>                      
               <RunVerify>false</RunVerify>           
+	      <Verbosity>none</Verbosity> <!-- for the preconditioner -->
            </MGPreconditioner>                                                     
         </InverterInfo>                                                             
-	<Verbosity>none</Verbosity>
-       <ExtraSolutionChecks/>
+        <ExtraSolutionChecks/>
      </QuarkPerambulatorInfo>
      <ComputationSet>
         <NumSinksBeforeProject>  4 </NumSinksBeforeProject>
@@ -140,6 +141,8 @@
            <SourceLaphEigvecIndexMax>28</SourceLaphEigvecIndexMax>
         </Computation>
      </ComputationSet>
+     <Verbosity>none</Verbosity>  <!-- to override the default verbosity -->
+     <PrintCoefficients/>         <!-- optional -->
   </Task>
 
 </QudaLaph>

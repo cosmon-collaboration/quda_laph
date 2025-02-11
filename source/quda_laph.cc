@@ -1,15 +1,14 @@
-#include "xml_handler.h"
-#include <cstdio>
-#include <ctime>
-#include <map>
-#include "quda.h"
+#include "tasks.h"
 #include "utils.h"
 #include "laph_stdio.h"
 #include "stop_watch.h"
-#include "layout_info.h"
-#include "named_obj_map.h"
 #include "quda_info.h"
-#include "tasks.h"
+#include "verbosity_info.h"
+#include "host_global.h"
+#include "layout_info.h"
+#if defined(QUDA_OPENMP)
+#include <omp.h>
+#endif
 #ifdef ARCH_PARALLEL
 #include <mpi.h>
 #endif
@@ -196,31 +195,15 @@ void initRand()
 #if defined(ARCH_PARALLEL)
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 #endif
-  srand(17 * rank + 137);
+  srand(time(NULL) * rank + 1073741827);
 }
 
 
-void readVerbosity(XMLHandler& xmlin, QudaVerbosity_s& verbosity)
-{
- string tagvalue;
- xmlread(xmlin,"Verbosity",tagvalue,"QudaLaph");
- if (tagvalue=="none"){
-    verbosity=QUDA_SILENT;
-    printLaph("Verbosity set to none: SILENT\n");}
- else if (tagvalue=="low"){
-    verbosity=QUDA_SUMMARIZE;
-    printLaph("Verbosity set to medium: SUMMARIZE\n");}
- else if ((tagvalue=="medium")||(tagvalue=="med")){
-    verbosity=QUDA_VERBOSE;
-    printLaph("Verbosity set to medium: VERBOSE\n");}
- else if (tagvalue=="high"){
-    verbosity=QUDA_DEBUG_VERBOSE;
-    printLaph("Verbosity set to high: DEBUG_VERBOSE\n");}
-}
+ //  Global data (persistent across tasks)
 
-
-std::map<std::string, NamedObjBase*> NamedObjMap::the_map;
-
+std::vector<LattField> HostGlobal::theGaugeConfig;
+std::vector<LattField> HostGlobal::theSmearedGaugeConfig;
+std::vector<LattField> HostGlobal::theLaphEigvecs;
 
 
 // ****************************************************************
@@ -239,15 +222,29 @@ int main(int argc, char** argv)
 
 #ifdef ARCH_PARALLEL
  MPI_Init(&argc,&argv);
+ int rank;
+ MPI_Comm_rank(MPI_COMM_WORLD, &rank);
  if ((int(npartitions.size())!=LayoutInfo::Ndim)||(inputxmlfile.empty())){
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     if (rank==0){
        std::cout <<endl<<endl<< "Invalid command line options: should be "
                  << "-i <inputxmlfile> -npartitions <nx> <ny> <nz> <nt>"<<endl<<endl;}
     MPI_Barrier(MPI_COMM_WORLD);
     MPI_Abort(MPI_COMM_WORLD,1);}
- initCommsGridQuda(LayoutInfo::Ndim,npartitions.data(),nullptr, nullptr);
+
+      // We want the MPI ranks on each node to correspond to sublattices separated 
+      // in space x,y,z, not in time.  
+ char comm_dist=LayoutInfo::getMPIRankDistributionOnNodes();
+ QudaCommsMap commfunc=nullptr;
+ void *commfuncdata=nullptr;
+ if (comm_dist=='B'){
+    commfunc=LayoutInfo::lex_rank_from_commcoord_x_fastest;
+    commfuncdata=npartitions.data();}
+ else if (comm_dist=='C'){
+    commfunc=LayoutInfo::lex_rank_from_commcoord_t_fastest;
+    commfuncdata=npartitions.data();}
+ MPI_Barrier(MPI_COMM_WORLD);
+
+ initCommsGridQuda(LayoutInfo::Ndim,npartitions.data(),commfunc,commfuncdata);
  comm_barrier();
 #else
  if (inputxmlfile.empty()){
@@ -260,7 +257,7 @@ int main(int argc, char** argv)
  initRand();  
  printLaph("\nStarting QUDA_LAPH");
  output_datetime();
-  
+
  StopWatch rolex;
  rolex.start();
  printLaph(make_strf("  Name of input XML file: %s\n\n",inputxmlfile));
@@ -279,10 +276,22 @@ int main(int argc, char** argv)
  else{
     printLaph(make_strf("QUDA_RESOURCE_PATH is set to %s\n",qrpath));}
 
+#ifdef ARCH_PARALLEL
+ if (comm_dist=='B'){
+    printLaph("\nMPI rank distribution is block (consecutive ranks on same node)");
+    printLaph("Sublattices laid out with x comm coordinate varying fastest\n");}
+ else if (comm_dist=='C'){
+    printLaph("\nMPI rank distribution is cyclic (consecutive ranks on consecutive nodes)");
+    printLaph("Sublattices laid out with time comm coordinate varying fastest\n");}
+ else{
+    printLaph("\nMPI rank distribution is not block nor cyclic");
+    printLaph("Sublattices laid out with QUDA default\n");}
+#endif
+
  bool echo=false;
  bool layoutinfo=false;
  bool qudainfo=false;
- QudaVerbosity_s verbosity=QUDA_SILENT;
+ Verbosity verbosity(0);
  XMLHandler xml_layoutinfo;
  XMLHandler xml_qudainfo;
  int ntasks = 0;
@@ -298,7 +307,7 @@ int main(int argc, char** argv)
           qudainfo=true;
           xml_qudainfo.set(xml_in);}
        else if (xml_in.get_node_name()=="Verbosity"){
-          readVerbosity(xml_in,verbosity);}
+          verbosity=Verbosity(xml_in);}
        else throw(std::runtime_error("Invalid XML input"));
        xml_in.seek_next_sibling();}}
  catch(const std::exception& err){
@@ -314,10 +323,12 @@ int main(int argc, char** argv)
  if (qudainfo){
     QudaInfo::init(xml_qudainfo,echo);}
      // set the verbosity level for Quda output
- setVerbosity(verbosity); 
+ setVerbosity(verbosity.getQudaValue()); 
+     // output communications map if high verbosity
+ if (verbosity.isHigh()){
+    LayoutInfo::print_comm_map();}
 
    // Quda initializations
- //initComms(argc, argv, gridsize_from_cmdline);
  initQuda(QudaInfo::getDeviceOrdinal());
 
  printLaph(make_strf("\n\n  Number of tasks is %d",ntasks));
@@ -336,14 +347,24 @@ int main(int argc, char** argv)
     StopWatch swatch;
     swatch.start();
     try{
-       printLaph(make_strf("\n\nStarting Task %d\n",task));
+       {const int lsize=62;
+       string liner0(lsize+2,'#');
+       string liner1(lsize,' ');
+       printLaph(make_strf("\n\n  %s",liner0.c_str()));
+       printLaph(make_strf("  %c%s%c",'#',liner1.c_str(),'#'));
+       string liner2b("Starting Task "); liner2b+=make_string(task);
+       string liner2a((lsize-liner2b.size())/2,' ');
+       string liner2c(lsize-liner2a.size()-liner2b.size(),' ');
+       printLaph(make_str("  #",liner2a,liner2b,liner2c,"#"));
+       printLaph(make_strf("  %c%s%c",'#',liner1.c_str(),'#'));
+       printLaph(make_strf("  %s\n\n",liner0.c_str()));}
        if (xml_in.fail()) throw(std::runtime_error("XML input error"));
        while (xml_in.get_node_name()!="Task"){
           xml_in.seek_next_sibling();}
        XMLHandler xml_task(xml_in);
            // the main task
        T.do_task(xml_task,echo);
-       setVerbosity(verbosity);   // set verbosity back to default after task may have changed it
+       setVerbosity(verbosity.getQudaValue());   // set verbosity back to default after task may have changed it
        }
     catch(const std::exception& err){
        errorLaph(make_strf("Error on Task %d: %s\n",task,err.what()));}

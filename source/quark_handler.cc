@@ -1,8 +1,8 @@
 #include "quark_handler.h"
 #include "multi_compare.h"
-#include "array.h"
 #include "stop_watch.h"
 #include "field_ops.h"
+#include "laph_noise.h"
 
 #if defined(USE_GSL_CBLAS)
 #include "gsl_cblas.h"
@@ -206,7 +206,7 @@ void QuarkHandler::set_info(const GaugeConfigurationInfo& gaugeinfo,
     errorLaph(make_strf("allocation problem in QuarkHandler: %s",xp.what()));}
 
  connectGaugeConfigurationHandler();
- connectGluonSmearingHandler(smeared_gauge_filename);
+ //connectGluonSmearingHandler(smeared_gauge_filename);
  connectQuarkSmearingHandler(smeared_quark_filestub);
  connectDilutionHandler();
 }
@@ -256,60 +256,59 @@ void QuarkHandler::setSinkComputations(const XMLHandler& xmlin)
     errorLaph("Cannot setSinkComputations in QuarkHandler unless info is set");}
  XMLHandler xmlrdr(xmlin);
  if (!sinkComps.computations.empty()) sinkComps.computations.clear();
+ if (xml_tag_count(xmlrdr,"SinkComputations")!=1){
+    errorLaph("Cannot setSinkComputations in QuarkHandler since no <SinkComputations> tag");}
 
- if (xml_tag_count(xmlrdr,"SinkComputations")==1){
+ XMLHandler xmlrd(xmlrdr,"SinkComputations");
 
-    XMLHandler xmlrd(xmlrdr,"SinkComputations");
+ uint nSinkLaphBatch,nSinkQudaBatch,nEigQudaBatch;
+ xmlread(xmlrd,"NumSinksBeforeProject",nSinkLaphBatch,"LAPH_QUARK_LINE_ENDS");
+ xmlread(xmlrd,"NumSinksInProjectBatch",nSinkQudaBatch,"LAPH_QUARK_LINE_ENDS");
+ xmlread(xmlrd,"NumEigsInProjectBatch",nEigQudaBatch,"LAPH_QUARK_LINE_ENDS");
 
-    uint nSinkLaphBatch,nSinkQudaBatch,nEigQudaBatch;
-    xmlread(xmlrd,"NumSinksBeforeProject",nSinkLaphBatch,"LAPH_QUARK_LINE_ENDS");
-    xmlread(xmlrd,"NumSinksInProjectBatch",nSinkQudaBatch,"LAPH_QUARK_LINE_ENDS");
-    xmlread(xmlrd,"NumEigsInProjectBatch",nEigQudaBatch,"LAPH_QUARK_LINE_ENDS");
+ int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
+ int ndil=dilHandler->getNumberOfSpinEigvecProjectors();
+ if ((int(nSinkLaphBatch) > ndil) || (nSinkLaphBatch == 0)){
+    errorLaph(make_strf("Invalid value %d for <NumSinksBeforeProject>: must be between 1 and ndil=%d",
+              nSinkLaphBatch,ndil));}
+ if ((int(nEigQudaBatch) > nEigs) || (nEigQudaBatch == 0)){
+    errorLaph(make_strf("Invalid value %d for <NumEigsInProjectBatch>: must be between 1 and nEigs=%d",
+              nEigQudaBatch,nEigs));}
+ if ((nSinkQudaBatch > nSinkLaphBatch) || (nSinkQudaBatch == 0)){
+    errorLaph(make_strf("Invalid value %d for <NumSinksInProjectBatch>: must be between 1 and %d",
+              nSinkQudaBatch,nSinkLaphBatch));}
+ sinkComps.nSinkLaphBatch=nSinkLaphBatch;
+ sinkComps.nSinkQudaBatch=nSinkQudaBatch;
+ sinkComps.nEigQudaBatch=nEigQudaBatch;
 
-    int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
-    int ndil=dilHandler->getNumberOfSpinEigvecProjectors();
-    if ((int(nSinkLaphBatch) > ndil) || (nSinkLaphBatch == 0)){
-       errorLaph(make_strf("Invalid value %d for <NumSinksBeforeProject>: must be between 1 and ndil=%d",
-                 nSinkLaphBatch,ndil));}
-    if ((int(nEigQudaBatch) > nEigs) || (nEigQudaBatch == 0)){
-       errorLaph(make_strf("Invalid value %d for <NumEigsInProjectBatch>: must be between 1 and nEigs=%d",
-                 nEigQudaBatch,nEigs));}
-    if ((nSinkQudaBatch > nSinkLaphBatch) || (nSinkQudaBatch == 0)){
-       errorLaph(make_strf("Invalid value %d for <NumSinksInProjectBatch>: must be between 1 and %d",
-                 nSinkQudaBatch,nSinkLaphBatch));}
-    sinkComps.nSinkLaphBatch=nSinkLaphBatch;
-    sinkComps.nSinkQudaBatch=nSinkQudaBatch;
-    sinkComps.nEigQudaBatch=nEigQudaBatch;
-
-    if (xml_tag_count(xmlrd,"NoiseList_TimeProjIndexList")==1){
-       XMLHandler xmlr(xmlrd,"NoiseList_TimeProjIndexList");
-       vector<int> time_proj_inds;
-       if (xml_tag_count(xmlr,"TimeProjIndexList")==1){
-          XMLHandler xmltpi(xmlr,"TimeProjIndexList");
-          if (xml_tag_count(xmltpi,"All")==1){
-             int tpnum=dilHandler->getNumberOfTimeProjectors();
-             time_proj_inds.resize(tpnum);
-             for (int t=0;t<tpnum;t++) time_proj_inds[t]=t;}
-          else{
-             xmlread(xmltpi,"Values",time_proj_inds,"LAPH_QUARK_LINE_ENDS");}}
-       XMLHandler xmln(xmlr,"LaphNoiseList");
-       list<XMLHandler> xmlns(xmln.find("LaphNoiseInfo"));
-       for (list<XMLHandler>::iterator it=xmlns.begin();it!=xmlns.end();++it){
-          LaphNoiseInfo aNoise(*it);
-          for (int t=0;t<int(time_proj_inds.size());t++){
-             sinkComps.computations.push_back(
-                  SinkComputation(aNoise,time_proj_inds[t]));}}}
-
-    if (xml_tag_count(xmlrd,"ComputationList")==1){
-       XMLHandler xmlr(xmlrd,"ComputationList");
-       list<XMLHandler> xmlcs(xmlr.find("Computation"));
-       for (list<XMLHandler>::iterator it=xmlcs.begin();it!=xmlcs.end();++it){
-          LaphNoiseInfo aNoise(*it);
-          int time_proj_index;
-          xmlread(*it,"TimeProjIndex",time_proj_index,"LAPH_QUARK_LINE_ENDS");
+ if (xml_tag_count(xmlrd,"NoiseList_TimeProjIndexList")==1){
+    XMLHandler xmlr(xmlrd,"NoiseList_TimeProjIndexList");
+    vector<int> time_proj_inds;
+    if (xml_tag_count(xmlr,"TimeProjIndexList")==1){
+       XMLHandler xmltpi(xmlr,"TimeProjIndexList");
+       if (xml_tag_count(xmltpi,"All")==1){
+          int tpnum=dilHandler->getNumberOfTimeProjectors();
+          time_proj_inds.resize(tpnum);
+          for (int t=0;t<tpnum;t++) time_proj_inds[t]=t;}
+       else{
+          xmlread(xmltpi,"Values",time_proj_inds,"LAPH_QUARK_LINE_ENDS");}}
+    XMLHandler xmln(xmlr,"LaphNoiseList");
+    list<XMLHandler> xmlns(xmln.find("LaphNoiseInfo"));
+    for (list<XMLHandler>::iterator it=xmlns.begin();it!=xmlns.end();++it){
+       LaphNoiseInfo aNoise(*it);
+       for (int t=0;t<int(time_proj_inds.size());t++){
           sinkComps.computations.push_back(
-                SinkComputation(aNoise,time_proj_index));}}
-    }
+               SinkComputation(aNoise,time_proj_inds[t]));}}}
+
+ if (xml_tag_count(xmlrd,"ComputationList")==1){
+    XMLHandler xmlr(xmlrd,"ComputationList");
+    list<XMLHandler> xmlcs(xmlr.find("Computation"));
+    for (list<XMLHandler>::iterator it=xmlcs.begin();it!=xmlcs.end();++it){
+       LaphNoiseInfo aNoise(*it);
+       int time_proj_index;
+       xmlread(*it,"TimeProjIndex",time_proj_index,"LAPH_QUARK_LINE_ENDS");
+       sinkComps.computations.push_back(
+             SinkComputation(aNoise,time_proj_index));}}
 
  printLaph("\nLAPH_QUARK_LINE_ENDS sink computations:\n");
  printLaph(make_strf("  NumSinksBeforeProject = %d",sinkComps.nSinkLaphBatch));
@@ -361,7 +360,7 @@ void QuarkHandler::clear()
  preconditioner=0;
 
  disconnectGaugeConfigurationHandler();
- disconnectGluonSmearingHandler();
+ //disconnectGluonSmearingHandler();
  disconnectQuarkSmearingHandler();
  disconnectDilutionHandler();
  clearData();
@@ -378,89 +377,56 @@ void QuarkHandler::clear()
 
 void QuarkHandler::connectGaugeConfigurationHandler()
 {
- if ((gaugeCounter==0)&&(gaugeHandler.get()==0)){
+ if (gaugeHandler.get()==0){
     try{
-       gaugeHandler.reset(new GaugeConfigurationHandler(*uPtr));
-       gaugeCounter=1;}
+       gaugeHandler.reset(new GaugeConfigurationHandler(*uPtr));}
     catch(const std::exception& xp){
        errorLaph("allocation problem in QuarkHandler::connectGaugeConfigurationHandler");}}
- else{
-    try{
-       if (gaugeHandler.get()==0) throw(std::invalid_argument("error"));
-       uPtr->checkEqual(gaugeHandler->getGaugeConfigurationInfo());
-       gaugeCounter++;}
-    catch(const std::exception& xp){
-       errorLaph("inconsistent QuarkHandler::connectGaugeConfigurationHandler");}}
 }
 
 void QuarkHandler::disconnectGaugeConfigurationHandler()
 {
- gaugeCounter--;
- if (gaugeCounter==0){
-    try{ gaugeHandler.reset();}
-    catch(const std::exception& xp){
-       errorLaph("delete problem in QuarkHandler::disconnectGaugeConfigurationHandler");}}
+ try{ gaugeHandler.reset();}
+ catch(const std::exception& xp){
+    errorLaph("delete problem in QuarkHandler::disconnectGaugeConfigurationHandler");}
 }
 
 
 
-
+/*
 void QuarkHandler::connectGluonSmearingHandler(const string& smeared_gauge_filename)
 {
- if ((gSmearCounter==0)&&(gSmearHandler.get()==0)){
+ if (gSmearHandler.get()==0){
     try{
-       gSmearHandler.reset(new GluonSmearingHandler(*gSmearPtr,*uPtr,smeared_gauge_filename));
-       gSmearCounter=1;}
+       gSmearHandler.reset(new GluonSmearingHandler(*gSmearPtr,*uPtr,smeared_gauge_filename));}
     catch(const std::exception& xp){
        clear();
        errorLaph("allocation problem in QuarkHandler::connectGluonSmearingHandler");}}
- else{
-    try{
-       if (gSmearHandler.get()==0) throw(std::invalid_argument("error"));
-       uPtr->checkEqual(gSmearHandler->getGaugeConfigurationInfo());
-       gSmearPtr->checkEqual(gSmearHandler->getGluonSmearingInfo());
-       gSmearCounter++;}
-    catch(const std::exception& xp){
-       errorLaph("inconsistent QuarkHandler::connectGluonSmearingHandler");}}
 }
 
 void QuarkHandler::disconnectGluonSmearingHandler()
 {
- gSmearCounter--;
- if (gSmearCounter==0){
-    try{ gSmearHandler.reset();}
-    catch(const std::exception& xp){
-       errorLaph("delete problem in QuarkHandler::disconnectGluonSmearingHandler");}}
+ try{ gSmearHandler.reset();}
+ catch(const std::exception& xp){
+    errorLaph("delete problem in QuarkHandler::disconnectGluonSmearingHandler");}
 }
-
+*/
 
 void QuarkHandler::connectQuarkSmearingHandler(const string& smeared_quark_filestub)
 {
- if ((qSmearCounter==0)&&(qSmearHandler.get()==0)){
+ if (qSmearHandler.get()==0){
     try{
        qSmearHandler.reset(new QuarkSmearingHandler(*gSmearPtr,*uPtr,*qSmearPtr,
-                                                    smeared_quark_filestub));
-       qSmearCounter=1;}
+                                                    smeared_quark_filestub));}
     catch(const std::exception& xp){
        errorLaph("allocation problem in QuarkHandler::connectQuarkSmearingHandler");}}
- else{
-    try{
-       if (qSmearHandler.get()==0) throw(std::invalid_argument("error"));
-       uPtr->checkEqual(qSmearHandler->getGaugeConfigurationInfo());
-       qSmearHandler->updateSmearing(*qSmearPtr);  // increase eigvecs if needed
-       qSmearCounter++;}
-    catch(const std::exception& xp){
-       errorLaph("inconsistent QuarkHandler::connectQuarkSmearingHandler");}}
- qSmearHandler->checkAllLevelFilesExist();
 }
 
 void QuarkHandler::disconnectQuarkSmearingHandler()
 {
- qSmearCounter--;
- if (qSmearCounter==0){
-    try{ qSmearHandler.reset();}
-    catch(const std::exception& xp){
-       errorLaph("delete problem in QuarkHandler::disconnectQuarkSmearingHandler");}}
+ try{ qSmearHandler.reset();}
+ catch(const std::exception& xp){
+    errorLaph("delete problem in QuarkHandler::disconnectQuarkSmearingHandler");}
 }
 
 
@@ -747,7 +713,7 @@ bool QuarkHandler::setUpPreconditioning(QudaInvertParam& invParam)
 
  // ************************************************************************************
 
-void QuarkHandler::computeSinks(bool verbose, bool extra_soln_check)
+void QuarkHandler::computeSinks(bool extra_soln_check, bool print_coeffs)
 {   
  check_compute_ready("computeSink");
  StopWatch totaltime; totaltime.start();
@@ -768,15 +734,20 @@ void QuarkHandler::computeSinks(bool verbose, bool extra_soln_check)
      // load the gauge configuration onto host and device
  StopWatch rolex; rolex.start();
  gaugeHandler->setData();
+ XMLHandler gauge_xmlinfo;
+ gaugeHandler->getXMLInfo(gauge_xmlinfo);
+ printLaph("XML info for the gauge configuration:");
+ printLaph(make_strf("%s\n",gauge_xmlinfo.output()));
+
      // quda hack to handle antifermionic temporal boundary conditions
- bool fermbchack=qactionPtr->isFermionTimeBCAntiPeriodic();
- if (fermbchack){
-    gaugeHandler->eraseDataOnDevice();  // erase on device to apply b.c. below to host, then copy to device
-    gaugeHandler->applyFermionTemporalAntiPeriodic();}
+// bool fermbchack=qactionPtr->isFermionTimeBCAntiPeriodic();
+// if (fermbchack){
+//    gaugeHandler->eraseDataOnDevice();  // erase on device to apply b.c. below to host, then copy to device
+//    gaugeHandler->applyFermionTemporalAntiPeriodic();}
  gaugeHandler->copyDataToDevice();
      // undo the hack on the host
- if (fermbchack){
-    gaugeHandler->applyFermionTemporalAntiPeriodic();}
+// if (fermbchack){
+//    gaugeHandler->applyFermionTemporalAntiPeriodic();}
  rolex.stop();
  double grtime=rolex.getTimeInSeconds();
  printLaph("...gauge configuration loaded on host and device");
@@ -795,6 +766,19 @@ void QuarkHandler::computeSinks(bool verbose, bool extra_soln_check)
        printLaph(make_str(" Time to set up clover term was ",clovertime," seconds"));
        QudaInfo::clover_on_device=true;}}
 
+     // load the LapH eigenvectors onto host, store pointers
+ rolex.reset(); rolex.start();
+ int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
+ if (!qSmearHandler->queryLaphEigenvectors()){
+    errorLaph("Could not load the LapH eigenvectors--computation cannot continue");}
+ const vector<LattField>& laphevs(qSmearHandler->getLaphEigenvectors());
+ vector<void*> evList(nEigs);
+ for (int n=0;n<nEigs;n++){
+    evList[n] = (void*)(laphevs[n].getDataConstPtr());}
+ rolex.stop();
+ double evreadtime=rolex.getTimeInSeconds();
+ printLaph(make_str("All Laph eigvecs read in ",evreadtime," seconds\n"));
+ 
     // set up any preconditioning in the inverter
  double precondtime=0.0;
  rolex.reset(); rolex.start();
@@ -804,18 +788,6 @@ void QuarkHandler::computeSinks(bool verbose, bool extra_soln_check)
  if (precond){
     printLaph(make_str(" Time to set up inverter preconditioner was ",precondtime," seconds"));}
 
-     // load the LapH eigenvectors onto host, store pointers
- rolex.reset(); rolex.start();
- int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
- vector<void*> evList(nEigs);
- for (int n=0;n<nEigs;n++){
-    evList[n] = (void*)(qSmearHandler->getLaphEigenvector(n).getDataConstPtr());
-    printLaph(make_strf("read LapH eigvec level %d",n));}
- qSmearHandler->closeLaphLevelFiles();
- rolex.stop();
- double evreadtime=rolex.getTimeInSeconds();
- printLaph(make_str("All Laph eigvecs read in ",evreadtime," seconds\n"));
- 
  double srctime=0.0;
  double invtime=0.0;
  double evprojtime=0.0;
@@ -831,7 +803,7 @@ void QuarkHandler::computeSinks(bool verbose, bool extra_soln_check)
     printLaph(" *");
     printLaph(" *************************************************************");
 
-    computeSinks(it->Noise,it->TimeProjIndex,evList,verbose,extra_soln_check,
+    computeSinks(it->Noise,it->TimeProjIndex,evList,print_coeffs,extra_soln_check,
                  srctime,invtime,evprojtime,writetime);
     }
 
@@ -856,7 +828,7 @@ void QuarkHandler::computeSinks(bool verbose, bool extra_soln_check)
     //  but for one noise, one time projector index
 
 void QuarkHandler::computeSinks(const LaphNoiseInfo& noise, int time_proj_index, 
-                                const std::vector<void*>& evList, bool verbose, bool extra_soln_check,
+                                const std::vector<void*>& evList, bool print_coeffs, bool extra_soln_check,
                                 double& src_time, double& inv_time, double& evproj_time, double& write_time)
 {
  if (!dilHandler->isValidTimeProjectorIndex(time_proj_index)){
@@ -964,7 +936,7 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo& noise, int time_proj_index,
        LattField sol_check(FieldSiteType::ColorSpinVector);
        void *sol_checkptr=sol_check.getDataPtr();
        MatQuda(sol_checkptr,spinor_snk,&quda_inv_param);
-       compare_latt_fields(sol_check,ferm_src);}
+       LaphEnv::compare_latt_fields(sol_check,ferm_src);}
 
     if ((quda_inv_param.iter>0)&&(quda_inv_param.iter<int(invertPtr->getMaxIterations()))){
        sinkBatchInds[iSinkBatch] = dil;
@@ -1003,7 +975,7 @@ void QuarkHandler::computeSinks(const LaphNoiseInfo& noise, int time_proj_index,
                 for (int iEv=0; iEv<nEigs; ++iEv) {
                    quark_sink[iEv] = soln_rescale*qudaRes(iSpin, t, iEv, iSink);}
                    DHputPtr->putData(RecordKey(iSpin+1,t,sinkBatchInds[iSink]),quark_sink);
-                   if (verbose){
+                   if (print_coeffs){
 		      printLaph(make_strf("dil = %d, spin = %d, time = %d",sinkBatchInds[iSink],iSpin+1,t));
                       for (int n=0;n<nEigs;n++){
 		         printLaph(make_strf("coef for eigenlevel %d = (%14.8f, %14.8f)",
@@ -1120,14 +1092,9 @@ void QuarkHandler::clearData()
 
   //  static pointers (set to null in default constructor)
 
-unique_ptr<GluonSmearingHandler> QuarkHandler::gSmearHandler;
+//unique_ptr<GluonSmearingHandler> QuarkHandler::gSmearHandler;
 unique_ptr<QuarkSmearingHandler> QuarkHandler::qSmearHandler;
 unique_ptr<GaugeConfigurationHandler> QuarkHandler::gaugeHandler;
-
-int QuarkHandler::gSmearCounter=0;
-int QuarkHandler::qSmearCounter=0;
-int QuarkHandler::gaugeCounter=0;
-//bool QuarkHandler::keepInMemory=false;
 
 // ***************************************************************
 }

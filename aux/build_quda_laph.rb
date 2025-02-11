@@ -40,6 +40,11 @@ class Launcher
      abort(" Unsupported machine "+`hostname`)
   end
 
+  puts
+  puts " QUDA_LAPH software installation on machine '"+@machine+"'"
+  puts
+  cmds=[]
+  
   if (@machine=="bridges")
 
      puts
@@ -54,13 +59,19 @@ class Launcher
 
   if (@machine=="perlmutter")
 
-     puts " Will use cray compiler; are modules below set? "
-     puts "   module load cpu"
-     puts "   module load PrgEnv-cray"
-     puts "   module unload darshan"
-     puts "   module load cray-hdf5-parallel"
-     puts "  Are these module loaded? (y/n)"
-
+     puts " Do the modules need to be set? (y/n) "
+     reply=gets.chomp.strip
+     if (reply=="y")
+        cmds=["module purge",
+              "module load PrgEnv-gnu/8.5.0",
+              "module load gpu",
+              "module load cmake/3.24.3",
+              "module load cpe-cuda/23.12",
+              "module load cudatoolkit/12.2",
+              "module load craype-accel-nvidia80",
+              "module load craype-x86-milan",
+              "module load eigen/3.4.0"]
+     end
   end
 
   if (@machine=="summit")
@@ -76,9 +87,47 @@ class Launcher
 
   end
 
-  puts
-  puts " QUDA_LAPH software installation on machine '"+@machine+"'"
-  puts
+  if (@machine=="frontier")
+
+     puts " Do the modules need to be set? (y/n) "
+     reply=gets.chomp.strip
+     if (reply=="y")
+        cmds=["module purge",
+              "module load Core",
+              "module load cmake",
+              "module load PrgEnv-amd/8.6.0",
+              "module load craype-x86-trento",
+              "module load amd/6.3.1", 
+              "module load rocm/6.3.1",
+              "module load cray-mpich/8.1.31",
+              "module load craype/2.7.31.11",
+              "module load cray-libsci/23.12.5",
+              "module load craype-accel-amd-gfx90a",
+              "module load openblas/0.3.26-omp"]
+     end
+  end
+
+      #  load modules if requested:  these are written to a file
+      #  and this program exits.  The user must then source
+      #  the shell script produced which loads the appropriate modules.
+      #  These must be set in the parent process to the process
+      #  running this script.
+
+  if (!cmds.empty?)
+     env_script=String.new
+     env_script+="#!/usr/bin/bash\n"
+     env_script+="\n# This file created by build_quda.rb: do not edit\n\n"
+     for cmd in cmds
+        env_script+=cmd+"\n"
+        end
+     env_script+="module list\n"
+     envfile=File.new("setup_env.sh","w")
+     envfile.puts env_script
+     envfile.close
+     puts "\n\nNecessary module commands written to file setup_env.sh"
+     puts "Run \"source setup_env.sh\" to set the environment variables\n\n"
+     exit(0)
+  end
   
       # default directories
 
@@ -90,25 +139,25 @@ class Launcher
      @srcdir=@qudalaphdir+"/source"
      @builddir=@qudalaphdir+"/build/"+nowstr
      @installdir=@qudalaphdir+"/install/"+nowstr
-     @qudainstalldir="/home/colin/quda/install/DATE-2024-10-30"
+     @qudainstalldir="/home/colin/quda/install/DATE-2025-1-9"
   elsif (@machine=="perlmutter")
      @qudalaphdir="/global/cfs/cdirs/m2986/stoch_nn/colin/quda_laph"
      @srcdir=@qudalaphdir+"/source"
      @builddir=@qudalaphdir+"/build/"+nowstr
      @installdir=@qudalaphdir+"/install/"+nowstr
-     @qudainstalldir="/global/cfs/cdirs/m2986/stoch_nn/colin/quda/install/DATE-2024-10-18"
+     @qudainstalldir="/global/cfs/cdirs/m2986/stoch_nn/colin/quda/install/perlmutter/DATE-2024-11-7"
   elsif (@machine=="summit")
      @qudalaphdir="/autofs/nccs-svm1_proj/nph162/colin/quda_laph"
      @srcdir=@qudalaphdir+"/source"
      @builddir=@qudalaphdir+"/build/"+nowstr
      @installdir=@qudalaphdir+"/install/"+nowstr
-     @qudainstalldir=""
+     @qudainstalldir="/autofs/nccs-svm1_proj/nph162/colin/quda/install/DATE-2024-11-5"
   elsif (@machine=="frontier")
      @qudalaphdir="/autofs/nccs-svm1_proj/nph165/colin/quda_laph"
      @srcdir=@qudalaphdir+"/source"
      @builddir=@qudalaphdir+"/build/"+nowstr
      @installdir=@qudalaphdir+"/install/"+nowstr
-     @qudainstalldir="/autofs/nccs-svm1_proj/nph162/colin/quda/install/DATE-2024-10-18"
+     @qudainstalldir="/autofs/nccs-svm1_proj/nph165/colin/quda/install/DATE-2025-1-24"
   elsif (@machine=="bridges")
      @qudalaphdir="/jet/home/mornings/quda_laph"
      @srcdir=@qudalaphdir+"/source"
@@ -268,9 +317,9 @@ class Launcher
      @cflags="-O3 -fopenmp"
      @cxxflags="-O3 -fopenmp"
      @linkerflags=""
-     @hostcblas="gsl"
-     @cblaslib=""
-     @cblasinc=""
+     @hostcblas="openblas"
+     @cblaslib="/opt/cray/pe/libsci/23.12.5/GNU/12.3/x86_64/lib/libsci_gnu_mpi.so"
+     @cblasinc="/opt/cray/pe/libsci/23.12.5/GNU/12.3/x86_64/include"
           
   elsif (@machine=="bridges")
   
@@ -311,9 +360,12 @@ class Launcher
      @cflags="-O3 -fopenmp"
      @cxxflags="-O3 -fopenmp"
      @linkerflags=""
-     @hostcblas="gsl"
-     @cblaslib=""
-     @cblasinc=""
+     #@hostcblas="gsl"
+     #@cblaslib="/sw/summit/spack-envs/summit-plus/opt/gcc-8.5.0/gsl-2.7.1-643fyt4m7sv5d4qjsstofh2l5rlqly2j/lib/libgslcblas.so"
+     #@cblasinc="/sw/summit/spack-envs/summit-plus/opt/gcc-8.5.0/gsl-2.7.1-643fyt4m7sv5d4qjsstofh2l5rlqly2j/include"
+     @hostcblas="openblas"
+     @cblaslib="/sw/summit/spack-envs/summit-plus/opt/gcc-12.1.0/openblas-0.3.24-hwvdhvhbfg4odxpj7mhv6ij3jtitcmyt/lib/libopenblas.so"
+     @cblasinc="/sw/summit/spack-envs/summit-plus/opt/gcc-12.1.0/openblas-0.3.24-hwvdhvhbfg4odxpj7mhv6ij3jtitcmyt/include"
 
   elsif (@machine=="frontier")
   
@@ -324,7 +376,7 @@ class Launcher
         abort("Not currently supported")
      end
      @gpu="hip"
-     @gpudir="/opt/rocm-5.7.1"
+     @gpudir="/opt/rocm-6.3.1"
      #@gpubindir=@gpudir+"/bin"
      #@gpuincdir=@gpudir+"/include"
      #@gpuarch="gfx90a"
@@ -333,9 +385,8 @@ class Launcher
      @cxxflags=" -D__HIP_PLATFORM_AMD__ -O2 -fopenmp"
      @linkerflags=""
      @hostcblas="openblas"
-     @cblaslib="/sw/frontier/spack-envs/core-24.07/opt/gcc-7.5.0/openblas-0.3.26-3m42udfwiyrshafp5qag4e2fixa4pnbq/lib/libopenblas.so"
-     @cblasinc="/sw/frontier/spack-envs/core-24.07/opt/gcc-7.5.0/openblas-0.3.26-3m42udfwiyrshafp5qag4e2fixa4pnbq/include"
-
+     @cblaslib="/sw/frontier/spack-envs/core-24.07/opt/gcc-7.5.0/openblas-0.3.26-2uukuglbn3pfur3tzlfe5dxmj6fjauoi/lib/libopenblas.so"
+     @cblasinc="/sw/frontier/spack-envs/core-24.07/opt/gcc-7.5.0/openblas-0.3.26-2uukuglbn3pfur3tzlfe5dxmj6fjauoi/include"
   end
  end
 
@@ -359,22 +410,6 @@ class Launcher
       hostcblas="NONE"
    end
 
-#  
-#cmd="cmake --fresh  -S .. -B . -DARCH=PARALLEL"+
-#   " -DCMAKE_CXX_COMPILER=\"CC\""+
-#   " -DCMAKE_C_COMPILER=\"cc\""+
-#   " -DGPUTOOLKIT_DIR=/opt/rocm-5.3.0"+
-#   " -DQUDA_DIR=/autofs/nccs-svm1_proj/nph162/colin/quda/install/DATE-2024-10-18_mpi"+
-#   " -DBUILD_TESTS=ON"+
-#   " -DHOSTCBLAS=OPENBLAS"+
-#   " -DCBLAS_INC=/sw/frontier/spack-envs/core-24.07/opt/gcc-7.5.0/openblas-0.3.26-3m42udfwiyrshafp5qag4e2fixa4pnbq/include"+
-#   " -DCBLAS_LIB=/sw/frontier/spack-envs/core-24.07/opt/gcc-7.5.0/openblas-0.3.26-3m42udfwiyrshafp5qag4e2fixa4pnbq/lib/libopenblas.so"+
-#   " -DCMAKE_CXX_STANDARD=17"+
-#   " -DCMAKE_CXX_FLAGS=\" -D__HIP_PLATFORM_AMD__ -O2 -Wall -fopenmp\""+
-#   " -DCMAKE_C_FLAGS=\" -D__HIP_PLATFORM_AMD__ -O2 -Wall -fopenmp\""
-
-
-
   cmd="cmake --fresh -S "+@srcdir+" -B "+@builddir+" "+@arch+
       " -DCMAKE_CXX_COMPILER="+@cxx+
       " -DCMAKE_C_COMPILER="+@cc+
@@ -389,46 +424,6 @@ class Launcher
       " -DHOSTCBLAS=\""+hostcblas+"\""+
       " -DCBLAS_INC=\""+@cblasinc+"\""+
       " -DCBLAS_LIB=\""+@cblaslib+"\""
-
-
-
-#      gpuoptions+
-#      " -DQUDA_DIRAC_CLOVER=ON"+
-#      " -DQUDA_DIRAC_DOMAIN_WALL=OFF"+
-#      " -DQUDA_MDW_FUSED_LS_LIST=\"8,12,16,20\""+
-#      " -DQUDA_DIRAC_STAGGERED=OFF"+
-#      " -DQUDA_DIRAC_TWISTED_MASS=OFF"+
-#      " -DQUDA_DIRAC_TWISTED_CLOVER=OFF"+
-#      " -DQUDA_DIRAC_WILSON=ON"+
-#      " -DQUDA_FORCE_GAUGE=OFF"+
-#      " -DQUDA_FORCE_HISQ=OFF"+
-#      " -DQUDA_GAUGE_ALG=OFF"+
-#      " -DQUDA_GAUGE_TOOLS=OFF"+
-#      " -DQUDA_CLOVER_DYNAMIC=ON"+
-#      " -DQUDA_CLOVER_RECONSTRUCT=ON"+
-#      " -DQUDA_QDPJIT=OFF"+
-#      " -DQUDA_INTERFACE_QDPJIT=OFF"+
-#      " -DQUDA_INTERFACE_MILC=OFF"+
-#      " -DQUDA_INTERFACE_CPS=OFF"+
-#      " -DQUDA_INTERFACE_QDP=ON"+
-#      " -DQUDA_INTERFACE_TIFR=OFF"+
-#      " -DQUDA_QMP="+qmp+
-#      " -DQUDA_QIO=OFF"+
-#      " -DQUDA_OPENMP=ON"+
-#      " -DQUDA_MULTIGRID=ON"+
-#      " -DQUDA_LAPLACE=ON"+
-#      " -DQUDA_MPI="+mpi+
-#      " -DQUDA_NVSHMEM=OFF"+
-#      " -DQUDA_MAX_MULTI_BLAS_N=9"+
-#      " -DQUDA_DOWNLOAD_EIGEN=ON"+
-#      " -DQUDA_EIGEN_VERSION=3.4.0"+
-#      " -DQUDA_DOWNLOAD_USQCD=OFF"+
-#      " -DCMAKE_BUILD_TYPE=""RELEASE"""+
-#      " -DBUILD_SHARED_LIBS=ON"+
-#      " -DQUDA_BUILD_SHAREDLIB=ON"+
-#      " -DQUDA_BUILD_ALL_TESTS=ON"+
-#      " -DQUDA_CTEST_DISABLE_BENCHMARKS=OFF"+
-#      " -DQUDA_BACKWARDS=ON"
 
    puts cmd
 

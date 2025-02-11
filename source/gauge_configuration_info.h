@@ -20,7 +20,6 @@ namespace LaphEnv {
 // *         <FileName> .... </FileName>                              *
 // *         <ConfigNumber> .... </ConfigNumber>                      *
 // *         <MarkovChainNumber>...</MarkovChainNumber> (optional)    *
-// *         <NOMId> ...</NOMId> (optional)                           *
 // *         <GluonAnisotropy> ... </GluonAnisotropy> (optional)      *
 // *         <FermionTimeBC> ... </FermionTimeBC> (optional)          *
 // *      </GaugeConfigurationInfo>                                   *
@@ -44,9 +43,6 @@ namespace LaphEnv {
 // *       - integer number of the config in the ensemble             *
 // *    <MarkovChainNumber>                                           *
 // *       - integer number of the Markov chain (0 default)           *
-// *    <NOMId>                                                       *
-// *       - Id string to use in the NamedObjMap                      *
-// *       - if absent, "default_gauge_id" is used                    *
 // *    <GluonAnisotropy>                                             *
 // *       - real number: spatial spacing/ temporal spacing           *
 // *       - default 1.0                                              *
@@ -68,7 +64,6 @@ class GaugeConfigurationInfo
   std::string file_name;
   int config_num;
   int mc_chain_num;
-  std::string nom_id;
   double gluon_anisotropy;
   char fermion_time_bc;
 
@@ -97,8 +92,6 @@ class GaugeConfigurationInfo
 
   int getMarkovChainNumber() const { return mc_chain_num; }
   
-  std::string getNOMId() const { return nom_id; }
-
   int getTimeExtent() const { return LayoutInfo::getLattExtents()[3]; }
   
   bool isFermionTimeBCAntiPeriodic() const {return (fermion_time_bc=='A');}

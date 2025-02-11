@@ -1,9 +1,8 @@
 #ifndef LAYOUT_INFO_H
 #define LAYOUT_INFO_H
 
-#include <vector>
-#include <map>
 #include "xml_handler.h"
+#include <map>
 
 
 namespace LaphEnv {
@@ -18,7 +17,7 @@ namespace LaphEnv {
 // *   execution, but after MPI and Quda communications have been    *
 // *   initialized. A 4 dimensional lattice is assumed (make the 4th *
 // *   dimension have size 1 to use a 3 dimensional lattice). QDP    *
-// *   lexicographic format is used. The lattice is dividing up on   *
+// *   lexicographic format is used. The lattice is divided up on    *
 // *   the MPI ranks in the same way on each rank.  The number of    *
 // *   lattice sites on each MPI rank is the same.  The lattice size *
 // *   in each direction must be divisible by the MPI partition      *
@@ -30,20 +29,51 @@ namespace LaphEnv {
 // *          <XYZTExtents>24 24 24 48</XYTZExtents>                 *
 // *       </LatticeLayoutInfo>                                      *
 // *                                                                 *
+// *   The tag <XYZTExtents> tells quda_laph the size of the lattice *
+// *   in the x,y,z,t directions, in that order.                     *
+// *                                                                 *
 // *   This class can assist with getting and putting the data on    *
 // *   a particular site into the lattice appropriately.             *
 // *                                                                 *
 // *   In order to accommodate red/black checkerboarding for an      *
 // *   efficient solve of the Dirac equation, the number of sites    *
 // *   on each MPI rank must be even. Lattice sites are ordered as   *
-// *   even-odd checkerboard (even/odd sites have x+y+z+t even/odd), *
-// *   with ordering (x,y,z,t) with t varying most slowly for each   *
-// *   parity. "start_parity" is the parity of the local (0,0,0,0)   *
-// *   site on the global lattice.                                   *
+// *   even-odd checkerboard (even/odd sites have global coordinates *
+// *   x+y+z+t even/odd), with ordering (x,y,z,t) with t varying     *
+// *   most slowly for each parity. All even parity sites are        *
+// *   ordered first, then the odd parity sites.  "start_parity" is  *
+// *   the parity of the local (0,0,0,0) site on the global lattice. *
 // *                                                                 *
+// *   NOTE: currently, QUDA does not support local sublattices      *
+// *   that have an odd size in any direction.  This class checks    *
+// *   for this.  It is hoped that this restriction will be          *
+// *   removed in a future version of QUDA, according to Kate.       *
+// *                                                                 *
+// *   The "comm_map" stores information about which MPI rank stores *
+// *   which part of the lattice. All ranks have this information.   *
+// *   Each comm_coords is encoded to a linear index which is used   *
+// *   as the key in the map.                                        *
 // *                                                                 *
 // *******************************************************************
 
+// *******************************************************************
+// *                                                                 *
+// *   If the number of sites on each MPI rank is even, then half    *
+// *   of the sites on each MPI rank have even parity (x+y+z+t even),*
+// *   and the other half have odd parity (x+y+z+t odd).             *
+// *                                                                 *
+// *   Simple "proof":  If the number of sites on each MPI rank is   *
+// *   even, this means at least ONE of the local extents is even.   *
+// *   Let Ne denote the extent of one of the even-extent directions,*
+// *   and let b refer to a coordinate in this direction.  Then Ne/2 *
+// *   of the b coordinate values in this direction are even, and    *
+// *   Ne/2 are odd.  For EACH value set of the other 3 coordinates, *
+// *   there is always half one parity, and half the other. Adding   *
+// *   up for all values of the other 3 coordinates does not change  *
+// *   this, getting (Ne/2)*Nother odd and (Ne/2)*Nother odd, where  *
+// *   Nother is the product of the other 3 local extents.           *
+// *                                                                 *
+// *******************************************************************
 
 
 class LayoutInfo
@@ -137,6 +167,22 @@ class LayoutInfo
 
   static void evenodd_to_lexico(char* dest, const char* src, int sitebytes);
 
+  static void print_comm_map();
+
+#if defined(ARCH_PARALLEL)
+    // This routine uses MPI_Get_processor_name to determine how the MPI ranks
+    // have been distributed among the processor nodes.  A single char is returned:  
+    // 'B' for block (consecutive ranks on the same node, until node is filled), 
+    // 'C' for cyclic (consecutive ranks on consecutive nodes in a round-robin 
+    // fashion), 'O' for other.
+
+  static char getMPIRankDistributionOnNodes();
+
+  static int lex_rank_from_commcoord_t_fastest(const int *comm_coord, void *partitions);
+
+  static int lex_rank_from_commcoord_x_fastest(const int *comm_coord, void *partitions);
+
+#endif
 
  private:
 
@@ -158,6 +204,12 @@ class LayoutInfo
   static int linearSiteIndex_evenodd(const std::vector<int>& loc_coords, 
                                      const std::vector<int>& loc_extents,
                                      int loc_nsites, int start_parity);
+  
+#if defined(ARCH_PARALLEL)
+  static bool check_pattern(const std::vector<std::string>& names,
+                            int nblocks, int blocksize, int ndistinctinblock,
+                            int ndistinctall);
+#endif
 
 };
 

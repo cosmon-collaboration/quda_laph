@@ -1,11 +1,8 @@
 #include "utils.h"
 #include "util_quda.h"
-#include <unistd.h>
-#include "xml_handler.h"
-#include "named_obj_map.h"
 #include "laph_stdio.h"
-#include "quda.h"
 #include "quda_info.h"
+#include <unistd.h>
 
 #ifdef ARCH_PARALLEL
 #include <mpi.h>
@@ -33,39 +30,24 @@ bool doesFileExist(const std::string& file_name, bool global_mode)
  return result;
 }
 
-    //  Tests if file having name "file_name" exists: works
-    //  in global or local mode. If starts with "NOM_", checks to
-    //  see if exists in the NamedObjMap.
+    //  Alternative name for above routine.
  
 bool fileExists(const std::string& file_name, bool global_mode)
 {
- bool result=false;
- if (file_name.find("NOM_")!=0){
-    if ((isPrimaryRank())||(!global_mode)){
-       result = (access(file_name.c_str(),F_OK) == 0) ? true : false;}
-#ifdef ARCH_PARALLEL
-    if (global_mode){
-       comm_broadcast(&result, sizeof(bool), 0);}
-#endif
-    }
- else{
-    string objname(tidyString(file_name));
-    objname.erase(0,4);
-    result=NamedObjMap::query(objname);}
- return result;
+ return doesFileExist(file_name, global_mode);
 }
 
+  // Removes tabs and newline characters, then trims
+  // leading and trailing blanks of the string.  If the
+  // string starts with "_NOM", the string is cleared.
+  // (Compatibility with previous versions)
 
-bool emptyFileName(const std::string& file_name)
+std::string tidyNameOfFile(const std::string& filename)
 {
- string ftidy(tidyString(file_name));
- return ((ftidy.empty())||(ftidy=="NOM_"));
-}
-
-
-bool isFileOnDisk(const std::string& file_name)
-{
- return (tidyString(file_name).find("NOM_")!=0);
+ string result(tidyString(filename));
+ if (result.find("NOM_")==0) result.clear();
+// if (result.empty()) result="LAPH_NO_SAVE_TO_FILE";
+return result;
 }
 
 

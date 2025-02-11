@@ -1,24 +1,12 @@
 #ifndef QUARK_HANDLER_H
 #define QUARK_HANDLER_H
 
-#include "gauge_configuration_info.h"
 #include "gauge_configuration_handler.h"
-#include "xml_handler.h"
-#include "field_smearing_info.h"
-#include "gluon_smearing_handler.h"
 #include "quark_smearing_handler.h"
-#include "dilution_scheme_info.h"
 #include "dilution_handler.h"
 #include "laph_noise_info.h"
-#include "laph_noise.h"
-#include "quark_action_info.h"
 #include "inverter_info.h"
-#include "filelist_info.h"
-#include "data_io_handler.h"
 #include "dir_path.h"
-#include "laph_stdio.h"
-#include "quda.h"
-#include <list>
 
 namespace LaphEnv {
 
@@ -93,7 +81,7 @@ namespace LaphEnv {
 // *  All Laph Handlers follow the member naming convention:       *
 // *                                                               *
 // *    compute....()  to do original computation                  *
-// *    set...()       to internally set from file or NamedObjMap  *
+// *    set...()       to internally set from file or HostGlobal   *
 // *                                                               *
 // *    get...()       provides access to results                  *
 // *                                                               *
@@ -273,14 +261,14 @@ class QuarkHandler
 
        // sub-handler pointers
 
-   static std::unique_ptr<GluonSmearingHandler> gSmearHandler;
+   //static std::unique_ptr<GluonSmearingHandler> gSmearHandler;
    static std::unique_ptr<QuarkSmearingHandler> qSmearHandler;
    static std::unique_ptr<GaugeConfigurationHandler> gaugeHandler;
    mutable DilutionHandler *dilHandler;
 
-   static int gSmearCounter;
-   static int qSmearCounter;
-   static int gaugeCounter;
+   //static int gSmearCounter;
+   //static int qSmearCounter;
+   //static int gaugeCounter;
    //static bool keepInMemory;
 
        // structure containing the computations to perform
@@ -403,7 +391,7 @@ class QuarkHandler
         // if "verbose" is set to true, the quark sinks
         // will be output to standard output too
 
-   void computeSinks(bool verbose=false, bool extra_soln_check=false);
+   void computeSinks(bool extra_soln_check=false, bool print_coeffs=false);
 
 
    bool isNormalMode() const {return normal_mode;}
@@ -488,18 +476,18 @@ class QuarkHandler
 
          //  sub-handler connections
 
-   void connectGluonSmearingHandler(const std::string& smeared_gauge_filename);
+   //void connectGluonSmearingHandler(const std::string& smeared_gauge_filename);
    void connectGaugeConfigurationHandler();
    void connectQuarkSmearingHandler(const std::string& smeared_quark_filestub);
    void connectDilutionHandler() const;
 
-   void disconnectGluonSmearingHandler();
+   //void disconnectGluonSmearingHandler();
    void disconnectGaugeConfigurationHandler();
    void disconnectQuarkSmearingHandler();
    void disconnectDilutionHandler() const;
 
    void computeSinks(const LaphNoiseInfo& noise, int time_proj_index, 
-                     const std::vector<void*>& evList, bool verbose, bool extra_soln_check, 
+                     const std::vector<void*>& evList, bool print_coefs, bool extra_soln_check, 
                      double& srctime, double& invtime, double& evprojtime, double& writetime);
 
           // Makes the source in the Dirac-Pauli basis.  The source is

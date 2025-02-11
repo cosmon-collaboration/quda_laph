@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.6)
+cmake_minimum_required(VERSION 3.18)
 
 project(QudaLaph
     VERSION 1.0
@@ -7,10 +7,11 @@ project(QudaLaph
 
 set(CMAKE_CXX_STANDARD 17)
 include(GNUInstallDirs)
+
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
-option(ARCH "Must call with either -DARCH=PARALLEL or -DARCH=SERIAL" "PARALLEL")
-
+set(ARCH "INVALID" CACHE STRING "Must set either -DARCH=PARALLEL or -DARCH=SERIAL" )
 if(ARCH STREQUAL "PARALLEL")
    message(STATUS "parallel build")
    add_compile_definitions(ARCH_PARALLEL)
@@ -23,8 +24,7 @@ else()
    message( FATAL_ERROR "Must define ARCH to be PARALLEL or SERIAL" )
 endif()
 
-option(HOSTCBLAS "Must define HOSTCBLAS")
-
+set(HOSTCBLAS "INVALID" CACHE STRING "Must define HOSTCBLAS")
 if(HOSTCBLAS STREQUAL "GSL")
    message(STATUS "using GSL cblas on hosts")
    add_compile_definitions(USE_GSL_CBLAS)
@@ -32,7 +32,7 @@ elseif(HOSTCBLAS STREQUAL "OPENBLAS")
    message(STATUS "using OPENblas on hosts")
    add_compile_definitions(USE_OPENBLAS)
 else()
-   message( FATAL_ERROR "Must define HOSTCBLAS to be GSL or OPENBLAS" )
+   message( FATAL_ERROR "Must define HOSTCBLAS to be GSLCBLAS or OPENBLAS" )
 endif()
 
 if(NOT GPUTOOLKIT_DIR)
@@ -104,6 +104,7 @@ target_sources(quda_laph PRIVATE
     task_smear_gauge_field.cc
     task_smear_quark_field.cc
     utils.cc
+    verbosity_info.cc
     xml_handler.cc
     )
 

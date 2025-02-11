@@ -1,13 +1,10 @@
 #ifndef ARRAY_H
 #define ARRAY_H
-#include <iostream>
 #include <vector>
-#include <string>
-#include <cstring>
-#include <utility>
 #include <map>
 #include <complex>
-
+#include <stdexcept>
+	
 
 // ************************************************************
 // *                                                          *
@@ -157,7 +154,7 @@ Array<T>::Array()
 
 template <typename T>
 Array<T>::Array(int size1) 
-         : m_sizes(1), m_store(abs(size1))
+         : m_sizes(1), m_store(std::abs(size1))
 {
 #ifdef SAFETY_FLAG
  if (size1<1) 
@@ -168,7 +165,7 @@ Array<T>::Array(int size1)
 
 template <typename T>
 Array<T>::Array(int size1, int size2) 
-         : m_sizes(2), m_store(abs(size1*size2))
+         : m_sizes(2), m_store(std::abs(size1*size2))
 {
 #ifdef SAFETY_FLAG
  if ((size1<1)||(size2<1)) 
@@ -180,7 +177,7 @@ Array<T>::Array(int size1, int size2)
 
 template <typename T>
 Array<T>::Array(int size1, int size2, int size3) 
-         : m_sizes(3), m_store(abs(size1*size2*size3))
+         : m_sizes(3), m_store(std::abs(size1*size2*size3))
 {
 #ifdef SAFETY_FLAG
  if ((size1<1)||(size2<1)||(size3<1)) 
@@ -193,7 +190,7 @@ Array<T>::Array(int size1, int size2, int size3)
 
 template <typename T>
 Array<T>::Array(int size1, int size2, int size3, int size4) 
-         : m_sizes(4), m_store(abs(size1*size2*size3*size4))
+         : m_sizes(4), m_store(std::abs(size1*size2*size3*size4))
 {
 #ifdef SAFETY_FLAG
  if ((size1<1)||(size2<1)||(size3<1)||(size4<1)) 
@@ -208,7 +205,7 @@ Array<T>::Array(int size1, int size2, int size3, int size4)
 template <typename T>
 Array<T>::Array(int size1, int size2, int size3, int size4,
                 int size5) 
-         : m_sizes(5), m_store(abs(size1*size2*size3*size4*size5))
+         : m_sizes(5), m_store(std::abs(size1*size2*size3*size4*size5))
 {
 #ifdef SAFETY_FLAG
  if ((size1<1)||(size2<1)||(size3<1)||(size4<1)
@@ -225,7 +222,7 @@ Array<T>::Array(int size1, int size2, int size3, int size4,
 template <typename T>
 Array<T>::Array(int size1, int size2, int size3, int size4,
                 int size5, int size6) 
-         : m_sizes(6), m_store(abs(size1*size2*size3*size4*size5*size6))
+         : m_sizes(6), m_store(std::abs(size1*size2*size3*size4*size5*size6))
 {
 #ifdef SAFETY_FLAG
  if ((size1<1)||(size2<1)||(size3<1)||(size4<1)
@@ -243,7 +240,7 @@ Array<T>::Array(int size1, int size2, int size3, int size4,
 template <typename T>
 Array<T>::Array(int size1, int size2, int size3, int size4,
                 int size5, int size6, int size7) 
-         : m_sizes(7), m_store(abs(size1*size2*size3*size4*size5*size6*size7))
+         : m_sizes(7), m_store(std::abs(size1*size2*size3*size4*size5*size6*size7))
 {
 #ifdef SAFETY_FLAG
  if ((size1<1)||(size2<1)||(size3<1)||(size4<1)
@@ -262,7 +259,7 @@ Array<T>::Array(int size1, int size2, int size3, int size4,
 template <typename T>
 Array<T>::Array(int size1, int size2, int size3, int size4,
                 int size5, int size6, int size7, int size8) 
-         : m_sizes(8), m_store(abs(size1*size2*size3*size4*size5*size6*size7*size8))
+         : m_sizes(8), m_store(std::abs(size1*size2*size3*size4*size5*size6*size7*size8))
 {
 #ifdef SAFETY_FLAG
  if ((size1<1)||(size2<1)||(size3<1)||(size4<1)

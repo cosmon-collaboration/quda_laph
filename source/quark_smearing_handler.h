@@ -1,10 +1,7 @@
 #ifndef QUARK_SMEARING_HANDLER_H
 #define QUARK_SMEARING_HANDLER_H
 
-#include "xml_handler.h"
-#include "field_smearing_info.h"
 #include "gauge_configuration_info.h"
-#include "array.h"
 #include "data_io_handler.h"
 #include "laph_eigen_info.h"
 
@@ -19,19 +16,19 @@ namespace LaphEnv {
 // *     -- in 3-d write mode, computes the Laplacian eigenvectors,*
 // *          saving results to "*_time.nn" files, each file       *
 // *          containing all eigenvectors for one time slice OR    *
-// *          inserting into TheNamedObjMap                        *
+// *          inserting into HostGlobal                       *
 // *     -- in 3-d read mode, reads the eigenvectors from the      *
 // *          "*_time.nn" files and makes them available for the   *
 // *          hadron handler to do quark displacements OR gets     *
-// *          from TheNamedObjMap                                  *
+// *          from HostGlobal                                  *
 // *     -- in 4-d write mode, either reads the "*_time.nn" files  *
 // *          and combines each level on all time slices into one  *
 // *          4-d file, writing out "_level.nn" files, OR it       *
 // *          computes them on all requested time slices and       *
-// *          inserts results into TheNamedObjMap                  *
+// *          inserts results into HostGlobal                  *
 // *     -- in 4-d read mode, reads the "*_level.nn" files and     *
 // *          makes them available for the quark handler to        *
-// *          compute quark sinks, or reads from TheNamedObjMap    *
+// *          compute quark sinks, or reads from HostGlobal    *
 // *          (if "level" files are not available, it will read    *
 // *           the "time" files)                                   *
 // *                                                               *
@@ -58,7 +55,7 @@ namespace LaphEnv {
 // *  All Laph Handlers follow the member naming convention:       *
 // *                                                               *
 // *    compute....()  to do original computation                  *
-// *    set...()       to internally set from file or NamedObjMap  *
+// *    set...()       to internally set from file or HostGlobal   *
 // *                                                               *
 // *    get...()       provides access to results                  *
 // *                                                               *
@@ -175,9 +172,9 @@ class QuarkSmearingHandler
    std::string smearedDispQuarkFileStub; 
 #elif (QDP_ND == 4) */
 
-   Array<double> Eigenvalues;
-   DataGetHandlerMFO<QuarkSmearingHandler,LevelKey,LevelKey,
-                     LattField> *dh_ptr;
+//   Array<double> Eigenvalues;
+//   DataGetHandlerMF<QuarkSmearingHandler,LevelKey,LevelKey,
+//                    LattField> *dh_ptr;
 
 
        // prevent copying ... handler might contain large
@@ -205,7 +202,7 @@ class QuarkSmearingHandler
                 bool read_mode=true);
 
           // update if number of eigenvectors needs to be increased
-   void updateSmearing(const QuarkSmearingInfo& quark_smearing);
+//   void updateSmearing(const QuarkSmearingInfo& quark_smearing);
 
    ~QuarkSmearingHandler();
 
@@ -232,21 +229,14 @@ class QuarkSmearingHandler
 //   void outputKeys(XMLHandler& xmlout);
 
 
-/*
-#if (QDP_ND == 3)
+           // Compute the Laph Eigenvectors, store in HostGlobal, 
+           // optionally output to file
 
-           // Compute largest eigenvalue of smeared covariant Laplacian.
-           // This value is useful for Chebyshev acceleration in
-           // computing all Laph eigenvectors.
-
-   double estimateLargestLaplacianEigenvalue(const std::string& smeared_gauge_file);
-
-           // Compute the Laph Eigenvectors and output to file or NamedObjMap
-*/
    void computeLaphEigenvectors(const LaphEigenSolverInfo& solver_info,
-                                const std::string& smeared_gauge_file);
+                                const std::string& smeared_gauge_file,
+                                bool print_eigvals);
 /*
-           // Compute covariantly displaced Laph Eigenvectors and output to file or NamedObjMap
+           // Compute covariantly displaced Laph Eigenvectors
 
    void displaceLaphEigenvectors(const std::set<DirPath>& displacements, int disp_length,
                                  uint timeval, const std::string& smeared_gauge_file,
@@ -262,11 +252,11 @@ class QuarkSmearingHandler
 
    bool queryLaphEigenvector(int time, int eigpair_num);
 
-   void removeLaphEigenvector(int time, int eigpair_num);
+   void removeLaphEigenvector(int time, int eigpair_num);*/
 
    void clearLaphEigenvectors();
 
-   const LattField& getDisplacedLaphEigenvector(int time, int eigpair_num, 
+/*   const LattField& getDisplacedLaphEigenvector(int time, int eigpair_num, 
                                                          const DirPath& dirpath);
 
    bool queryDisplacedLaphEigenvector(int time, int eigpair_num, const DirPath& dirpath);
@@ -278,15 +268,8 @@ class QuarkSmearingHandler
 /*
 #elif (QDP_ND == 4)
 
-           // The 3-d computation of the Laph eigenvectors produces
-           // one file for each time slice, and each file contains all
-           // eigen-levels up to the requested number of eigenvectors.
-           // This routine re-organizes these files, producing one file
-           // for each level, but each file contains all time slices.
 
-   void combineTimeSlices(int striping_factor=1, int striping_unit=0);
-
-           // Compute the Laph Eigenvectors and stored in TheNamedObjMap
+           // Compute the Laph Eigenvectors and store in HostGlobal
 
    void computeLaphEigenvectors(const LaphEigenSolverInfo& solver_info,
                                 const std::string& smeared_gauge_file,
@@ -294,8 +277,14 @@ class QuarkSmearingHandler
                                 int mintime=0, int maxtime=-1);   // -1 means as large as possible
 */
 
-           // get and query data when in read mode
+           // if eigenvectors are in the HostGlobal, returns a reference to them;
+           // if not, reads the eigenvectors from file(s) and places them in
+           // the HostGlobal
 
+   const std::vector<LattField>& getLaphEigenvectors();
+
+   bool queryLaphEigenvectors();
+/*
    const LattField& getLaphEigenvector(int eigpair_num);
 
    bool queryLaphEigenvector(int eigpair_num);
@@ -309,7 +298,7 @@ class QuarkSmearingHandler
            // checks to see if all _level files exist.
 
    bool checkAllLevelFilesExist();
-
+*/
 /*
 
 #endif
@@ -325,6 +314,8 @@ class QuarkSmearingHandler
    void check_info_set(const std::string& name,
                        int check_mode=0) const;
 
+   bool loadLaphEigenvectors();
+
    void failure(const std::string& message);
 
    bool checkHeader(XMLHandler& xmlr, int suffix);
@@ -333,45 +324,11 @@ class QuarkSmearingHandler
 
    void checkLaphEigvecComputation(const std::vector<LattField>& laphEigvecs,
                           const std::vector<LattField>& smeared_gauge_field);
-/*
-   void writeHeader(XMLHandler& xmlw, const TimeKey& fkey, int suffix);
-
-   void do_path_shift(const LattField& start,
-                      LattField& finish,
-                      const DirPath& dir_path, uint disp_length);
-   void get_path_displacer(const multi1d<LatticeColorMatrix>& usmear,
-                           LatticeColorMatrix& covdisplacer,
-                           const DirPath& dir_path, uint disp_length);
-   void get_displaph_setup(); */
 
    void writeHeader(XMLHandler& xmlw, const LevelKey& fkey, int suffix);
 
-/*   void readTimeSlicesIntoNOM();
-
-   friend class DataGetHandlerMF<QuarkSmearingHandler,TimeKey,LevelKey,
-                                 LattField>;*/
    friend class DataGetHandlerMF<QuarkSmearingHandler,LevelKey,LevelKey,LattField>;
-/*   friend class DataGetHandlerMF<QuarkSmearingHandler,TimeKey,LevelDispKey,
-                                 LattField>;
-   friend class DataPutHandlerMF<QuarkSmearingHandler,TimeKey,LevelKey,
-                                 LattField>;*/
-   friend class DataPutHandlerMF<QuarkSmearingHandler,LevelKey,LevelKey,
-                                 LattField>;
-/*   friend class DataPutHandlerMF<QuarkSmearingHandler,TimeKey,LevelDispKey,
-                                 LattField>;
-
-   friend class DataGetHandlerMFNOM<QuarkSmearingHandler,TimeKey,LevelKey,
-                                    LattField>;*/
-   friend class DataGetHandlerMFNOM<QuarkSmearingHandler,LevelKey,LevelKey,LattField>;
-/*   friend class DataGetHandlerMFNOM<QuarkSmearingHandler,TimeKey,LevelDispKey,
-                                    LattField>;
-   friend class DataPutHandlerMFNOM<QuarkSmearingHandler,TimeKey,LevelKey,
-                                    LattField>;*/
-   friend class DataPutHandlerMFNOM<QuarkSmearingHandler,LevelKey,LevelKey,
-                                    LattField>;
-/*   friend class DataPutHandlerMFNOM<QuarkSmearingHandler,TimeKey,LevelDispKey,
-                                    LattField>;
-*/
+   friend class DataPutHandlerMF<QuarkSmearingHandler,LevelKey,LevelKey,LattField>;
 };
 
 // ***************************************************************

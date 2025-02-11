@@ -3,15 +3,14 @@
 #include "stop_watch.h"
 
 using namespace std;
-using namespace quda;
 
 namespace LaphEnv {
 
 	
 // *****************************************************************************************
 // *                                                                                       *
-// *   Task to compute the LapH quark perambulators and write to file or the               *
-// *   NamedObjMap.   The input XML is expected to have the following  form:               *
+// *   Task to compute the LapH quark perambulators and write to file(s).                  *
+// *   The input XML is expected to have the following  form:                              *
 // *                                                                                       *
 // *      <Task>                                                                           *
 // *         <Name>LAPH_QUARK_PERAMBULATORS</Name>                                         *
@@ -32,7 +31,7 @@ namespace LaphEnv {
 // *               <LaphSigmaCutoff>0.32</LaphSigmaCutoff>                                 *
 // *               <NumberLaphEigvecs> 32 </NumberLaphEigvecs>                             *
 // *            </QuarkLaphSmearingInfo>                                                   *
-// *            <SmearedQuarkFileStub>/path/smeared_quark_field_1</SmearedQuarkFileStub>   *
+// *            <SmearedQuarkFileStub>/path/sq_field</SmearedQuarkFileStub> (see below)    *
 // *            <QuarkActionInfo>                                                          *
 // *               <Name> WILSON_CLOVER </Name>                                            *
 // *               <Flavor> ud </Flavor>                                                   *
@@ -49,8 +48,7 @@ namespace LaphEnv {
 // *               <Tolerance>1.0e-11</Tolerance>                                          *
 // *               <MaxIterations>35000</MaxIterations>                                    *
 // *            </InverterInfo>                                                            *
-// *            <Verbosity>full</Verbosity>                                                *
-// *            <ExtraSolutionChecks/> (optional)                                           *
+// *            <ExtraSolutionChecks/> (optional)                                          *
 // *         </QuarkPerambulatorInfo>                                                      *
 // *         <ComputationSet>                                                              *
 // *            <NumSinksBeforeProject>  4 </NumSinksBeforeProject>                        *
@@ -66,11 +64,19 @@ namespace LaphEnv {
 // *               <SourceLaphEigvecIndexMax>32</SourceLaphEigvecIndexMax>                 *
 // *            </Computation>                                                             *
 // *         </ComputationSet>                                                             *
+// *         <Verbosity>full</Verbosity>  (optional: override default)                     *
+// *         <PrintCoefficients/>  (optional)                                              *
 // *      </Task>                                                                          *
 // *                                                                                       *
-// *   If the tag "Verbosity" is included with value "full", then the quark sink           *
-// *   solutions will be echoed to standard output as coefficients of the LapH             *
-// *   eigenvectors.                                                                       *
+// *   If the tag <SmearedQuarkFileStub> is set, then the LapH eigenvectors will be read   *
+// *   from file.  Otherwise, this task expects that the LapH eigenvectors already         *
+// *   reside in HostGlobal; otherwise, an error results.                                  *
+// *                                                                                       *
+// *   The default verbosity from the main program is used, unless overridden by           *
+// *   the <Verbosity> tag above.                                                          *
+// *                                                                                       *
+// *   If the <PrintCoefficients/> is present, then the coefficients are printed           *
+// *   to standard output.                                                                 *
 // *                                                                                       *
 // *   Often, all of the perambulators for all source Laph eigenvector indices cannot be   *
 // *   done in a single run, and so for safety, the data for different sets of source ev   *
@@ -90,26 +96,23 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
  GluonSmearingInfo gSmear(xmlr);
  QuarkSmearingInfo qSmear(xmlr);
  string smeared_quark_filestub;
- xmlread(xmlr,"SmearedQuarkFileStub",smeared_quark_filestub,"LAPH_QUARK_PERAMBULATORS");
+ xmlreadif(xmlr,"SmearedQuarkFileStub",smeared_quark_filestub,"LAPH_QUARK_PERAMBULATORS");
  QuarkActionInfo quark(xmlr);
  FileListInfo files(xmlr);
  InverterInfo invinfo(xmlr);
  bool upper_spin_only=false;
- if (xml_tag_count(xmlr,"UpperSpinComponentsOnly")>=1){
+ if (xml_tag_count(xmlr,"UpperSpinComponentsOnly")>0){
     upper_spin_only=true;}
- bool verbose=false;  // output final results
- string verbosity;
- xmlreadif(xmlr,"Verbosity",verbosity,"LAPH_QUARK_PERAMBULATORS");
- if (tidyString(verbosity)=="full"){
-    verbose=true; 
-    setVerbosity(QUDA_VERBOSE);}
- else if (verbosity=="low"){
-    setVerbosity(QUDA_SUMMARIZE);}
- else if (verbosity=="none"){
-    setVerbosity(QUDA_SILENT);}
  bool extra_soln_check=false;
- if (xml_tag_count(xmlr,"ExtraSolutionChecks")>=1){
+ if (xml_tag_count(xmlr,"ExtraSolutionChecks")>0){
     extra_soln_check=true;}
+    // change verbosity from default if requested
+ Verbosity task_verbosity(getVerbosity());
+ if (xml_read_if(xmltask,task_verbosity)){
+    setVerbosity(task_verbosity.getQudaValue());}
+ bool print_coeffs=false;
+ if (xml_tag_count(xmltask,"PrintCoefficients")>0){
+    print_coeffs=true;}
  PerambulatorHandler::Mode mode=PerambulatorHandler::Compute;
 
  printLaph("\n");
@@ -122,7 +125,8 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
  printLaph(make_strf("\n%s\n",gaugeinfo.output()));
  printLaph(make_strf("\n\nGluon Smearing:\n%s\n",gSmear.output()));
  printLaph(make_strf("\n\nQuark Smearing:\n%s\n",qSmear.output()));
- printLaph(make_strf("SmearedQuarkFileStub: %s",smeared_quark_filestub));
+ if (!smeared_quark_filestub.empty()){
+    printLaph(make_strf("SmearedQuarkFileStub: %s",smeared_quark_filestub));}
  printLaph(make_str("\nQuarkAction:\n",quark.output()));
  printLaph(make_str("\nInverter Info:\n",invinfo.output()));
  if (upper_spin_only){
@@ -149,7 +153,7 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
 
      // now do the computations!
  StopWatch outer; outer.start();
- Q.computePerambulators(verbose,extra_soln_check);
+ Q.computePerambulators(extra_soln_check,print_coeffs);
  outer.stop();
  printLaph(make_strf("LAPH_PERAMBULATORS: total time = %g secs",
            outer.getTimeInSeconds()));

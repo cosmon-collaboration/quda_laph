@@ -1,11 +1,8 @@
 #include "xml_handler.h"
-#include <stdlib.h>
-#include <fstream>
-#include <sstream>
-#include <cstring>
-#include <unistd.h>
 #include "utils.h"
 #include "laph_stdio.h"
+#include <fstream>
+#include <cstring>
 
 
 using namespace std;
@@ -263,25 +260,31 @@ string XMLDoc::get_tag_name(const string& instr, size_t charstart,
    // check valid XML tag name
    // no other blanks allowed
  pos=tagName.find_first_of(" ");
- if (pos!=string::npos)
-    throw(std::invalid_argument(std::string("Invalid XML tag name: <")+tagName+string(">")));
+ bool success=true;
+ if ((pos!=string::npos)||(tagName.empty()))
+    success=false;
    // first 3 characters cannot be xml (case insensitive)
- if (tagName.length()>=3){
+ if ((success)&&(tagName.length()>=3)){
     if (((tagName[0]=='x')||(tagName[0]=='X'))
       &&((tagName[1]=='m')||(tagName[1]=='M'))
       &&((tagName[2]=='l')||(tagName[2]=='L')))
-        throw(std::invalid_argument(string("Invalid XML tag name: <")+tagName+string(">")));}
+        success=false;}
    // first character must be letter or underscore
- char c=tagName[0];
- if (!(((c>='a')&&(c<='z'))||((c>='A')&&(c<='Z'))||(c=='_')))
-     throw(std::invalid_argument(string("Invalid XML tag name: <")+tagName+string(">")));
+ if (success){
+    char c=tagName[0];
+    if (!(((c>='a')&&(c<='z'))||((c>='A')&&(c<='Z'))||(c=='_')))
+       success=false;
    // all other characters must be letter, numerical digit,
    // underscore, period, hyphen, exclamation mark
- for (unsigned int k=1;k<tagName.length();k++){
-   c=tagName[k];
-   if (!(((c>='a')&&(c<='z'))||((c>='A')&&(c<='Z'))
-      ||((c>='0')&&(c<='9'))||(c=='_')||(c=='-')||(c=='.')||(c=='!')))
-     throw(std::invalid_argument(string("Invalid XML tag name: <")+tagName+string(">")));}
+    unsigned int k=1;
+    while ((success)&&(k<tagName.length())){
+       c=tagName[k];
+       if (!(((c>='a')&&(c<='z'))||((c>='A')&&(c<='Z'))
+           ||((c>='0')&&(c<='9'))||(c=='_')||(c=='-')||(c=='.')||(c=='!')))
+          success=false;
+       k++;}}
+ if (!success)
+    throw(std::invalid_argument(string("Invalid XML tag name: <")+tagName+string(">")));
  return tagName;
 }
 
@@ -328,7 +331,7 @@ bool XMLDoc::nonwhitespace(const string& instr, size_t charstart, size_t charsto
 void XMLDoc::find_next_xml_event(const string& xmlstr, size_t start, size_t in_stop,
                                  XMLDoc::XMLEvent& type, size_t& pos, bool incomment)
 {
- size_t stop=min(in_stop,xmlstr.length());
+ size_t stop=std::min(in_stop,xmlstr.length());
  type=none; pos=stop;
  if (start>=stop) return;
  
@@ -721,12 +724,14 @@ XMLHandler::XMLHandler(const XMLHandler& xmlin,
        // if not found or multiple instances found.  This creates a new
        // pointer to a subtree of the same XML document.
 
-XMLHandler::XMLHandler(const XMLHandler& xmlin, const std::string& newroottag)
+XMLHandler::XMLHandler(const XMLHandler& xmlin, const std::string& newroottag,
+                       bool seek_to_child_only)
            : content(0), root(0), current(0), exceptions(true)
 {
  do_set(xmlin,false,false); 
  try{
-    seek_unique(newroottag);}
+    if (!seek_to_child_only) seek_unique(newroottag);
+    else seek_unique_to_child(newroottag);}
  catch(const std::exception& msg){
     clear(); throw;}
  if (current!=0){
@@ -883,6 +888,8 @@ void XMLHandler::do_set(const string& roottagname,
 void XMLHandler::do_set(const XMLHandler& xmlin, bool subtree, bool makecopy)
 {
  XMLDoc::XMLNode *newroot=(subtree ? xmlin.current : xmlin.root);
+ if (newroot->text)
+    throw(std::runtime_error("XMLHandler copy failed: current node is text valued, cannot be root tag"));
  if ((makecopy)&&(newroot!=0)){
     try{
        content=new XMLDoc(newroot,xmlin.content->declaration);
@@ -1070,6 +1077,45 @@ void XMLHandler::seek_unique(const string& tagname)
              +string(" failed: none or plural")));}
 }
 
+void XMLHandler::seek_unique_to_child(const string& tagname)
+{
+ int ncount=0;
+ XMLHandler tagfinder(*this,XMLHandler::pointer);
+ tagfinder.seek_root();
+ tagfinder.set_exceptions_off();
+ bool ischild=false;
+ while ((tagfinder.good())&&(ncount<2)){
+    if ((!(tagfinder.current->text))&&(tagfinder.current->name==tagname)){
+       current=tagfinder.current;
+       ncount++;}
+    if (ischild) tagfinder.seek_next_sibling();
+    else{ tagfinder.seek_first_child(); ischild=true;}}
+ if (ncount!=1){
+    current=0;
+    if (exceptions) 
+       throw(std::invalid_argument(string("seek unique of tag ")+tagname
+             +string(" failed: none or plural")));}
+}
+
+void XMLHandler::seek_unique_child(const string& tagname)
+{
+ int ncount=0;
+ XMLHandler tagfinder(*this,XMLHandler::pointer);
+ tagfinder.seek_root();
+ tagfinder.set_exceptions_off();
+ tagfinder.seek_first_child(); 
+ while ((tagfinder.good())&&(ncount<2)){
+    if ((!(tagfinder.current->text))&&(tagfinder.current->name==tagname)){
+       current=tagfinder.current;
+       ncount++;}
+    tagfinder.seek_next_sibling();}
+ if (ncount!=1){
+    current=0;
+    if (exceptions) 
+       throw(std::invalid_argument(string("seek unique of tag ")+tagname
+            +string(" failed: none or plural")));}
+}
+
 list<XMLHandler> XMLHandler::find(const string& tagname) const
 {
  list<XMLHandler> found;
@@ -1084,6 +1130,23 @@ list<XMLHandler> XMLHandler::find(const string& tagname) const
  return found;
 }
 
+list<XMLHandler> XMLHandler::find(const list<string>& tagnames) const
+{
+ list<XMLHandler> found;
+ XMLHandler tagfinder(*this,XMLHandler::pointer);
+ tagfinder.seek_root();
+ tagfinder.set_exceptions_off();
+ while (tagfinder.good()){
+    if (!(tagfinder.current->text)){
+       for (list<string>::const_iterator it=tagnames.begin();it!=tagnames.end();it++){
+          if (tagfinder.current->name==*it){
+             XMLHandler xmlt(tagfinder);
+             found.push_back(xmlt); break;}}}
+    tagfinder.seek_next_node();}
+ return found;
+}
+
+
 int XMLHandler::count(const string& tagname) const
 {
  int ncount=0;
@@ -1094,6 +1157,97 @@ int XMLHandler::count(const string& tagname) const
     if ((!(tagfinder.current->text))&&(tagfinder.current->name==tagname)){
        ncount++;}
     tagfinder.seek_next_node();}
+ return ncount;
+}
+
+
+list<XMLHandler> XMLHandler::find_among_children(const string& tagname) const
+{
+ list<XMLHandler> found;
+ XMLHandler tagfinder(*this,XMLHandler::pointer);
+ tagfinder.set_exceptions_off();
+ tagfinder.seek_first_child();
+ while (tagfinder.good()){
+    if ((!(tagfinder.current->text))&&(tagfinder.current->name==tagname)){
+       XMLHandler xmlt(tagfinder);
+       found.push_back(xmlt);}
+    tagfinder.seek_next_sibling();}
+ return found;
+}
+
+
+list<XMLHandler> XMLHandler::find_among_children(const list<string>& tagnames) const
+{
+ list<XMLHandler> found;
+ XMLHandler tagfinder(*this,XMLHandler::pointer);
+ tagfinder.set_exceptions_off();
+ tagfinder.seek_first_child();
+ while (tagfinder.good()){
+    if (!(tagfinder.current->text)){
+       for (list<string>::const_iterator it=tagnames.begin();it!=tagnames.end();it++){
+          if (tagfinder.current->name==*it){
+             XMLHandler xmlt(tagfinder);
+             found.push_back(xmlt); break;}}}
+    tagfinder.seek_next_sibling();}
+ return found;
+}
+
+
+int XMLHandler::count_among_children(const string& tagname) const
+{
+ int ncount=0;
+ XMLHandler tagfinder(*this,XMLHandler::pointer);
+ tagfinder.set_exceptions_off();
+ tagfinder.seek_first_child();
+ while (tagfinder.good()){
+    if ((!(tagfinder.current->text))&&(tagfinder.current->name==tagname)){
+       ncount++;}
+    tagfinder.seek_next_sibling();}
+ return ncount;
+}
+
+int XMLHandler::count_to_among_children(const string& tagname) const
+{
+ int ncount=0;
+ XMLHandler tagfinder(*this,XMLHandler::pointer);
+// tagfinder.seek_root();
+ tagfinder.set_exceptions_off();
+ bool ischild=false;
+ while (tagfinder.good()){
+    if ((!(tagfinder.current->text))&&(tagfinder.current->name==tagname)){
+       ncount++;}
+    if (ischild) tagfinder.seek_next_sibling();
+    else{ tagfinder.seek_first_child(); ischild=true;}}
+ return ncount;
+}
+
+bool XMLHandler::query_unique_to_among_children(const string& tagname) const
+{
+ int ncount=0;
+ XMLHandler tagfinder(*this,XMLHandler::pointer);
+// tagfinder.seek_root();
+ tagfinder.set_exceptions_off();
+ bool ischild=false;
+ while (tagfinder.good()){
+    if ((!(tagfinder.current->text))&&(tagfinder.current->name==tagname)){
+       ncount++;}
+    if (ncount>1)
+       throw(std::invalid_argument(std::string("Multiple occurrences of ")
+            +tagname+std::string(" when one or none required")));
+    if (ischild) tagfinder.seek_next_sibling();
+    else{ tagfinder.seek_first_child(); ischild=true;}}
+ return ncount;
+}
+
+int XMLHandler::count_children() const
+{
+ int ncount=0;
+ XMLHandler tagfinder(*this,XMLHandler::pointer);
+ tagfinder.seek_first_child();
+ tagfinder.set_exceptions_off();
+ while (tagfinder.good()){
+    ncount++;
+    tagfinder.seek_next_sibling();}
  return ncount;
 }
 
@@ -1565,6 +1719,28 @@ string tidyFileName(const string& str)
 }
 
 
+  // Trims leading and trailing white space, then checks
+  // to make sure each character is alphanumeric, underscore, 
+  // or period or backslash. If name is invalid, an empty string is returned.
+
+string tidyName(const string& str)
+{
+ string tmp;
+ size_t len=str.length();
+ if (len==0) return tmp;
+ size_t start=0;
+ while ((isspace(str[start]))&&(start<len)) start++;
+ if (start==len) return tmp;
+ size_t stop=len-1;
+ while ((isspace(str[stop]))&&(stop>start)) stop--;
+ for (size_t i=start;i<=stop;i++){
+    char c=str[i];
+    if (isalnum(c)||(c=='_')||(c=='.')||(c=='/')||(c=='(')||(c==')')||(c=='-'))
+       tmp.push_back(c);
+    else return string("");}
+ return tmp;
+}
+
       // Converts an integer to a string
       
 string int_to_string(int intval)
@@ -1581,9 +1757,24 @@ string int_to_string(int intval)
     // is found in the XML document "xmlh".
     // A **tag name** should be input.
 
-int xml_tag_count(XMLHandler& xmlh, const string& tagname)
+int xml_tag_count_deep(XMLHandler& xmlh, const string& tagname)
 {
  return xmlh.count(tagname);
+}
+
+int xml_tag_count_among_children(XMLHandler& xmlh, const string& tagname)
+{
+ return xmlh.count_among_children(tagname);
+}
+
+int xml_tag_count_to_among_children(XMLHandler& xmlh, const string& tagname)
+{
+ return xmlh.count_to_among_children(tagname);
+}
+
+int xml_tag_count(XMLHandler& xmlh, const string& tagname)
+{
+ return xmlh.count_to_among_children(tagname);
 }
 
     // Check for existence of a unique tag "tagname" and if not
@@ -1596,6 +1787,22 @@ void xml_tag_assert(XMLHandler& xmlh, const std::string& tagname)
     initmsg+=tagname+"> tag \n";
     xmlreadfail(xmlh,tagname,initmsg);}
  xmlh.seek_unique(tagname);
+}
+
+
+    // Check for existence of a unique tag "tagname1" or "tagname2" 
+    // and if neither present, throw exception.
+  
+void xml_either_tag_assert(XMLHandler& xmlh, const std::string& tagname1,
+                           const std::string& tagname2)
+{
+ if (xml_tag_count(xmlh,tagname1)==1){
+    xmlh.seek_unique(tagname1); return;}
+ else if (xml_tag_count(xmlh,tagname2)==1){
+    xmlh.seek_unique(tagname2); return;}
+ string initmsg("Bad XML input: Expected one <");
+ initmsg+=tagname1+"> or <"+tagname2+"> tag \n";
+ xmlreadfail(xmlh,tagname1,initmsg);
 }
 
 
@@ -1620,6 +1827,31 @@ void xml_child_assert(XMLHandler& xmlh, const std::string& tagname,
     initmsg+=infoname+"\nExpected one <"+tagname+"> tag \n";
     xmlreadfail(xmlh,infoname,initmsg);}
 }
+
+void xml_root_assert(XMLHandler& xmlh, const std::string& tagname,
+                     const std::string& infoname)
+{
+ try{
+    xmlh.seek_root();
+    if (xmlh.get_node_name()!=tagname) throw(std::invalid_argument("assert"));}
+ catch(const std::exception& xp){
+    string initmsg("Bad XML input to ");
+    initmsg+=infoname+"\nExpected root tag to be <"+tagname+">\n";
+    xmlreadfail(xmlh,infoname,initmsg);}
+}
+
+
+void xml_root_assert(XMLHandler& xmlh, const std::string& tagname)
+{
+ try{
+    xmlh.seek_root();
+    if (xmlh.get_node_name()!=tagname) throw(std::invalid_argument("assert"));}
+ catch(const std::exception& xp){
+    string initmsg("Bad XML input:");
+    initmsg+="\nExpected root tag to be <"+tagname+">\n";
+    xmlreadfail(xmlh,tagname,initmsg);}
+}
+
 
    // outputs the current context for a failed xml read
    // (typically in an Info constructor) then throws exception.
@@ -1661,7 +1893,7 @@ bool headerMatch(const string& doc1, const string& doc2,
 }
 
 // ************************************************************
-
+/*
 std::vector<std::string> string_split(const std::string& astr, char delimiter)
 {
  std::vector<std::string> tokens;
@@ -1693,5 +1925,5 @@ int char_count(const std::string& astr, char delimiter)
     pos=astr.find(delimiter,pos+1);}
  return cnt;
 }
-
+*/
 // **********************************************************

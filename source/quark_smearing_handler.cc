@@ -1,7 +1,8 @@
 #include "quark_smearing_handler.h"
-#include "stop_watch.h"
 #include "gluon_smearing_handler.h"
 #include "field_ops.h"
+#include "host_global.h"
+#include "stop_watch.h"
 
 #if defined(USE_GSL_CBLAS)
 #include "gsl_cblas.h"
@@ -12,7 +13,6 @@
 
     // STILL TO DO:  single asynchronous thread for output so can continue next computations
     //                   while output occurs
-
 
 using namespace std;
 
@@ -31,7 +31,7 @@ namespace LaphEnv {
 
 QuarkSmearingHandler::QuarkSmearingHandler()
      : uPtr(0), gSmearPtr(0), qSmearPtr(0),
-       m_read_mode(true), dh_ptr(0)
+       m_read_mode(true)
 {
 }
 
@@ -62,10 +62,7 @@ void QuarkSmearingHandler::set_info(const GluonSmearingInfo& gluon_smearing,
                                     const string& smeared_quark_file_stub,
                                     bool read_mode)
 {
- smearedQuarkFileStub=tidyString(smeared_quark_file_stub);
- if (smearedQuarkFileStub.empty()){
-    errorLaph("empty file name or stub in QuarkSmearingHandler");}
-
+ smearedQuarkFileStub=tidyNameOfFile(smeared_quark_file_stub);
  try{
     uPtr=new GaugeConfigurationInfo(gauge);
     gSmearPtr=new GluonSmearingInfo(gluon_smearing);
@@ -74,9 +71,8 @@ void QuarkSmearingHandler::set_info(const GluonSmearingInfo& gluon_smearing,
     errorLaph("problem in setInfo in QuarkSmearingHandler");}
 
  m_read_mode=read_mode;
-
- if (m_read_mode){
 /*
+ if (m_read_mode){
     uint mintime=uPtr->getMinTime();
     uint maxtime=uPtr->getMaxTime();
     FileListInfo files(smearedQuarkFileStub+"_time",
@@ -92,20 +88,17 @@ void QuarkSmearingHandler::set_info(const GluonSmearingInfo& gluon_smearing,
        else{
           QDPIO::cout << "problem with QuarkSmearingHandler file stub: "<<smeared_quark_file_stub<<endl;
           QDP_abort(1);}}
-  */
+  
 
-         // read from files (or the NamedObjMap)
+         // read from file
     FileListInfo files(smearedQuarkFileStub+"_level",
                        0,qSmearPtr->getNumberOfLaplacianEigenvectors()-1,false);
    // if (!fileExists(files.getFileName(0))){
-   //    readTimeSlicesIntoNOM();  // read time slices, reorganize and put into NamedObjMap
-   //    FileListInfo nomfiles("NOM_LaphEig_level",
-   //                          0,qSmearPtr->getNumberOfLaplacianEigenvectors()-1,false);
    //    files=nomfiles;}
-    try{ dh_ptr=new DataGetHandlerMFO<QuarkSmearingHandler,LevelKey,LevelKey,
-                        LattField>(*this,files,"Laph--SmearedQuarkLevelFile",
-                        "LaphEigenvectors");
-       if (dh_ptr->queryFile(LevelKey(0)))
+    try{ 
+       DataGetHandlerMF<QuarkSmearingHandler,LevelKey,LevelKey,LattField> DH(*this,
+                 files,"Laph--SmearedQuarkLevelFile","LaphEigenvectors");
+       if (DH.queryFile(LevelKey(0)))
           printLaph("QuarkSmearingHandler file stub appears to be okay");
        else{
           errorLaph(make_strf("problem with QuarkSmearingHandler file stub: %s",
@@ -113,18 +106,18 @@ void QuarkSmearingHandler::set_info(const GluonSmearingInfo& gluon_smearing,
     catch(const std::exception& xp){ 
       errorLaph("unable to allocate data handler in QuarkSmearingHandler");}}
  else{
-    dh_ptr=0;}
+    dh_ptr=0;}  */
 }
 
     // use this to increase the number of Laplacian eigenvectors allowed;
     // need inside QuarkHandler since smearing sub-handler is static.
-
+/*
 void QuarkSmearingHandler::updateSmearing(const QuarkSmearingInfo& quark_smearing)
 {
  check_info_set("updateQuarkSmearingInfo");
  qSmearPtr->increaseUpdate(quark_smearing);
 }
-
+*/
 
 QuarkSmearingHandler::~QuarkSmearingHandler()
 {
@@ -137,14 +130,12 @@ void QuarkSmearingHandler::clear()
  try{
     delete gSmearPtr;
     delete qSmearPtr;
-    delete uPtr;
-    delete dh_ptr;} 
+    delete uPtr;} 
  catch(const std::exception& xp) {errorLaph("abort");}
  smearedQuarkFileStub.clear();
  gSmearPtr=0;
  qSmearPtr=0;
  uPtr=0;
- Eigenvalues.clear();
 }
 
 
@@ -152,8 +143,7 @@ void QuarkSmearingHandler::clear()
 
 bool QuarkSmearingHandler::isInfoSet() const
 {
- return ((gSmearPtr!=0)&&(uPtr!=0)&&(qSmearPtr!=0)
-        &&(!smearedQuarkFileStub.empty()));
+ return ((gSmearPtr!=0)&&(uPtr!=0)&&(qSmearPtr!=0));
 } 
 
 
@@ -206,12 +196,13 @@ void QuarkSmearingHandler::failure(const string& message)
 
 
            // Compute the Laph Eigenvectors simultaneously on all
-           // time slices (from mintime to maxtime in the *u_ptr).
-           // Put results into TheNamedObjMap or to level files.
+           // time slices. Put results into HostGlobal and, if
+           // requested, output to level files.
 
 void QuarkSmearingHandler::computeLaphEigenvectors(
-                         const LaphEigenSolverInfo& solver_info,
-                         const string& smeared_gauge_file)
+                             const LaphEigenSolverInfo& solver_info,
+                             const string& smeared_gauge_file,
+                             bool print_eigvals)
 {
  check_info_set("computeLaphEigenvectors",2);
 
@@ -231,6 +222,23 @@ void QuarkSmearingHandler::computeLaphEigenvectors(
                  " ... will not overwrite so computation aborted\n\n"));
        return;}}
 
+
+
+   //   THIS IS A HACK UNTIL QUDA IS CHANGED
+  if (GB::theGaugeConfig.empty()){ 
+     printLaph("The gauge config has not been loaded and QUDA will barf");
+     printLaph("Loading the gauge config to prevent the vomit");
+     GaugeConfigurationHandler GHtemp(*uPtr);
+     GHtemp.setData();
+     GHtemp.copyDataToDevice();}
+
+
+
+
+
+
+
+
     // fire up the GluonSmearingHandler
 
  GluonSmearingHandler gHandler(*gSmearPtr,*uPtr,smeared_gauge_file);
@@ -240,18 +248,13 @@ void QuarkSmearingHandler::computeLaphEigenvectors(
  printLaph(make_str("  number of requested eigenvectors = ",nEigvecs));
  printLaph(make_str("            time extent of lattice = ",nTime));
 
-    // fire up the data handler
-
- FileListInfo writeFiles(smearedQuarkFileStub+"_level",0,nEigvecs-1);
- DataPutHandlerMFO<QuarkSmearingHandler,LevelKey,LevelKey,
-       LattField> DHput(*this,writeFiles,"Laph--SmearedQuarkLevelFile",
-                                 "LaphEigenvectors",true,false);
-//                                 striping_factor,striping_unit);
       // read smeared gauge field 
  StopWatch iotimer; iotimer.start();
-// const vector<LattField>& usmear = gHandler.getSmearedGaugeField();
+ if (!gHandler.querySmearedGaugeField()){
+    errorLaph("Unable to get the smeared gauge field: cannot continue");}
  gHandler.copyDataToDevice();
- printLaph(make_str("\n\nSmeared gauge field obtained from ",smeared_gauge_file,"\n"));
+ if (!smeared_gauge_file.empty()){
+    printLaph(make_str("\n\nSmeared gauge field obtained from ",smeared_gauge_file,"\n"));}
  
  iotimer.stop();
  iotime+=iotimer.getTimeInSeconds();
@@ -264,7 +267,8 @@ void QuarkSmearingHandler::computeLaphEigenvectors(
  solver_info.setQudaParam(eig_inv_param,eig_param,*qSmearPtr);
 
    // allocate space for eigenvectors and eigenvalues on the host
- vector<LattField> laphEigvecs(nEigvecs,FieldSiteType::ColorVector);
+ GB::theLaphEigvecs.resize(nEigvecs,FieldSiteType::ColorVector);
+ vector<LattField>& laphEigvecs(GB::theLaphEigvecs);
  vector<complex<double>> laphEigvals(nEigvecs*nTime);
  __complex__ double* h_evals=(__complex__ double*)(laphEigvals.data());
  vector<void*> h_evecs(nEigvecs);
@@ -278,7 +282,16 @@ void QuarkSmearingHandler::computeLaphEigenvectors(
  else{
     setZeroField(laphEigvecs[0]);}
 
+
+
+
+
+
+
+
+
    // now determine the eigenvectors!!
+
  eigensolveQuda(h_evecs.data(), h_evals, &eig_param);
 
  bulova.stop();
@@ -301,7 +314,7 @@ void QuarkSmearingHandler::computeLaphEigenvectors(
  printLaph(make_strf(" Phase shift convention applied in %g seconds\n",
            bulova.getTimeInSeconds()));
 
- if (solver_info.getOutputVerbosity()>0){
+ if (print_eigvals){
     printLaph("Eigenvalues of -Laplacian:");
     for (int t=0;t<nTime;++t)
     for (int v=0;v<nEigvecs;++v){
@@ -314,32 +327,49 @@ void QuarkSmearingHandler::computeLaphEigenvectors(
     printLaph("Performing extra slower checks");
     checkLaphEigvecComputation(laphEigvecs,gHandler.getSmearedGaugeField());}
 
+    // fire up the data handler and output to file(s) if requested
+
  iotimer.reset();iotimer.start();
- printLaph("Outputting results to file or named obj map");
-// bulava.reset();bulava.start();  */
- for (int k=0;k<nEigvecs;k++){
-    DHput.open(LevelKey(k)); // open file, write header
-    DHput.putData(LevelKey(k),laphEigvecs[k]);
-    DHput.close();     // finalize current file
-    printLaph(make_str("Level ",k," with max ",nEigvecs-1," done"));
-    laphEigvecs[k].clear();} 
+ if (!smearedQuarkFileStub.empty()){
+    printLaph("Outputting results to file as requested");
+    FileListInfo writeFiles(smearedQuarkFileStub+"_level",0,nEigvecs-1);
+    DataPutHandlerMF<QuarkSmearingHandler,LevelKey,LevelKey,
+          LattField> DHput(*this,writeFiles,"Laph--SmearedQuarkLevelFile",
+                           "LaphEigenvectors",true,false);
+//                          striping_factor,striping_unit);
+    for (int k=0;k<nEigvecs;k++){
+       DHput.open(LevelKey(k)); // open file, write header
+       DHput.putData(LevelKey(k),laphEigvecs[k]);
+       DHput.close();     // finalize current file
+       printLaph(make_str("Level ",k," with max ",nEigvecs-1," done"));} }
 
  gHandler.clearData();  // clear smeared gauge time slices
  iotimer.stop();
  printLaph(make_strf("Time to write laph eigenvectors = %g seconds",iotimer.getTimeInSeconds()));
  iotime+=iotimer.getTimeInSeconds();
+ gHandler.eraseDataOnDevice();
+ 
+ 
+   //   THIS IS A HACK:  QUDA LAPH EV SOLVER might be screwing things up so undo
+ QudaInfo::clearDeviceGaugeConfiguration();
+
+
+
  printLaph("Computation done \n");
 
- if (!QudaInfo::gauge_config_on_device){
-    freeGaugeQuda();}   // undoes the hack above in copyDataToDevice
+// if (!QudaInfo::gauge_config_on_device){
+//    freeGaugeQuda();}   // undoes the hack above in copyDataToDevice
+
+    // Quda's device memory pool wastes a lot of memory if it is loaded
+    // with Laplace-mode fields and then used for multigrid solvers.
+    // Here we call a Quda internal function to free the pool.
+// quda::pool::flush_device();   NEEDED????
 
  rolex.stop();
  printLaph(make_strf("computeLaphEigenvectors: total time = %g seconds",
            rolex.getTimeInSeconds()));
  printLaph(make_strf("Total file I/O time = %g seconds",iotime));
  printLaph("ran successfully\n");
-
-
 }
 
 
@@ -467,6 +497,8 @@ void QuarkSmearingHandler::applyLaphPhaseConvention(vector<LattField>& laph_evec
 
 // **********************************************************************************
 
+   // This is slow CPU code.  Use it only for debugging purposes, or as a one-time
+   // run to ensure correct results, then do not use for subsequent runs.
 
 void QuarkSmearingHandler::checkLaphEigvecComputation(const vector<LattField>& laphEigvecs,
                                                       const vector<LattField>& smeared_gauge_field)
@@ -505,8 +537,35 @@ void QuarkSmearingHandler::checkLaphEigvecComputation(const vector<LattField>& l
 
 // *************************************************************
 
+     // if eigenvectors are in the HostGlobal, returns a reference to them;
+     // if not, reads the eigenvectors from file(s) and places them in
+     // the HostGlobal
+
+const std::vector<LattField>& QuarkSmearingHandler::getLaphEigenvectors()
+{
+ if (!GB::theLaphEigvecsAreSet()){
+    if (!loadLaphEigenvectors()){
+       errorLaph("Was unable to get the Laph Eigenvectors");}}
+ return GB::theLaphEigvecs;
+}
+
+
+bool QuarkSmearingHandler::queryLaphEigenvectors()
+{
+ if (!GB::theLaphEigvecsAreSet()){
+    return loadLaphEigenvectors();}
+ return true;
+}
+
      // Provides access to the quark smearing eigenvectors
      // while in read mode.
+/*
+const LattField& QuarkSmearingHandler::getLaphEigenvector(int eigpair_num)
+{
+ check_info_set("getLaphEigenvector",1);
+ LevelKey key(eigpair_num);
+ return dh_ptr->getData(key,key);
+}
 
 const LattField& QuarkSmearingHandler::getLaphEigenvector(int eigpair_num)
 {
@@ -532,8 +591,8 @@ void QuarkSmearingHandler::removeLaphEigenvector(int eigpair_num)
 void QuarkSmearingHandler::clearLaphEigenvectors()
 {
  if (!m_read_mode) return;
- dh_ptr->clearData();
- Eigenvalues.resize(0);
+// dh_ptr->clearData();
+// Eigenvalues.resize(0);
 }
 
 void QuarkSmearingHandler::closeLaphLevelFiles()
@@ -554,6 +613,33 @@ bool QuarkSmearingHandler::checkAllLevelFilesExist()
        return false; }}
  return true;
 }
+*/
+
+bool QuarkSmearingHandler::loadLaphEigenvectors()
+{
+ check_info_set("getLaphEigenvector",1);
+ if (!m_read_mode) return false;
+ uint nlevels=qSmearPtr->getNumberOfLaplacianEigenvectors();
+ if (GB::theLaphEigvecs.size()>=nlevels) return true;  // already in HostGlobal
+ if (smearedQuarkFileStub.empty()) return false;
+
+        // read from file(s)
+ FileListInfo files(smearedQuarkFileStub+"_level",0,nlevels-1,false);
+ try{ 
+    GB::theLaphEigvecs.resize(nlevels);
+    DataGetHandlerMF<QuarkSmearingHandler,LevelKey,LevelKey,LattField> DH(*this,
+              files,"Laph--SmearedQuarkLevelFile","LaphEigenvectors");
+    for (uint eigpair_num=0;eigpair_num<nlevels;++eigpair_num){
+       LevelKey key(eigpair_num);
+       GB::theLaphEigvecs[eigpair_num]=DH.getData(key,key);  // does a copy
+       printLaph(make_strf("read LapH eigvec level %d",eigpair_num));
+       DH.removeData(key,key);}}
+ catch(const std::exception& xp){
+   printLaph("unable to read Laph eigenvectors from file(s)");
+   return false;}
+ return true;
+}
+
 
 void QuarkSmearingHandler::writeHeader(XMLHandler& xmlw, const LevelKey& fkey, 
                                        int suffix)

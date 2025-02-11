@@ -9,6 +9,7 @@
      <CUDASloppyPrecision>single</CUDASloppyPrecision>
   </QudaInfo>
   <Verbosity>low</Verbosity>
+
   <Task>
      <Name>LAPH_QUARK_LINE_ENDS</Name>
      <QuarkLineEndInfo>
@@ -75,7 +76,6 @@
               <DilutionType>full</DilutionType>
            </SpinDilution>
         </LaphDilutionScheme>
-        <Verbosity>full</Verbosity>
      </QuarkLineEndInfo> 
      <SinkComputations>
         <NumSinksBeforeProject>  4 </NumSinksBeforeProject>
@@ -101,5 +101,8 @@
          </TimeProjIndexList>
        </NoiseList_TimeProjIndexList>
      </SinkComputations>
+     <Verbosity>low</Verbosity>
+     <PrintCoefficients/>
   </Task> 
+
 </QudaLaph>

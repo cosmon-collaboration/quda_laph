@@ -1,7 +1,5 @@
 #include "gauge_configuration_info.h"
-#include <sstream>
 #include "quda_info.h"
-#include "layout_info.h"
 #include "laph_stdio.h"
 
 using namespace std;
@@ -34,8 +32,6 @@ void GaugeConfigurationInfo::set_info(XMLHandler& xml_in)
  xmlread(xmlg,"ConfigNumber",config_num,"GaugeConfigurationInfo");
  mc_chain_num=0;
  xmlreadif(xmlg,"MarkovChainNumber",mc_chain_num,"GaugeConfigurationInfo");
- nom_id="default_gauge_id";
- xmlreadif(xmlg,"NOMId",nom_id,"GaugeConfigurationInfo");
  gluon_anisotropy=1.0;
  xmlreadif(xmlg,"GluonAnisotropy",gluon_anisotropy,"GaugeConfigurationInfo");
  string response="antiperiodic";
@@ -64,7 +60,7 @@ GaugeConfigurationInfo::GaugeConfigurationInfo(
          : ensemble_name(rhs.ensemble_name), file_format(rhs.file_format),
            config_type(rhs.config_type), file_name(rhs.file_name),
            config_num(rhs.config_num), mc_chain_num(rhs.mc_chain_num),
-           nom_id(rhs.nom_id), gluon_anisotropy(rhs.gluon_anisotropy),
+           gluon_anisotropy(rhs.gluon_anisotropy),
            fermion_time_bc(rhs.fermion_time_bc) {}
 
 
@@ -77,7 +73,6 @@ GaugeConfigurationInfo& GaugeConfigurationInfo::operator=(
  file_name=rhs.file_name;
  config_num=rhs.config_num;
  mc_chain_num=rhs.mc_chain_num;
- nom_id=rhs.nom_id;
  gluon_anisotropy=rhs.gluon_anisotropy;
  fermion_time_bc=rhs.fermion_time_bc;
  return *this;
@@ -119,7 +114,6 @@ void GaugeConfigurationInfo::output(XMLHandler& xmlout) const
  xmlout.put_child("FileName",file_name);
  xmlout.put_child("ConfigNumber",make_string(config_num));
  xmlout.put_child("MarkovChainNumber",make_string(mc_chain_num));
- xmlout.put_child("NOMId",nom_id);
  xmlout.put_child("GluonAnisotropy",make_string(gluon_anisotropy));
  string fermtimebc((fermion_time_bc=='A')?"antiperiodic":"periodic");
  xmlout.put_child("FermionTimeBC",fermtimebc);

@@ -1,7 +1,8 @@
 #include "field_ops.h"
 #include "laph_stdio.h"
-#include <cstring>
 #include "utils.h"
+#include "array.h"
+#include <cstring>
 
 #ifdef ARCH_PARALLEL
 #include <mpi.h>
@@ -133,6 +134,47 @@ void setUnitField(LattField& field)
 void setZeroField(LattField& field)
 {
  setConstantField(field,complex<double>(0.0,0.0));
+}
+
+
+   // Sets the zeroth element at a site to exp(I*sum(site[k]*momfactors[k],k))
+   // and each subsequent element at the site gets multiplied by another
+   // factor of exp(I*local_phase)
+
+void setVariablePhaseField(LattField& field, const std::vector<double>& momfactors,
+                           const double& local_phase)
+{
+ bool dp=(field.bytesPerWord()==sizeof(complex<double>));
+ vector<char> sitedata(field.bytesPerSite());
+ vector<int> start(LayoutInfo::Ndim);
+ vector<int> stop(LayoutInfo::Ndim);
+ for (int d=0;d<LayoutInfo::Ndim;++d){
+    start[d]=LayoutInfo::getMyCommCoords()[d]*LayoutInfo::getRankLattExtents()[d];
+    stop[d]=start[d]+LayoutInfo::getRankLattExtents()[d];}
+ complex<double> localfactor(std::cos(local_phase),std::sin(local_phase));
+ vector<int> site(LayoutInfo::Ndim);
+ for (site[3]=start[3];site[3]<stop[3];++site[3]){
+    double tphase=momfactors[3]*double(site[3]);
+    complex<double> tfactor(std::cos(tphase),std::sin(tphase));
+    for (site[2]=start[2];site[2]<stop[2];++site[2]){
+       double zphase=momfactors[2]*double(site[2]);
+       complex<double> zfactor(std::cos(zphase),std::sin(zphase));
+       zfactor*=tfactor;
+       for (site[1]=start[1];site[1]<stop[1];++site[1]){
+          double yphase=momfactors[1]*double(site[1]);
+          complex<double> yfactor(std::cos(yphase),std::sin(yphase));
+          yfactor*=zfactor;
+          for (site[0]=start[0];site[0]<stop[0];++site[0]){
+             double xphase=momfactors[0]*double(site[0]);
+             complex<double> factor(std::cos(xphase),std::sin(xphase));
+             factor*=yfactor;
+             double* dptr=reinterpret_cast<double*>(sitedata.data());
+             float* sptr=reinterpret_cast<float*>(sitedata.data());
+             for (int j=0;j<int(field.elemsPerSite());++j,++dptr,++sptr){
+                if (dp){ *dptr=factor.real(); ++dptr; *dptr=factor.imag();}
+                else { *sptr=float(factor.real()); ++sptr; *sptr=float(factor.imag());}
+                factor*=localfactor;}
+             field.putSiteData(site,sitedata);}}}}
 }
 
 
@@ -703,6 +745,7 @@ void spin_mult(complex<T>* op, const complex<T>* ip, const vector<pair<int,compl
 }
 
 
+   //  Spin matrices in the DeGrand-Rossi basis
 template <typename T>
 void assign_spin_matrix(int spin_matrix_index, vector<pair<int,complex<T>>>& spin_mat)
 {
@@ -747,6 +790,8 @@ void assign_spin_matrix(int spin_matrix_index, vector<pair<int,complex<T>>>& spi
 }
 
 
+   //  Multiply infield by a spin matrices in the DeGrand-Rossi basis, returning
+   //  result in outfield.
 void lattice_spin_multiply(LattField& outfield, const LattField& infield, int spin_matrix_index)
 {
  if (infield.getFieldSiteType()!=FieldSiteType::ColorSpinVector){
@@ -768,6 +813,100 @@ void lattice_spin_multiply(LattField& outfield, const LattField& infield, int sp
     const complex<float>* ip=reinterpret_cast<const complex<float>*>(infield.getDataConstPtr());
     for (int k=0;k<nsites;++k,op+=nelem,ip+=nelem){
        spin_mult<float>(op,ip,spin_mat);}}
+}
+
+
+void get_spin_transform_matrix(Array<double>& transmat, const std::string& from_to)
+{
+ double vcp=1.0/sqrt(2.0);
+ double vcm=-1.0/sqrt(2.0);
+ if (from_to=="GR_to_DP"){
+    transmat(0,0)=0.0; transmat(0,1)=vcm; transmat(0,2)=0.0; transmat(0,3)=vcm;
+    transmat(1,0)=vcp; transmat(1,1)=0.0; transmat(1,2)=vcp; transmat(1,3)=0.0;
+    transmat(2,0)=0.0; transmat(2,1)=vcp; transmat(2,2)=0.0; transmat(2,3)=vcm;
+    transmat(3,0)=vcm; transmat(3,1)=0.0; transmat(3,2)=vcp; transmat(3,3)=0.0;}
+ else if (from_to=="DP_to_GR"){
+    transmat(0,0)=0.0; transmat(0,1)=vcp; transmat(0,2)=0.0; transmat(0,3)=vcm;
+    transmat(1,0)=vcm; transmat(1,1)=0.0; transmat(1,2)=vcp; transmat(1,3)=0.0;
+    transmat(2,0)=0.0; transmat(2,1)=vcp; transmat(2,2)=0.0; transmat(2,3)=vcp;
+    transmat(3,0)=vcm; transmat(3,1)=0.0; transmat(3,2)=vcm; transmat(3,3)=0.0;}
+ else if (from_to=="UK_to_GR"){
+    transmat(0,0)=0.0; transmat(0,1)=vcm; transmat(0,2)=0.0; transmat(0,3)=vcm;
+    transmat(1,0)=vcp; transmat(1,1)=0.0; transmat(1,2)=vcp; transmat(1,3)=0.0;
+    transmat(2,0)=0.0; transmat(2,1)=vcm; transmat(2,2)=0.0; transmat(2,3)=vcp;
+    transmat(3,0)=vcp; transmat(3,1)=0.0; transmat(3,2)=vcm; transmat(3,3)=0.0;}
+ else if (from_to=="GR_to_UK"){
+    transmat(0,0)=0.0; transmat(0,1)=vcp; transmat(0,2)=0.0; transmat(0,3)=vcp;
+    transmat(1,0)=vcm; transmat(1,1)=0.0; transmat(1,2)=vcm; transmat(1,3)=0.0;
+    transmat(2,0)=0.0; transmat(2,1)=vcp; transmat(2,2)=0.0; transmat(2,3)=vcm;
+    transmat(3,0)=vcm; transmat(3,1)=0.0; transmat(3,2)=vcp; transmat(3,3)=0.0;}
+ else if ((from_to=="CH_to_GR")||(from_to=="GR_to_CH")){
+    transmat(0,0)=0.0; transmat(0,1)=0.0; transmat(0,2)=0.0; transmat(0,3)=-1.0;
+    transmat(1,0)=0.0; transmat(1,1)=0.0; transmat(1,2)=1.0; transmat(1,3)=0.0;
+    transmat(2,0)=0.0; transmat(2,1)=1.0; transmat(2,2)=0.0; transmat(2,3)=0.0;
+    transmat(3,0)=-1.0;transmat(3,1)=0.0; transmat(3,2)=0.0; transmat(3,3)=0.0;}
+ else if (from_to=="UK_to_CH"){
+    transmat(0,0)=vcm; transmat(0,1)=0.0; transmat(0,2)=vcp; transmat(0,3)=0.0;
+    transmat(1,0)=0.0; transmat(1,1)=vcm; transmat(1,2)=0.0; transmat(1,3)=vcp;
+    transmat(2,0)=vcp; transmat(2,1)=0.0; transmat(2,2)=vcp; transmat(2,3)=0.0;
+    transmat(3,0)=0.0; transmat(3,1)=vcp; transmat(3,2)=0.0; transmat(3,3)=vcp;}
+ else if (from_to=="CH_to_UK"){
+    transmat(0,0)=vcm; transmat(0,1)=0.0; transmat(0,2)=vcp; transmat(0,3)=0.0;
+    transmat(1,0)=0.0; transmat(1,1)=vcm; transmat(1,2)=0.0; transmat(1,3)=vcp;
+    transmat(2,0)=vcp; transmat(2,1)=0.0; transmat(2,2)=vcp; transmat(2,3)=0.0;
+    transmat(3,0)=0.0; transmat(3,1)=vcp; transmat(3,2)=0.0; transmat(3,3)=vcp;}
+ else if ((from_to=="DP_to_UK")||(from_to=="UK_to_DP")){
+    transmat(0,0)=-1.0;transmat(0,1)=0.0; transmat(0,2)=0.0; transmat(0,3)=0.0;
+    transmat(1,0)=0.0; transmat(1,1)=-1.0;transmat(1,2)=0.0; transmat(1,3)=0.0;
+    transmat(2,0)=0.0; transmat(2,1)=0.0; transmat(2,2)=1.0; transmat(2,3)=0.0;
+    transmat(3,0)=0.0; transmat(3,1)=0.0; transmat(3,2)=0.0; transmat(3,3)=1.0;}
+}
+
+template <typename T>
+void convertSpinBasis(complex<T>* zGR, const complex<T>* zDP,
+                      const Array<double>& transmat)
+{
+ complex<T>* pL=zGR;
+ const complex<T>* pR=zDP;
+ for (int c=0;c<3;c++,++pL,++pR){
+    complex<T>* ppL=pL;
+    for (int s=0;s<4;++s,ppL+=3){
+       complex<T> res=complex<T>(0.0,0.0);
+       const complex<T>* ppR=pR;
+       for (int ss=0;ss<4;++ss,ppR+=3){
+          res+=T(transmat(s,ss))*(*ppR);}
+       *ppL=res;}}
+}
+
+void convertSpinBasis(std::vector<char>& siteGR, const std::vector<char>& siteDP, bool dp,
+                      const Array<double>& transmat)
+{
+ if (dp){
+    complex<double>* zGR=reinterpret_cast<complex<double>*>(siteGR.data());
+    const complex<double>* zDP=reinterpret_cast<const complex<double>*>(siteDP.data());
+    convertSpinBasis<double>(zGR,zDP,transmat);}
+ else{
+    complex<float>* zGR=reinterpret_cast<complex<float>*>(siteGR.data());
+    const complex<float>* zDP=reinterpret_cast<const complex<float>*>(siteDP.data());
+    convertSpinBasis<float>(zGR,zDP,transmat);}
+}
+
+
+void convertSpinBasis(LattField& outferm, const LattField& inferm, const std::string& from_to)
+{
+ bool dp=(inferm.bytesPerWord()==sizeof(complex<double>)); 
+ //int nelem_site=inferm.elemsPerSite();
+ Array<double> transmat(4,4);
+ get_spin_transform_matrix(transmat,from_to);
+ std::vector<char> siteDataOut(inferm.bytesPerSite());
+ std::vector<int> coord(LayoutInfo::Ndim);
+ for (coord[3]=0;coord[3]<LayoutInfo::getLattExtents()[3];++coord[3])
+ for (coord[2]=0;coord[2]<LayoutInfo::getLattExtents()[2];++coord[2])
+ for (coord[1]=0;coord[1]<LayoutInfo::getLattExtents()[1];++coord[1])
+ for (coord[0]=0;coord[0]<LayoutInfo::getLattExtents()[0];++coord[0]){
+    std::vector<char> siteDataIn(inferm.getSiteData(coord));
+    convertSpinBasis(siteDataOut,siteDataIn,dp,transmat);
+    outferm.putSiteData(coord,siteDataOut);}
 }
 
 
@@ -814,12 +953,14 @@ void calcCloverLeaves(LattField& cloverleaf, const vector<LattField>& gaugefield
    //
    //   Lattice shifts must take the fermion temporal boundary
    //   conditions into account.
+   //
+   //   The routine below assumes the DeGrand-Rossi Dirac matrix convention.
    
 
-void applyCloverDirac(LattField& outfield, const LattField& infield,
-                      const vector<LattField>& gauge_field,
-                      const GaugeConfigurationInfo& gaction,
-                      const QuarkActionInfo& qaction)
+void applyCloverDiracDGR(LattField& outfield, const LattField& infield,
+                         const vector<LattField>& gauge_field,
+                         const GaugeConfigurationInfo& gaction,
+                         const QuarkActionInfo& qaction)
 {
  if (int(gauge_field.size())!=LayoutInfo::Ndim){
     errorLaph("invalid gauge field in applyCloverDirac");}
@@ -836,7 +977,8 @@ void applyCloverDirac(LattField& outfield, const LattField& infield,
 
  if (qaction.getName()!="WILSON_CLOVER"){
     errorLaph("Can only applyCloverDirac if action name is WILSON_CLOVER");}
- bool timebc_antiperiodic=qaction.isFermionTimeBCAntiPeriodic();
+ //bool timebc_antiperiodic=qaction.isFermionTimeBCAntiPeriodic();
+ bool timebc_antiperiodic=false;       // minus sign is stored in gauge field both on host and device
  double kappa=qaction.getRValues()[2];
  double csw=qaction.getRValues()[4];
  double anisotropy=qaction.getRValues()[3];
@@ -877,16 +1019,23 @@ void applyCloverDirac(LattField& outfield, const LattField& infield,
  setZeroField(outfield);
  lattice_addto(outfield,infield,complex<double>(1.0/(2.0*kappa),0.0));
  lattice_addto(outfield,Dterm,complex<double>(-0.5,0.0));
-
-// vector<vector<int>> sites;
-// sites.push_back(vector<int>{4,7,3,12});
-// sites.push_back(vector<int>{11,15,7,19});
-// printField(outfield,"Dirac term",sites);
-
  lattice_addto(outfield,CFterm);
-// printField(CFterm,"clover term",sites);
 }
 
+
+   //   This routine assumes the Dirac-Pauli convention for the Dirac gamma-matrices.
+   
+void applyCloverDirac(LattField& outfield, const LattField& infield,
+                      const vector<LattField>& gauge_field,
+                      const GaugeConfigurationInfo& gaction,
+                      const QuarkActionInfo& qaction)
+{
+ LattField tmp(FieldSiteType::ColorSpinVector);
+ convertSpinBasis(outfield,infield,"DP_to_GR");
+ applyCloverDiracDGR(tmp,outfield,gauge_field,gaction,qaction);
+ convertSpinBasis(outfield,tmp,"GR_to_DP");
+}
+ 
 
     //  Applies the 3d spatial Laplacian with a smeared gauge field
     //  onto "infield", returning result in "outfield".  These fields

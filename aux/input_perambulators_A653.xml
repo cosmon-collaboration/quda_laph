@@ -9,6 +9,7 @@
      <CUDASloppyPrecision>single</CUDASloppyPrecision>
   </QudaInfo>
   <Verbosity>none</Verbosity>
+
   <Task>
      <Name>SMEAR_GAUGE_FIELD</Name>
      <GaugeConfigurationInfo>
@@ -22,8 +23,9 @@
         <LinkIterations>20</LinkIterations>
         <LinkStapleWeight>0.1</LinkStapleWeight>
      </GluonStoutSmearingInfo>
-     <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>
+   <!--  <SmearedGaugeFileName>outputfilenameifdesired</SmearedGaugeFileName> -->
   </Task>
+
   <Task>
      <Name>SMEAR_QUARK_FIELD</Name>
      <GaugeConfigurationInfo>
@@ -37,23 +39,24 @@
         <LinkIterations>20</LinkIterations>
         <LinkStapleWeight>0.1</LinkStapleWeight>
      </GluonStoutSmearingInfo>
-   <!--  <SmearedGaugeFileName>/latticeQCD/raid4/laph/cls21_A653_r000/smeared_gauge_field/1/smeared_gauge_field4D_1_qudalaphB</SmearedGaugeFileName>-->
-     <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>
+    <!-- <SmearedGaugeFileName>/path/smg_field</SmearedGaugeFileName> (include if need to read from file) -->
      <QuarkLaphSmearingInfo>
         <LaphSigmaCutoff>0.32</LaphSigmaCutoff>
         <NumberLaphEigvecs> 32 </NumberLaphEigvecs>
      </QuarkLaphSmearingInfo>
-     <SmearedQuarkFileStub>NOM_smeared_quark_field</SmearedQuarkFileStub>
+    <!-- <SmearedQuarkFileStub>outputfilestubnameifdesired</SmearedQuarkFileStub> -->
      <LaphEigenSolverInfo>
-        <ResidualTolerance>1.0e-11</ResidualTolerance>
+        <ResidualTolerance>1.0e-12</ResidualTolerance>
         <MaxIterations>200</MaxIterations>
         <KrylovDimension>64</KrylovDimension>
         <ChebyshevOrder>8</ChebyshevOrder>
         <MaxEigenvalue>15.0</MaxEigenvalue>
         <CutoffEigenvalue>0.5</CutoffEigenvalue>
-        <OutputVerbosity>2</OutputVerbosity>
      </LaphEigenSolverInfo>
+     <Verbosity>low</Verbosity> 
+     <PrintEigenvalues/> 
   </Task>
+
   <Task>
      <Name>LAPH_QUARK_PERAMBULATORS</Name>
      <QuarkPerambulatorInfo>
@@ -69,14 +72,11 @@
            <LinkIterations>20</LinkIterations>
            <LinkStapleWeight>0.1</LinkStapleWeight>
         </GluonStoutSmearingInfo>
-    <!--    <SmearedGaugeFileName>/latticeQCD/raid4/laph/cls21_A653_r000/smeared_gauge_field/1/smeared_gauge_field4D_1_qudalaphB</SmearedGaugeFileName>-->
-        <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>
         <QuarkLaphSmearingInfo>
            <LaphSigmaCutoff>0.32</LaphSigmaCutoff>
            <NumberLaphEigvecs> 32 </NumberLaphEigvecs>
         </QuarkLaphSmearingInfo>
-    <!--    <SmearedQuarkFileStub>/latticeQCD/raid4/laph/cls21_A653_r000/smeared_quark_field/1_Nev32/smeared_quark_field_1</SmearedQuarkFileStub>-->
-        <SmearedQuarkFileStub>NOM_smeared_quark_field</SmearedQuarkFileStub>
+      <!--  <SmearedQuarkFileStub>/path/sq_field</SmearedQuarkFileStub> (include to read from file) -->
         <QuarkActionInfo>
            <Name> WILSON_CLOVER </Name>
            <Flavor> ud </Flavor>
@@ -126,10 +126,6 @@
               <PostOrthoNullVectors>false</PostOrthoNullVectors>
            </MGPreconditioner> -->
         </InverterInfo>
-
-        <Verbosity>full</Verbosity> 
-     <!--   <Verbosity>medium</Verbosity> -->
-     <!--   <Verbosity>none</Verbosity> -->
       <!--  <ExtraSolutionChecks/> -->
      </QuarkPerambulatorInfo> 
      <ComputationSet>
@@ -138,17 +134,18 @@
         <NumEigsInProjectBatch>  4 </NumEigsInProjectBatch>
         <Computation>
            <SourceTime>8</SourceTime>
-      <!--     <SourceLaphEigvecIndices>12 17 23 24 25</SourceLaphEigvecIndices> -->
            <SourceLaphEigvecIndices>24  27 28 </SourceLaphEigvecIndices>
         </Computation>
         <Computation>
            <SourceTime>12</SourceTime>
-      <!--     <SourceLaphEigvecIndexMin>24</SourceLaphEigvecIndexMin> -->
            <SourceLaphEigvecIndexMin>29</SourceLaphEigvecIndexMin>
            <SourceLaphEigvecIndexMax>31</SourceLaphEigvecIndexMax>
         </Computation>
      </ComputationSet>
+     <Verbosity>low</Verbosity> 
+     <PrintCoefficients/> 
   </Task> 
+
   <Task>
      <Name>LAPH_QUARK_PERAMBULATORS</Name>
      <QuarkPerambulatorInfo>
@@ -164,14 +161,11 @@
            <LinkIterations>20</LinkIterations>
            <LinkStapleWeight>0.1</LinkStapleWeight>
         </GluonStoutSmearingInfo>
-    <!--    <SmearedGaugeFileName>/latticeQCD/raid4/laph/cls21_A653_r000/smeared_gauge_field/1/smeared_gauge_field4D_1_qudalaphB</SmearedGaugeFileName>-->
-        <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>
         <QuarkLaphSmearingInfo>
            <LaphSigmaCutoff>0.32</LaphSigmaCutoff>
            <NumberLaphEigvecs> 32 </NumberLaphEigvecs>
         </QuarkLaphSmearingInfo>
-    <!--    <SmearedQuarkFileStub>/latticeQCD/raid4/laph/cls21_A653_r000/smeared_quark_field/1_Nev32/smeared_quark_field_1</SmearedQuarkFileStub> -->
-        <SmearedQuarkFileStub>NOM_smeared_quark_field</SmearedQuarkFileStub>
+      <!--  <SmearedQuarkFileStub>/path/sq_field</SmearedQuarkFileStub> (include to read from file) -->
         <QuarkActionInfo>
            <Name> WILSON_CLOVER </Name>
            <Flavor> ud </Flavor>
@@ -210,9 +204,7 @@
               </Level0>
            </MGPreconditioner>
         </InverterInfo>
-
-        <Verbosity>none</Verbosity>
-       <ExtraSolutionChecks/>
+        <ExtraSolutionChecks/>
      </QuarkPerambulatorInfo> 
      <ComputationSet>
         <NumSinksBeforeProject>  4 </NumSinksBeforeProject>
@@ -224,10 +216,12 @@
         </Computation>
         <Computation>
            <SourceTime>12</SourceTime>
-      <!--     <SourceLaphEigvecIndexMin>24</SourceLaphEigvecIndexMin> -->
            <SourceLaphEigvecIndexMin>26</SourceLaphEigvecIndexMin>
            <SourceLaphEigvecIndexMax>28</SourceLaphEigvecIndexMax>
         </Computation>
      </ComputationSet>
+     <Verbosity>none</Verbosity>  <!-- to override the default verbosity -->
+     <PrintCoefficients/>         <!-- optional -->
   </Task> 
+
 </QudaLaph>

@@ -16,8 +16,8 @@ namespace LaphEnv {
 // *                                                               *
 // *  GluonSmearingHandler:                                        *
 // *                                                               *
-// *     -- computes smeared gauge field and either writes to      *
-// *        a file or inserts into the NamedObjMap                 *
+// *     -- computes smeared gauge field and places in the         *
+// *        HostGlobal, and optionally writes to a file            *
 // *                                                               *
 // *                                                               *
 // *****************************************************************
@@ -36,11 +36,6 @@ class GluonSmearingHandler
    const GaugeConfigurationInfo *uPtr;
    std::string h_filename;
    bool m_read_mode;
-
-       // storage and/or references to internal data
-
-   DataGetHandlerSFO<GluonSmearingHandler,RecordKey,
-                     std::vector<LattField>> *dh_ptr;
 
        // prevent copying ... handler might contain large
        // amounts of data
@@ -79,18 +74,21 @@ class GluonSmearingHandler
 
    std::string getFileName() const {return h_filename;}
 
-           // Computes the smeared gauge field and puts it into the file
-           // whose name is stored in "h_filename".  If "h_filename" 
-           // starts with "NOM_", results are actually put into the
-           // "NamedObjMap" with identifier "Laph--SmearedGaugeField".
+           // Computes the smeared gauge field into HostGlobal and 
+           // optionally puts it into the file whose name is stored in 
+           // "h_filename".
 
    void computeSmearedGaugeField();
 
-   const std::vector<LattField>& getSmearedGaugeField() const;
-   
-           // remove one time slice, or clear all of the smeared gauge 
-           // fields time slices from memory
+           // Returns a reference to the smeared gauge field.
+           // Checks first if in HostGlobal; if not, reads from
+           // file and stores it in HostGlobal
 
+   const std::vector<LattField>& getSmearedGaugeField();
+
+   bool querySmearedGaugeField();
+   
+           // clear the smeared config from HostGlobal
    void clearData();
 
    void copyDataToDevice();
@@ -106,6 +104,8 @@ class GluonSmearingHandler
                  const GaugeConfigurationInfo& gauge,
                  const std::string& smearedFieldFileName,
                  bool readmode);
+   
+   bool loadSmearedGaugeField();  // load from file, put into HostGlobal
 
    void filefail(const std::string& message);
 
@@ -119,10 +119,6 @@ class GluonSmearingHandler
                                  std::vector<LattField>>;
    friend class DataPutHandlerSF<GluonSmearingHandler,UIntKey,
                                  std::vector<LattField>>;
-   friend class DataGetHandlerSFNOM<GluonSmearingHandler,UIntKey,
-                                    std::vector<LattField>>;
-   friend class DataPutHandlerSFNOM<GluonSmearingHandler,UIntKey,
-                                    std::vector<LattField>>;
 
 };
 

@@ -1,5 +1,4 @@
 #include "filelist_info.h"
-#include "named_obj_map.h"
 #include "laph_stdio.h"
 #include "utils.h"
 
@@ -63,8 +62,6 @@ void FileListInfo::set_info(const std::string& stub, int min_suffix,
  m_file_stub=tidyString(stub);
  if (m_file_stub.empty()){
     throw(std::invalid_argument("Blank file name in FileListInfo"));}
- if ((m_file_stub.find("NOM_")==0)&&(m_file_stub.length()==4)){
-    throw(std::invalid_argument("Blank NOM name in FileListInfo"));}
  m_max_file_number=max_suffix;
  m_overwrite_mode = over_write;  // protect mode
  m_min_file_number=min_suffix;
@@ -103,17 +100,6 @@ int FileListInfo::getFirstAvailableSuffix(bool global_mode) const
     string filename=getFileName(suffix);
     if (!fileExists(filename)) return suffix;}
  printLaph("no suffix numbers are available for writing\n ... increase maxFilenumber");
- throw(std::invalid_argument("error"));
-}
-
-
-int FileListInfo::getFirstAvailableSuffixNOM() const
-{
- for (int suffix=m_min_file_number;suffix<=m_max_file_number;suffix++){
-    string filename=getFileName(suffix);
-    if (!NamedObjMap::query(filename)) return suffix;}
- printLaph("no suffix numbers are available for inserting into TheNamedObjMap");
- printLaph(" ... increase maxFilenumber");
  throw(std::invalid_argument("error"));
 }
 

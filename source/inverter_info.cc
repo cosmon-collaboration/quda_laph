@@ -2,16 +2,15 @@
 #include "quda_info.h"
 #include "util_quda.h"
 #include "utils.h"
-#include "laph_stdio.h"
 #include "layout_info.h"
-#include <map>
+#include "verbosity_info.h"
 
 using namespace std;
 
 
 namespace LaphEnv {
 
-
+//   NOTE:  in multigrid,  CGNR or GCR   ---  give a choice???
 
 InverterInfo::InverterInfo(const XMLHandler& xml_in)
 { 
@@ -95,6 +94,8 @@ void InverterInfo::setQudaInvertParam(QudaInvertParam& invParam,
 {
  invParam=newQudaInvertParam();
  qactioninfo.setQudaInvertParam(invParam);
+ invParam.input_location = QUDA_CPU_FIELD_LOCATION;
+ invParam.output_location = QUDA_CPU_FIELD_LOCATION;
  if (svalues[0]=="CGNR"){
     setQudaInvertParam_cgnr(invParam);}
  else if (svalues[0]=="BICGSTAB"){
@@ -354,6 +355,7 @@ void InverterInfo::setQudaInvertParam_gcr(QudaInvertParam& invParam) const
 // *        <PreOrthoNullVectors>true</PreOrthoNullVectors>                      *
 // *        <PostOrthoNullVectors>true</PostOrthoNullVectors>                    *
 // *        <RunVerify>false</RunVerify>   (use true for initial runs)           *
+// *        <Verbosity>med</Verbosity>  (low is default)                         *
 // *     </MGPreconditioner>                                                     *
 // *   </InvertInfo>                                                             *
 // *                                                                             *
@@ -451,6 +453,7 @@ void InverterInfo::set_info_gcr_multigrid(XMLHandler& xmlr)
  xmlsetQLBool(xmlmg,"PreOrthoNullVectors",ivalues,ivalindex,true,true);
  xmlsetQLBool(xmlmg,"PostOrthoNullVectors",ivalues,ivalindex,true,true);
  xmlsetQLBool(xmlmg,"RunVerify",ivalues,ivalindex,true,true);
+ xmlsetQLEnum(xmlmg,"Verbosity",{"none","low","medium","med","high","full"},ivalues,ivalindex,true,0);
 // printLaph(make_str("rvalindex = ",rvalindex," size of rvalues = ",rvalues.size()));
 // printLaph(make_str("ivalindex = ",ivalindex," size of ivalues = ",ivalues.size()));
 }
@@ -499,6 +502,7 @@ void InverterInfo::output_gcr_multigrid(XMLHandler& xmlout) const
  xmlmg.put_child(xmloutputQLBool("PreOrthoNullVectors",ivalues,ivalindex));
  xmlmg.put_child(xmloutputQLBool("PostOrthoNullVectors",ivalues,ivalindex));
  xmlmg.put_child(xmloutputQLBool("RunVerify",ivalues,ivalindex));
+ xmlmg.put_child(xmloutputQLEnum("Verbosity",{"none","low","medium","medium","high","high"},ivalues,ivalindex));
  xmlout.put_child(xmlmg);
 // printLaph(make_str("rvalindex = ",rvalindex," size of rvalues = ",rvalues.size()));
 // printLaph(make_str("ivalindex = ",ivalindex," size of ivalues = ",ivalues.size()));
@@ -554,6 +558,9 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(QudaInvertParam& invParam,
  bool pre_ortho_setup=(ivalues[ivalindex])?true:false; ++ivalindex;
  bool post_orth_setup=(ivalues[ivalindex])?true:false; ++ivalindex;
  bool setup_verify=(ivalues[ivalindex])?true:false; ++ivalindex;
+ int vint=ivalues[ivalindex]; ++ivalindex;
+ if (vint>2) --vint;
+ Verbosity verbosity(vint);
 
  double setup_tolerance=1e-10;  // so setup will continue to max iteration
  double smoother_tol=1e-6;      // so will go to max iteration
@@ -571,7 +578,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(QudaInvertParam& invParam,
  invParam.pipeline = 0;
  invParam.dagger = QUDA_DAG_NO;
  invParam.verbosity = getVerbosity();
- invParam.verbosity_precondition = getVerbosity();
+ invParam.verbosity_precondition = verbosity.getQudaValue();
  invParam.compute_true_res=true;
  invParam.preserve_source = QUDA_PRESERVE_SOURCE_NO;
  invParam.cuda_prec_sloppy = QudaInfo::get_cuda_prec_sloppy();
@@ -588,6 +595,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(QudaInvertParam& invParam,
  invParam.deflation_op=nullptr;
  invParam.eig_param=nullptr;
  invParam.deflate=QUDA_BOOLEAN_FALSE;
+// invParam.use_smeared_gauge = QUDA_BOOLEAN_FALSE;     WILL CHANGE THIS EVENTUALLY
  invParam.struct_size = sizeof(invParam);
 
     // create new structure to hold the auxiliary data, then
@@ -627,7 +635,6 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(QudaInvertParam& invParam,
  mg_param.generate_all_levels=(generate_all)?QUDA_BOOLEAN_TRUE:QUDA_BOOLEAN_FALSE;
  mg_param.pre_orthonormalize=(pre_ortho_setup)?QUDA_BOOLEAN_TRUE:QUDA_BOOLEAN_FALSE;
  mg_param.post_orthonormalize=(post_orth_setup)?QUDA_BOOLEAN_TRUE:QUDA_BOOLEAN_FALSE;
- mg_param.setup_minimize_memory=QUDA_BOOLEAN_FALSE;
  mg_param.run_verify=(setup_verify)?QUDA_BOOLEAN_TRUE:QUDA_BOOLEAN_FALSE;
 
  for (int level=0;level<nlevels;++level){
@@ -639,7 +646,8 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(QudaInvertParam& invParam,
     mg_param.setup_maxiter_refresh[level] = 0;
     mg_param.n_vec_batch[level]=1;
 
-    mg_param.coarse_solver[level]=(level<(nlevels-1))? QUDA_GCR_INVERTER: QUDA_CA_GCR_INVERTER;
+    mg_param.coarse_solver[level]=(level<(nlevels-1))? QUDA_GCR_INVERTER: QUDA_CA_GCR_INVERTER;  
+//    mg_param.coarse_solver[level]=(level<(nlevels-1))? QUDA_CGNR_INVERTER: QUDA_CA_CGNR_INVERTER;   CHOICE HERE ????
     mg_param.coarse_grid_solution_type[level]=QUDA_MATPC_SOLUTION;
     mg_param.coarse_solver_tol[level]=coarse_solver_tol[level];
     mg_param.coarse_solver_maxiter[level]=coarse_solver_maxiter[level];
@@ -655,6 +663,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(QudaInvertParam& invParam,
     mg_param.spin_block_size[level]=(level==0)?2:1;
     mg_param.n_vec[level]=nullspacedim[level];
     mg_param.smoother[level]=QUDA_CA_GCR_INVERTER;
+    //mg_param.smoother[level]=QUDA_CA_CGNR_INVERTER;
     mg_param.smoother_solve_type[level]=QUDA_DIRECT_PC_SOLVE;
     mg_param.smoother_tol[level]=smoother_tol;
     mg_param.smoother_solver_ca_basis[level] = QUDA_POWER_BASIS;
@@ -666,7 +675,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(QudaInvertParam& invParam,
     mg_param.cycle_type[level]=QUDA_MG_CYCLE_RECURSIVE;
     mg_param.location[level]=QUDA_CUDA_FIELD_LOCATION;
     mg_param.precision_null[level]=QUDA_HALF_PRECISION;
-    mg_param.verbosity[level]=QUDA_SUMMARIZE;
+    mg_param.verbosity[level]=verbosity.getQudaValue();
     mg_param.global_reduction[level]=QUDA_BOOLEAN_YES;   // yes, unless using schwarz smoother
     mg_param.use_eig_solver[level] = QUDA_BOOLEAN_FALSE;
     mg_param.setup_use_mma[level] = QUDA_BOOLEAN_FALSE;
@@ -713,7 +722,7 @@ void InverterInfo::initDeflationParam_gcr_multigrid() const
  coarse_deflate_param.invert_param= 0;   // not used
  coarse_deflate_param.a_max = -1;  // determine by power method
  coarse_deflate_param.eig_type = QUDA_EIG_TR_LANCZOS;
- coarse_deflate_param.use_smeared_gauge = false;
+ coarse_deflate_param.use_smeared_gauge = QUDA_BOOLEAN_FALSE;   // WILL CHANGE THIS EVENTUALLY
  coarse_deflate_param.spectrum = QUDA_SPECTRUM_SR_EIG;
  coarse_deflate_param.use_norm_op = QUDA_BOOLEAN_TRUE;
  coarse_deflate_param.require_convergence = QUDA_BOOLEAN_FALSE;

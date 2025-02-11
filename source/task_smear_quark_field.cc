@@ -1,25 +1,18 @@
 #include "tasks.h"
-#include "gauge_configuration_info.h"
-#include "gauge_configuration_handler.h"
 #include "quark_smearing_handler.h"
-#include "layout_info.h"
-#include "latt_field.h"
-#include "field_smearing_info.h"
 #include "stop_watch.h"
-#include "laph_eigen_info.h"
 
 using namespace std;
-using namespace quda;
 
 namespace LaphEnv {
 
 
 // ************************************************************************************
 // *                                                                                  *
-// *   Task to smear the quark field with LapH smearing and then either write to      *
-// *   file or to the NamedObjMap. The input XML is expected to have the following    *
-// *   form:                                                                          *
-// *                                              
+// *   Task to smear the quark field with LapH smearing and optionally write to       *
+// *   file.  The eigenvectors will be stored in HostGlobal.  The input XML is        *
+// *   expected to have the following form:                                           *
+// *                                                                                  *
 // *    <Task>                                                                        *
 // *       <Name>SMEAR_QUARK_FIELD</Name>                                             *
 // *       <GaugeConfigurationInfo>                                                   *
@@ -33,12 +26,12 @@ namespace LaphEnv {
 // *          <LinkIterations>20</LinkIterations>                                     *
 // *          <LinkStapleWeight>0.1</LinkStapleWeight>                                *
 // *       </GluonStoutSmearingInfo>                                                  *
-// *       <SmearedGaugeFileName>/path/smeared_gauge_field</SmearedGaugeFileName>     *
+// *       <SmearedGaugeFileName>/path/smg_field</SmearedGaugeFileName> (see below)   *
 // *       <QuarkLaphSmearingInfo>                                                    *
 // *          <LaphSigmaCutoff>0.32</LaphSigmaCutoff>                                 *
 // *          <NumberLaphEigvecs> 164 </NumberLaphEigvecs>                            *
 // *       </QuarkLaphSmearingInfo>                                                   *
-// *       <SmearedQuarkFileStub>/path/smeared_quark_field</SmearedQuarkFileStub>     *
+// *       <SmearedQuarkFileStub>/path/smq_field</SmearedQuarkFileStub> (see below)   *
 // *       <LaphEigenSolverInfo>                                                      *
 // *          <ResidualTolerance>1.0e-11</ResidualTolerance>                          *
 // *          <MaxIterations>200</MaxIterations>                                      *
@@ -48,13 +41,28 @@ namespace LaphEnv {
 // *          <CutoffEigenvalue>0.5</CutoffEigenvalue>                                *
 // *          <StartingVectorType>equal_components</StartingVectorType>               *
 // *          <CheckSolution>true</CheckSolution>                                     *
-// *          <OutputVerbosity>2</OutputVerbosity>                                    *
 // *       </LaphEigenSolverInfo>                                                     *
+// *       <Verbosity>low</Verbosity> (optional: override default)                    *
+// *       <PrintEigenvalues/> (optional)                                             *
 // *    </Task>                                                                       *
+// *                                                                                  *
+// *   If the tag <SmearedGaugeFileName> is set, then the smeared gauge field is      *
+// *   read from file.  Otherwise, this routine expects that the smeared gauge        *
+// *   field resides in HostGlobal; if not there, an error results.                   *
+// *                                                                                  *
+// *   If the tag <SmearedQuarkFileStub> is set, then the LapH eigenvectors are       *
+// *   written out to file(s).  In any case, the eigenvectors are returned in         *
+// *   HostGlobal.                                                                    *
 // *                                                                                  *
 // *   The LapH eigenvectors are removed from the gpu device memory since it is       *
 // *   assumed quark propagators will subsequently be computed, so gpu memory         *
 // *   will be needed for those computations.                                         *
+// *                                                                                  *
+// *   The default verbosity from the main program is used, unless overridden by      *
+// *   the <Verbosity> tag above.                                                     *
+// *                                                                                  *
+// *   If the <PrintEigenvalues/> is present, then the eigenvalues on each time       *
+// *   slice are printed to standard output.                                          *
 // *                                                                                  *
 // ************************************************************************************
 	
@@ -64,49 +72,41 @@ void doSmearQuarkField(XMLHandler& xmltask)
  GaugeConfigurationInfo gaugeinfo(xmltask);
  GluonSmearingInfo gsmear(xmltask);
  string smeared_gauge_filename;
- xmlread(xmltask,"SmearedGaugeFileName",smeared_gauge_filename,"SMEAR_QUARK_FIELD");
+ xmlreadif(xmltask,"SmearedGaugeFileName",smeared_gauge_filename,"SMEAR_QUARK_FIELD");
  QuarkSmearingInfo qsmear(xmltask);
  string smeared_quark_filestub;
- xmlread(xmltask,"SmearedQuarkFileStub",smeared_quark_filestub,"SMEAR_QUARK_FIELD");
-
- bool laph_solve=true;
- LaphEigenSolverInfo *eigsolveinfo=0;
- if (xml_tag_count(xmltask,"LaphEigenSolverInfo")==1)
-    eigsolveinfo = new LaphEigenSolverInfo(xmltask);
- else 
-    laph_solve=false;
+ xmlreadif(xmltask,"SmearedQuarkFileStub",smeared_quark_filestub,"SMEAR_QUARK_FIELD");
+ LaphEigenSolverInfo eigsolveinfo(xmltask);
+    // change verbosity from default if requested
+ Verbosity task_verbosity(getVerbosity());
+ if (xml_read_if(xmltask,task_verbosity)){
+    setVerbosity(task_verbosity.getQudaValue());}
+ bool print_eigvals=false;
+ if (xml_tag_count(xmltask,"PrintEigenvalues")>0){
+    print_eigvals=true;}
 
  printLaph("\n");
  printLaph(" *************************************************************");
  printLaph(" *                                                           *");
  printLaph(" *   Laph Task: Smear the quark field by computing the       *");
  printLaph(" *              eigenvectors of the smeared-covariant        *");
- printLaph(" *              Laplacian, write to file or the NamedObjMap  *");
+ printLaph(" *              Laplacian, write to file or the Host Global  *");
  printLaph(" *                                                           *");
  printLaph(" *************************************************************\n\n");
  printLaph(make_strf("%s",gaugeinfo.output()));
  printLaph(make_strf("\n%s",gsmear.output()));
- printLaph(make_strf("Smeared gauge field file name = %s",smeared_gauge_filename));
+ if (!smeared_gauge_filename.empty()){
+    printLaph(make_strf("Smeared gauge field file name = %s",smeared_gauge_filename));}
  printLaph(make_strf("\n%s",qsmear.output()));
- printLaph(make_strf("Smeared quark field file stub = %s",smeared_quark_filestub));
- if (laph_solve){
-    printLaph(make_strf("\n%s",eigsolveinfo->output()));}
- else{
-    printLaph("\nEstimate largest eigenvalue of -Laplacian only");}  // Not implemented yet
+ if (!smeared_quark_filestub.empty()){
+    printLaph(make_strf("Smeared quark field file stub = %s",smeared_quark_filestub));}
+ printLaph(make_strf("\n%s",eigsolveinfo.output()));
 
     // create the handler (in write mode)
 
  QuarkSmearingHandler Q(gsmear,gaugeinfo,qsmear,smeared_quark_filestub,false);
-
  StopWatch outer; outer.start();
-
- if (laph_solve) Q.computeLaphEigenvectors(*eigsolveinfo,smeared_gauge_filename);
-/* else{
-    double lambda_max=Q.estimateLargestLaplacianEigenvalue(smeared_gauge_filename);
-    QDPIO::cout << endl<<"Estimate of largest eigenvalue of -Laplacian is "
-                << lambda_max <<endl<<endl;}
-*/
- delete eigsolveinfo;
+ Q.computeLaphEigenvectors(eigsolveinfo,smeared_gauge_filename,print_eigvals);
  outer.stop();
  printLaph(make_strf("SMEAR_QUARK_FIELD task: total time = %g seconds",
                      outer.getTimeInSeconds()));

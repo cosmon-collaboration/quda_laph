@@ -3,7 +3,6 @@
 
 #include "gauge_configuration_info.h"
 #include "latt_field.h"
-#include "quda.h"
 #include "quda_info.h"
 
 namespace LaphEnv {
@@ -45,7 +44,7 @@ class GaugeConfigurationHandler
       
     const GaugeConfigurationInfo* m_gauge_info;
 
-      // pointer to the gauge field (external: in NamedObjMap)
+      // pointer to the gauge field (external: in HostGlobal)
  
     const std::vector<LattField>* m_cfg;
 
@@ -62,11 +61,11 @@ class GaugeConfigurationHandler
 
     void setInfo(const GaugeConfigurationInfo& gaugeinfo);
 
-    ~GaugeConfigurationHandler();
-    
-    void clear();   // clears this handler, but leaves config in NamedObjMap
-
-    void eraseDataOnHost();   // removes config from NamedObjMap on host
+    ~GaugeConfigurationHandler();   // destructor, but leaves config in HostGlobal
+                                    // if one device, leaves it on the device too
+    void clear();   // clears this handler, but leaves config in HostGlobal
+                    // if one device, leaves it on the device too
+    void eraseDataOnHost();   // removes config from HostGlobal on host
   
     void setData();
     
@@ -80,8 +79,6 @@ class GaugeConfigurationHandler
     bool isInfoSet() const { return (m_gauge_info!=0);}
 
     bool isDataSet() const { return (m_cfg!=0);}
-
-    std::string getNOMId() const {return m_gauge_info->getNOMId();}
 
     void getXMLInfo(XMLHandler& gauge_xmlinfo) const;
 

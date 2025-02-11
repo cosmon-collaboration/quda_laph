@@ -1,9 +1,8 @@
 #include "io_fm_handler.h"
-#include <vector>
-#include <unistd.h>
+#include "layout_info.h"
 #include "utils.h"
 #include "laph_stdio.h"
-#include <sstream>
+#include <unistd.h>
 
 
 using namespace std;
@@ -1020,7 +1019,7 @@ void IOFMHandler::write(const LattField& output)
 {
  int sizeT=output.bytesPerSite();
  lattinfo.resetBytes(sizeT);
- unsigned int sz[LayoutInfo::Ndim+2];
+ unsigned int sz[IOFMHandler::Nd+2];
  sz[0]=LayoutInfo::Ndim;
  for (int k=0;k<LayoutInfo::Ndim;k++)
     sz[k+1]=LayoutInfo::getLattExtents()[k];
@@ -1039,13 +1038,13 @@ void IOFMHandler::write(const std::vector<LattField>& output)
 
 void IOFMHandler::read(LattField& input)
 {
- unsigned int sz[LayoutInfo::Ndim+2];
+ unsigned int sz[IOFMHandler::Nd+2];
  multi_read(sz,LayoutInfo::Ndim+2);
  bool errflag=(sz[0]!=(unsigned int)(LayoutInfo::Ndim));
  for (int k=0;k<LayoutInfo::Ndim;k++)
     errflag=errflag || (sz[k+1]!=(unsigned int)(LayoutInfo::getLattExtents()[k]));
  check_for_failure(errflag, "Invalid lattice read");
- int sizeT=sz[LayoutInfo::Ndim+1];
+ int sizeT=sz[IOFMHandler::Nd+1];
  lattinfo.resetBytes(sizeT);
  input.reset_by_bytes_per_site(sizeT);  // read using precision in file
  int cmplxbytes=input.bytesPerSite()/input.elemsPerSite();

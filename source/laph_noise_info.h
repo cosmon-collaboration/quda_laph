@@ -2,9 +2,7 @@
 #define LAPH_NOISE_INFO_H
 
 #include "gauge_configuration_info.h"
-
-typedef unsigned long   uint32;
-
+#include <cstdint>
 
 namespace LaphEnv {
 
@@ -65,7 +63,7 @@ namespace LaphEnv {
 class LaphNoiseInfo
 {
 
-  uint32 store;
+  uint32_t store;
 
  public:  
 
@@ -92,12 +90,12 @@ class LaphNoiseInfo
 
     // output functions
 
-  uint32 getSeed(const GaugeConfigurationInfo& G) const;
+  uint32_t getSeed(const GaugeConfigurationInfo& G) const;
 
   unsigned int getZNGroup() const 
    { const unsigned int GP=0x3Fu; return (store & GP); }
 
-  uint32 getSeed() const { return (store>>6); }
+  uint32_t getSeed() const { return (store>>6); }
 
   std::string output(int indent = 0) const;
 

@@ -3,7 +3,7 @@
 
 #include "xml_handler.h"
 #include "field_smearing_info.h"
-
+#include "verbosity_info.h"
 
 namespace LaphEnv {
 
@@ -22,7 +22,6 @@ namespace LaphEnv {
 // *      <MaxEigenvalue> 15.0 </MaxEigenvalue> (can be omitted)     *
 // *      <CutoffEigenvalue> 3.4 </CutoffEigenvalue> (optional)      *
 // *      <StartingVectorType>equal_components</StartingVectorType>  *
-// *      <OutputVerbosity>0</OutputVerbosity>                       *
 // *      <CheckSolution/>  (optional)                               *
 // *   </LaphEigenSolverInfo>                                        *
 // *                                                                 *
@@ -80,9 +79,6 @@ namespace LaphEnv {
 // *   "StartingVectorType" is optional: its default value is        *
 // *   "equal_components", although "random" is another valid value. *
 // *                                                                 *
-// *   "OutputVerbosity" is optional: it must have value 0,1,2.      *
-// *   Higher numbers lead to more output from the solver.           *
-// *                                                                 *
 // *                                                                 *
 // *******************************************************************
 
@@ -98,7 +94,6 @@ class LaphEigenSolverInfo
   double cutoffEigenvalue;
   std::string startVector;
   bool check_solution;
-  int outputVerbosity;
 
 
  public:  
@@ -129,8 +124,6 @@ class LaphEigenSolverInfo
 
   std::string getStartingVectorType() const { return startVector; }
 
-  int getOutputVerbosity() const { return outputVerbosity; }
-  
   bool doCheckSolution() const { return check_solution;}
 
   std::string output(int indent = 0) const;

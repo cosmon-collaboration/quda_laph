@@ -485,16 +485,6 @@ bool allNotEqual(const T& u1, const T& u2, const T& u3, const T& u4, const T& u5
 }
 
 // ******************************************************************
-
-template <typename T>
-std::size_t multiHash(const std::vector<T>& dat) 
-{
-  std::size_t ret = 0;
-  for (auto aD : dat) ret ^= aD;
-  return ret;
-}
-
-// ******************************************************************
 }
 
 #endif
