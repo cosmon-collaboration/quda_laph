@@ -283,7 +283,6 @@ void InverterInfo::setQudaInvertParam_gcr(QudaInvertParam &invParam) const {
 //         <GenerateAllLevels>true</GenerateAllLevels>  all or level 0 only
 //         <PreOrthoNullVectors>true</PreOrthoNullVectors>
 //         <PostOrthoNullVectors>true</PostOrthoNullVectors>
-//         <SetupMinimizeMemory>false<SetupMinimizeMemory>
 //         <RunVerify>false</RunVerify>   (use true for initial runs)
 //      </MGPreconditioner>
 //    </InvertInfo>
@@ -394,7 +393,6 @@ void InverterInfo::set_info_gcr_multigrid(XMLHandler &xmlr) {
   xmlsetQLBool(xmlmg, "GenerateAllLevels", ivalues, ivalindex, true, true);
   xmlsetQLBool(xmlmg, "PreOrthoNullVectors", ivalues, ivalindex, true, true);
   xmlsetQLBool(xmlmg, "PostOrthoNullVectors", ivalues, ivalindex, true, true);
-  xmlsetQLBool(xmlmg, "SetupMinimizeMemory", ivalues, ivalindex, true, false);
   xmlsetQLBool(xmlmg, "RunVerify", ivalues, ivalindex, true, true);
 }
 
@@ -451,7 +449,6 @@ void InverterInfo::output_gcr_multigrid(XMLHandler &xmlout) const {
   xmlmg.put_child(xmloutputQLBool("GenerateAllLevels", ivalues, ivalindex));
   xmlmg.put_child(xmloutputQLBool("PreOrthoNullVectors", ivalues, ivalindex));
   xmlmg.put_child(xmloutputQLBool("PostOrthoNullVectors", ivalues, ivalindex));
-  xmlmg.put_child(xmloutputQLBool("SetupMinimizeMemory", ivalues, ivalindex));
   xmlmg.put_child(xmloutputQLBool("RunVerify", ivalues, ivalindex));
   xmlout.put_child(xmlmg);
 }
@@ -523,8 +520,6 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
   const bool pre_ortho_setup = (ivalues[ivalindex]) ? true : false;
   ++ivalindex;
   const bool post_orth_setup = (ivalues[ivalindex]) ? true : false;
-  ++ivalindex;
-  const bool minimize_mem = (ivalues[ivalindex]) ? true : false;
   ++ivalindex;
   //const bool setup_verify = (ivalues[ivalindex]) ? true : false;
   ++ivalindex;
@@ -612,7 +607,6 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
     (generate_all) ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE;
   mg_param.pre_orthonormalize = (pre_ortho_setup) ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE;
   mg_param.post_orthonormalize = (post_orth_setup) ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE;
-  mg_param.setup_minimize_memory = (minimize_mem) ? QUDA_BOOLEAN_TRUE : QUDA_BOOLEAN_FALSE;
   mg_param.run_verify = QUDA_BOOLEAN_FALSE ;
 
   for (int level = 0; level < nlevels; ++level) {
@@ -630,12 +624,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(
     mg_param.coarse_solver_tol[level] = coarse_solver_tol[level];
     mg_param.coarse_solver_maxiter[level] = coarse_solver_maxiter[level];
 
-    //mg_param.coarse_solver_ca_basis[level] = QUDA_CHEBYSHEV_BASIS;
     mg_param.coarse_solver_ca_basis_size[level] = 4;
-    //mg_param.coarse_solver_ca_lambda_min[level] = 0.0;
-    //mg_param.coarse_solver_ca_lambda_max[level] =
-    //   -1.0; // determine max by power method
-
     for (int dir = 0; dir < LayoutInfo::Ndim; ++dir) {
       mg_param.geo_block_size[level][dir] = blockextents[level][dir];
     }
