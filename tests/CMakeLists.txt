@@ -11,6 +11,14 @@ add_executable(TestNoise test_noise.cc)
 target_include_directories(TestNoise PUBLIC include)
 target_link_libraries(TestNoise PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
 
+add_executable(TestColorCross test_ColorCross.cc)
+target_include_directories(TestColorCross PUBLIC include)
+target_link_libraries(TestColorCross PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
+
+add_executable(TestColorContract test_ColorContract.cc)
+target_include_directories(TestColorContract PUBLIC include)
+target_link_libraries(TestColorContract PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
+
 add_executable(TestBaryonKernel test_laphBaryonKernel.cc)
 target_include_directories(TestBaryonKernel PUBLIC include)
 target_link_libraries(TestBaryonKernel PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)

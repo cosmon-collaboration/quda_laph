@@ -6,7 +6,7 @@
 using namespace LaphEnv ;
 
 void
-cpu_code( std::vector<LattField> &laph_evecs )
+old_code( std::vector<LattField> &laph_evecs )
 {
 }
 
@@ -92,11 +92,22 @@ int main(int argc, char *argv[]) {
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
-    LayoutInfo::getRankLattExtents()[3]	} ;
-  double _Complex host_mom[512] = {} ;
-  double _Complex return_array[512] = {} ;
+    LayoutInfo::getRankLattExtents()[3] } ;
+  const int nspat  = X[0]*X[1]*X[2] ;
   
-  laphBaryonKernelComputeModeTripletA( nmom , Nev , blockSizeMomProj ,
+  double _Complex host_mom[ nmom*nspat ] ;
+
+  // host_mom should be complex
+  for( size_t i = 0 ; i < nmom*nspat ; i++ ) {
+    host_mom[i] = 0.1 ;
+  }
+
+  const size_t nEvChoose3 = Nev*(Nev-1)*(Nev-2)/6;
+  double _Complex return_array[ nmom*nEvChoose3 ] = {} ;
+  
+  laphBaryonKernelComputeModeTripletA( nmom,
+				       Nev,
+				       blockSizeMomProj,
 				       evList.data() ,
 				       host_mom ,
 				       return_array ,

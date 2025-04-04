@@ -1,63 +1,90 @@
+/**
+   Test the laphBaryonTripletB code in my fork of quda
+ */
 #include "QudaLaphIncludes.h"
 #include "init_quda_laph.h"
 #include "quark_smearing_handler.h"
 #include "field_ops.h"
 
+#include <cassert>
+
 using namespace LaphEnv ;
 
+// ok so what is this doing?
 void
-old_code( std::vector<LattField> &laph_evecs )
+cpu_code( const int n1,
+	  const int n2,
+	  const int n3,
+	  const int nMom,
+	  const int nEv,
+	  const double _Complex *host_coeffs1,
+	  const double _Complex *host_coeffs2,
+	  const double _Complex *host_coeffs3,
+	  const double _Complex *host_mode_trip_buf,
+	  double _Complex *host_ret_arr )
 {
-}
-
-static void
-printevecs( std::vector<LattField> laphEigvecs , const int rank )
-{
-#ifdef PRINT_EVECS
-  int myrank = rank ;
+  int global = 1 ;
 #ifdef ARCH_PARALLEL
-  MPI_Comm_rank(  MPI_COMM_WORLD  , &myrank ) ;
+  MPI_Comm_size( MPI_COMM_WORLD , &global ) ;
 #endif
-  for( size_t n = 0 ; n < laphEigvecs.size() ; n++ ) {
-    if( myrank == rank ) {
-      std::cout<<"Ev "<<n<<" | rank "<<rank<<std::endl ;
-      std::complex<double> *pt = (std::complex<double>*)laphEigvecs[n].getDataPtr() ;
-      for( size_t i = 0 ; i < (size_t)LayoutInfo::getRankLatticeNumSites() ; i++ ) {
-	for( size_t c = 0 ; c < (size_t)FieldNcolor ; c++ ) {
-	  std::cout<<i<<"/"<<c<<" "<<pt[c+FieldNcolor*i]<<std::endl ;
+  const int nSubEv = nEv/global ;
+
+  // zgemm d_mtb*d_coeffs = d_q3 
+  double _Complex mtb[ nMom*nSubEv*nEv*nEv ] ;
+  memcpy( mtb , host_mode_trip_buf , nMom*nSubEv*nEv*nEv*sizeof( double _Complex ) ) ;
+
+  // is the first product
+  double _Complex q3[ nMom*nSubEv*nEv*n3 ] ;
+  
+  // eg this is doing C_ij \sum_k A_ik Bjk strided for nMom*nSubEv
+  // C_ij is size Nmom
+  for( int p = 0 ; p < nMom ; p++ ) {
+    for( int n = 0 ; n < nSubEv ; n++ ) {
+      for( int evo = 0 ; evo < nEv ; evo++ ) { 
+	double _Complex *pt1 = (double _Complex*)mtb + nEv*( evo + nEv*( n + nSubEv*p ) ) ;
+	for( int nin = 0 ; nin < n3 ; nin++ ) {
+	  double _Complex *pt2 = (double _Complex*)host_coeffs3+nin*nEv ;
+	  double _Complex sum = 0.0 ;
+	  for( int ev = 0 ; ev < nEv ; ev++ ) {
+	    sum += pt1[ev]*pt2[ev] ; 
+	  }
+	  q3[nin+n3*( evo + nEv*( n + nSubEv*p ) ) ] = sum ; 
 	}
       }
-      std::cout<<std::endl ;
-      fflush( stdout ) ;
     }
   }
-#endif
-}
 
-static void
-set_constant( std::vector<LattField> &laphEigvecs )
-{
-  int myrank = 0 ;
-#ifdef ARCH_PARALLEL
-  MPI_Comm_rank( MPI_COMM_WORLD , &myrank ) ;
-#endif
-  // give them some bullshit values
-  for( size_t n = 0 ; n < laphEigvecs.size() ; n++ ) {
-    #ifdef ALL_CONSTANT
-    std::complex<double> z( (n+1) , (n+1) ) ;
-    setConstantField( laphEigvecs[n], z );
-    #else
-    std::complex<double> *ptr = (std::complex<double>*)laphEigvecs[n].getDataPtr() ;
-    const size_t V = (size_t)LayoutInfo::getRankLatticeNumSites() ;
-    for( size_t i = 0 ; i < V ; i++ ) {
-      for( size_t c = 0 ; c < (size_t)FieldNcolor ; c++ ) {
-	const std::complex<double> z( n+laphEigvecs.size()*(c+FieldNcolor*(i+V*myrank))+1 ,
-				      n+laphEigvecs.size()*(c+FieldNcolor*(i+V*myrank))+1 ) ;
-	*ptr = z ;
-	ptr++ ;
+  // second set of gemms
+  // host_coeffs2*d_q3 -> dtmp
+  // n1*nEv . nMom*nSubEv*nEv*n3 -> nSubEv*n2*n3 
+  for( int p = 0 ; p < nMom ; p++ ) {
+    // again just a product over nEv
+    double _Complex tmp[ nSubEv*n2*n3 ] ;
+    for( int nsub = 0 ; nsub < nSubEv ; nsub++ ) {
+      for( int nout = 0 ; nout < n2 ; nout++ ) {
+	for( int nin = 0 ; nin < n3 ; nin++ ) { 
+	  double _Complex sum = 0 ;
+	  for( int ev = 0 ; ev < nEv ; ev++ ) {
+	    sum += host_coeffs2[ ev + nout*nEv ] * q3[ nin + n3*( ev + nEv*( nsub + nSubEv*p ) ) ] ; 
+	  }
+	  tmp[ nin + n3*( nout + n2*nsub ) ] = sum ;
+	}
       }
     }
-    #endif
+    // host_coeffs1*d_tmp -> d_ret
+    // n1*nEv . nSubEv*n2*n3 -> nmom.n1.n2.n3
+    for( int i = 0 ; i < n1 ; i++ ) {
+      for( int j = 0 ; j < n2 ; j++ ) {
+	for( int k = 0 ; k < n3 ; k++ ) {
+	  // only works for 1 rank so that nSubEv == nEv 
+	  double _Complex sum = 0.0 ;
+	  for( int ev = 0 ; ev < nEv ; ev++ ) {
+	    sum += host_coeffs1[ev+i*nEv]*tmp[ k + n3*( j + n2*ev ) ];
+	  }
+	  host_ret_arr[ k + n3*( j + n2*( i + n1*p ) ) ] = sum ;
+	}
+      }
+    }
   }
 }
 
@@ -72,35 +99,38 @@ int main(int argc, char *argv[]) {
 #ifdef ARCH_PARALLEL
   MPI_Comm_size( MPI_COMM_WORLD , &global ) ;
 #endif
+  assert( global == 1 ) ; // for now
+
+  const int Nev = 16 ;
+  const int NsubEv = 16/global ;
+  const int nmom = 4 , n1 = 1 , n2 = 2 , n3 = 3 ;
   
-  // call rephase here
-  const int Nev = 8 ;
-  std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
+  double _Complex host_coeffs1[ n1*Nev ] ;
+  double _Complex host_coeffs2[ n2*Nev ] ;
+  double _Complex host_coeffs3[ n3*Nev ] ;
 
-  std::cout<<"Constant Eigvecs"<<std::endl ;
-  set_constant( laphEigvecs ) ;
-  for( int i = 0 ; i < global ; i++ ) {
-    printevecs( laphEigvecs , i ) ;
-  }
-
-  std::vector<void*> evList( Nev ) ;
-  for( int i = 0 ; i < Nev ; i++ ) {
-    evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
-  }
-
-  const int nmom = 1 ;
-  double _Complex coeffs[512] = {} ;
-  double _Complex host_mode_triplet[512] = {} ;
-  double _Complex return_array[512] = {} ;
+  double _Complex host_mode_trip_buf[ NsubEv*Nev*Nev*nmom ] ;
+  double _Complex host_ret_arr[ nmom*n1*n2*n3 ] ;
   
-  laphBaryonKernelComputeModeTripletB( 1, 1, 1,
+  laphBaryonKernelComputeModeTripletB( n1, n2, n3,
 				       nmom,
 				       Nev ,
-				       coeffs ,
-				       coeffs ,
-				       coeffs ,
-				       host_mode_triplet ,
-				       return_array ) ;
+				       host_coeffs1 ,
+				       host_coeffs2 ,
+				       host_coeffs3 ,
+				       host_mode_trip_buf ,
+				       host_ret_arr ) ;
+
+  double _Complex cpu_ret_arr[ nmom*n1*n2*n3 ] ;
+
+  cpu_code( n1, n2, n3,
+	    nmom,
+	    Nev ,
+	    host_coeffs1 ,
+	    host_coeffs2 ,
+	    host_coeffs3 ,
+	    host_mode_trip_buf ,
+	    cpu_ret_arr ) ;
   
   finalize();
 
