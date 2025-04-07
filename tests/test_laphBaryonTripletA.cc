@@ -60,7 +60,6 @@ cpu_code( const int nMom,
   
   // spatial only
   const size_t nSites = X[0]*X[1]*X[2] ;
-  
   const size_t nEvC3 = nEv*(nEv-1)*(nEv-2)/6 ;
 
   LattField Diq( FieldSiteType::ColorVector);
@@ -266,7 +265,7 @@ int main(int argc, char *argv[]) {
 
   // host_mom should be complex
   for( size_t p = 0 ; p < nmom ; p++ ) {
-    const int mom[3] = { p+1, p+2, p+3 } ;
+    const size_t mom[3] = { p+1, p+2, p+3 } ;
     for( size_t i = 0 ; i < (size_t)nspat ; i++ ) {
       const size_t x = i%X[0] ;
       const size_t y = (i/X[0])%X[1] ;
