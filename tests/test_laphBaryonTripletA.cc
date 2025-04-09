@@ -3,15 +3,26 @@
 #include "quark_smearing_handler.h"
 #include "field_ops.h"
 
+#include <quda.h>
+#include <timer.h>
+#include <blas_lapack.h>
+#include <blas_quda.h>
+#include <tune_quda.h>
+#include <color_spinor_field.h>
+#include <contract_quda.h>
+
 #include <cassert>
 #include <complex.h>
 
 #include <random>
 
 using namespace LaphEnv ;
+using namespace quda ;
 
 // will give zero for these otherwise default to uniform random numbers
 //#define PSEUDOCONSTANT
+
+//#define VERBOSE_COMPARISON
 
 // cpu color cross
 static void
@@ -191,6 +202,140 @@ cpu_codev3( const int nMom,
   }
 }
 
+// so I tied an onion to my belt, which was the style at the time
+void alamode( const int nMom,
+	      const int nEv,
+	      const int blockSizeMomProj,
+	      void **host_evec, 
+	      const double _Complex *host_mom,
+	      QudaInvertParam inv_param,
+	      double _Complex *return_arr,
+	      const int X[4])
+{
+  //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_TOTAL);
+  
+  // important that this only works on spatial nSites
+  const size_t nSites = X[0]*X[1]*X[2];
+  const size_t nEvChoose3 = nEv*(nEv-1)/2*(nEv-2)/3;
+  
+  // appropriate checks and balances
+  //if (sizeof(Complex) != sizeof(double _Complex)) {
+  //  errorQuda("Irreconcilable difference between interface and internal complex number conventions");
+  //}
+  if( nEvChoose3%blockSizeMomProj != 0 ) {
+    errorQuda("Block size mom proj needs to divide %zu %d", nEvChoose3 , blockSizeMomProj);
+  }
+  
+  //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_INIT);
+
+  // Parameter object describing evecs
+  const lat_dim_t x = { X[0] , X[1] , X[2] , X[3] } ;
+  ColorSpinorParam cpu_evec_param(host_evec, inv_param, x, false, QUDA_CPU_FIELD_LOCATION);
+  cpu_evec_param.nSpin = 1;
+  std::vector<ColorSpinorField> evec(nEv) ;
+  for (int iEv=0; iEv<nEv; ++iEv) {
+    cpu_evec_param.v = host_evec[iEv];
+    evec[iEv] = ColorSpinorField(cpu_evec_param);
+  }
+
+  // chuck all the evecs on the GPU
+  ColorSpinorParam cuda_evec_param(cpu_evec_param,inv_param,QUDA_CUDA_FIELD_LOCATION);
+  cuda_evec_param.setPrecision(inv_param.cuda_prec, inv_param.cuda_prec, true);
+  std::vector<ColorSpinorField> quda_evec(nEv);
+  for (int i=0; i<nEv; i++) {
+    quda_evec[i] = ColorSpinorField(cuda_evec_param) ;
+    quda_evec[i] = evec[i] ; // CPU -> GPU
+  }
+  
+  // Create device diquark vector
+  ColorSpinorParam cuda_diq_param(cpu_evec_param,inv_param,QUDA_CUDA_FIELD_LOCATION);
+  ColorSpinorField quda_diq(cuda_diq_param) ;
+  
+  // Device side temp array (complBuf in chroma_laph)
+  const size_t data_tmp_bytes = blockSizeMomProj*X[0]*X[1]*X[2]*2*quda_evec[0].Precision();
+  void *d_tmp = pool_device_malloc(data_tmp_bytes);
+
+  const size_t data_ret_bytes = nEvChoose3*nMom*2*quda_evec[0].Precision();
+  void *d_ret = pool_device_malloc(data_ret_bytes);
+
+  const size_t data_mom_bytes = nMom*nSites*2*quda_evec[0].Precision();
+  void *d_mom = pool_device_malloc(data_mom_bytes);
+  if( getVerbosity() >= QUDA_SUMMARIZE ) {
+    const size_t OneGB = 1024*1024*1024;
+    const size_t total_bytes = data_tmp_bytes + data_ret_bytes + data_mom_bytes ;
+    printfQuda("d_tmp %fGB | d_ret %fGB | d_mom %fGB | total = %fGB\n",
+	       (double)data_tmp_bytes/(OneGB), (double)data_ret_bytes/(OneGB),
+	       (double)data_mom_bytes/(OneGB), (double)total_bytes/(OneGB)); 
+  }
+  //getProfileBaryonKernelModeTripletsA().TPSTOP(QUDA_PROFILE_INIT);
+
+  // Copy host data to device
+  //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_H2D);
+  qudaMemcpy(d_mom, host_mom, data_mom_bytes, qudaMemcpyHostToDevice);  
+  //getProfileBaryonKernelModeTripletsA().TPSTOP(QUDA_PROFILE_H2D);
+
+  // idea here like always is to do several ev-blocks at once in a zgemm
+  const __complex__ double alpha = 1.0, beta = 0.0;    
+  QudaBLASParam cublas_param_mom_sum = newQudaBLASParam();
+  cublas_param_mom_sum.trans_a = QUDA_BLAS_OP_N;
+  cublas_param_mom_sum.trans_b = QUDA_BLAS_OP_T;
+  cublas_param_mom_sum.m = nMom;
+  cublas_param_mom_sum.k = nSites;
+  cublas_param_mom_sum.n = blockSizeMomProj;
+  cublas_param_mom_sum.lda = nSites;
+  cublas_param_mom_sum.ldb = nSites;
+  cublas_param_mom_sum.ldc = nEvChoose3;
+  cublas_param_mom_sum.batch_count = 1;
+  cublas_param_mom_sum.alpha = (__complex__ double)alpha;  
+  cublas_param_mom_sum.beta  = (__complex__ double)beta;
+  cublas_param_mom_sum.data_order = QUDA_BLAS_DATAORDER_ROW;
+  cublas_param_mom_sum.data_type = QUDA_BLAS_DATATYPE_Z;
+
+  //getProfileBaryonKernelModeTripletsA().TPSTOP(QUDA_PROFILE_TOTAL);
+
+  int nInBlock = 0, blockStart = 0;
+  for (int aEv=0; aEv<nEv; aEv++) {
+    for (int bEv=aEv+1; bEv<nEv; bEv++) {
+      //getProfileColorCross().TPSTART(QUDA_PROFILE_COMPUTE);
+      colorCrossQuda(quda_evec[aEv], quda_evec[bEv], quda_diq);
+      //getProfileColorCross().TPSTOP(QUDA_PROFILE_COMPUTE);
+      for (int cEv=bEv+1; cEv<nEv; cEv++) {
+	//getProfileColorContract().TPSTART(QUDA_PROFILE_COMPUTE);
+	colorContractQuda(quda_diq, quda_evec[cEv],(std::complex<double>*)d_tmp + nSites*nInBlock);
+	//getProfileColorContract().TPSTOP(QUDA_PROFILE_COMPUTE);
+	nInBlock++;
+	// eh todo this can be cleaned up
+	if (nInBlock == blockSizeMomProj) {
+	  cublas_param_mom_sum.c_offset = blockStart;
+	  //getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);  
+	  blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp, d_ret,
+						cublas_param_mom_sum,
+						QUDA_CUDA_FIELD_LOCATION);
+	  //getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);
+	  blockStart += nInBlock;
+	  nInBlock = 0;
+	}
+      }
+    }
+  }
+
+  // Copy return array back to host
+  //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_TOTAL); 
+  //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_D2H);
+  qudaMemcpy(return_arr, d_ret, data_ret_bytes, qudaMemcpyDeviceToHost);  
+  //getProfileBaryonKernelModeTripletsA().TPSTOP(QUDA_PROFILE_D2H);
+  
+  // Clean up memory allocations
+  //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_FREE);
+
+  pool_device_free(d_tmp);
+  pool_device_free(d_mom);
+  pool_device_free(d_ret);
+
+  //getProfileBaryonKernelModeTripletsA().TPSTOP(QUDA_PROFILE_FREE);
+  //getProfileBaryonKernelModeTripletsA().TPSTOP(QUDA_PROFILE_TOTAL);
+}
+
 static void
 set_constant( std::vector<LattField> &laphEigvecs )
 {
@@ -242,7 +387,7 @@ int main(int argc, char *argv[]) {
   assert( global == 1 ) ;
   
   // call rephase here
-  const int Nev = 16 ;
+  const int Nev = 12 ;
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
 
   std::cout<<"Constant Eigvecs"<<std::endl ;
@@ -253,13 +398,15 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 4 ;
-  const int blockSizeMomProj = nmom ;
+  const int nmom = 3 ;
+  const int blockSizeMomProj = 4 ;
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
     LayoutInfo::getRankLattExtents()[3] } ;
   const int nspat  = X[0]*X[1]*X[2] ;
+
+  std::cout<<"nmom "<<nmom<<" | block "<<blockSizeMomProj<<std::endl ;
   
   double _Complex host_mom[ nmom*nspat ] = {} ;
 
@@ -292,6 +439,7 @@ int main(int argc, char *argv[]) {
 
   StopWatch gpu ;
   gpu.start() ;
+  /*
   laphBaryonKernelComputeModeTripletA( nmom,
 				       Nev,
 				       blockSizeMomProj,
@@ -299,6 +447,28 @@ int main(int argc, char *argv[]) {
 				       host_mom ,
 				       retGPU,
 				       X ) ;
+  */
+    // should be an argument
+  QudaInvertParam inv_param = newQudaInvertParam();
+  inv_param.dslash_type = QUDA_WILSON_DSLASH;
+  inv_param.solution_type = QUDA_MAT_SOLUTION;
+  inv_param.solve_type = QUDA_DIRECT_SOLVE;
+  inv_param.cpu_prec = QUDA_DOUBLE_PRECISION;
+  inv_param.cuda_prec = QUDA_DOUBLE_PRECISION;
+  inv_param.dirac_order = QUDA_DIRAC_ORDER;
+  inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
+  inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
+  inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
+
+  alamode( nmom,
+	   Nev,
+	   blockSizeMomProj,
+	   evList.data(),
+	   host_mom,
+	   inv_param,
+	   retGPU,
+	   X ) ;
+  
   gpu.stop() ;
   printLaph(make_strf("\nGPU modetripletA in = %g seconds\n", gpu.getTimeInSeconds()));
 
@@ -327,15 +497,16 @@ int main(int argc, char *argv[]) {
   printLaph(make_strf("\nCPUv3 modetripletA in = %g seconds\n", cpu.getTimeInSeconds()));
   
   // test outputs
+  printf( "CPU == GPU\n" ) ;
   for( size_t p = 0 ; p < nmom ; p++ ) {
     double sum = 0 ;
     for( size_t i = 0 ; i < nEvChoose3 ; i++ ) {
       const size_t idx = i + nEvChoose3*p ;
       sum += cabs( retCPU[idx] - retGPU[idx] ) ;
-      #if 0
+      #ifdef VERBOSE_COMPARISON
       printf( " (%f %f) == (%f %f)\n" ,
-	      creal(retCPU[idx1]) , cimag(retCPU[idx1]) ,
-	      creal(retGPU[idx2]) , cimag(retGPU[idx2]) ) ;
+	      creal(retCPU[idx]) , cimag(retCPU[idx]) ,
+	      creal(retGPU[idx]) , cimag(retGPU[idx]) ) ;
       #endif
     }
     std::cout<<"Summed diff p="<<p<<" "<<sum<<std::endl ;

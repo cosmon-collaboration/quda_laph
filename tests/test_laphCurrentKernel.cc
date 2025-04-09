@@ -18,7 +18,7 @@
 using namespace quda ;
 using namespace LaphEnv ;
 
-//#define VERBOSE
+#define VERBOSE_COMPARISON
 
 static void cpu_code( const int n1,
 		      const int n2,
@@ -83,6 +83,7 @@ static void alamode( const int n1,
 		     void **host_quark,
 		     void **host_quark_bar,
 		     const double _Complex *host_mom,
+		     QudaInvertParam inv_param,
 		     void *ret_arr,
 		     const int X[4])
 {
@@ -97,20 +98,6 @@ static void alamode( const int n1,
   if( (n2*n1)%block_size_mom_proj != 0 ) {
     errorQuda("I only support block sizes that are factors of n1*n2") ;
   }
-
-  // wait a fucking minute, host_mom is an integer!!! This is just wrong.
-  const std::complex<double>* host_mom_ptr = reinterpret_cast<const std::complex<double>*>(host_mom);
-  
-  QudaInvertParam inv_param = newQudaInvertParam();
-  inv_param.dslash_type = QUDA_WILSON_DSLASH;
-  inv_param.solution_type = QUDA_MAT_SOLUTION;
-  inv_param.solve_type = QUDA_DIRECT_SOLVE;
-  inv_param.cpu_prec = QUDA_DOUBLE_PRECISION;
-  inv_param.cuda_prec = QUDA_DOUBLE_PRECISION;
-  inv_param.dirac_order = QUDA_DIRAC_ORDER;
-  inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
-  inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
-  inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
 
   // Some common variables
   const size_t n_spatial_sites = X[0]*X[1]*X[2];
@@ -156,18 +143,19 @@ static void alamode( const int n1,
   // nmom x nsites | nsites x T
   // output is an n_mom x X[3] matrix
   cublas_param_mom_sum.m = n_mom ; // # of rows of A -> mom list
-  cublas_param_mom_sum.lda = n_spatial_sites ; // # of cols of A == L^3
-  cublas_param_mom_sum.n = X[3] ; // # of rows of (B)^T which is time in lexi order
-  cublas_param_mom_sum.ldb = n_spatial_sites ; // #of rows of B == L^3
+  cublas_param_mom_sum.n = X[3] ;
+
   cublas_param_mom_sum.k   = n_spatial_sites ; // should be lda and ldb
+  cublas_param_mom_sum.lda = n_spatial_sites ; // # of cols of A == L^3
+  cublas_param_mom_sum.ldb = n_spatial_sites ; // #of rows of B == L^3
+
   cublas_param_mom_sum.ldc = X[3] ;
-  //  cublas_param_mom_sum.batch_count = 1;
-  cublas_param_mom_sum.batch_count = block_size_mom_proj ;
+  cublas_param_mom_sum.batch_count = 1 ;
   cublas_param_mom_sum.alpha = (__complex__ double)alpha;  
   cublas_param_mom_sum.beta  = (__complex__ double)beta;
   cublas_param_mom_sum.data_order = QUDA_BLAS_DATAORDER_ROW;
   cublas_param_mom_sum.data_type = QUDA_BLAS_DATATYPE_Z;
-    //--------------------------------------------------------------------------------
+  //--------------------------------------------------------------------------------
 
   // Copy host data to device
   //getProfileCurrentKernel().TPSTART(QUDA_PROFILE_H2D);
@@ -179,42 +167,31 @@ static void alamode( const int n1,
     quda_quark[dil2] = quark[dil2] ;
   }
   // For the moment, use the chroma_laph defined momenta, then compute on host
-  qudaMemcpy(d_mom, host_mom_ptr, data_mom_bytes, qudaMemcpyHostToDevice);  
+  qudaMemcpy(d_mom, host_mom, data_mom_bytes, qudaMemcpyHostToDevice);  
   //getProfileCurrentKernel().TPSTOP(QUDA_PROFILE_H2D);
 
   // doing too much work here as (di1,dil2) == (dil2,dil1)*
   int n_in_block = 0 , idx_last = 0 ;
   for (int dil1=0; dil1<n1; dil1++) {
-
     cpu_quark_bar_param.v = host_quark_bar[dil1] ;
     ColorSpinorField quark_bar(cpu_quark_bar_param) ;
     ColorSpinorField quda_quark_bar(cuda_quark_bar_param) ;
     quda_quark_bar = quark_bar ;
-
     // just block dil2
-    for (int dil2=0; dil2<n2; dil2++) {
-      
+    for (int dil2=0; dil2<n2; dil2++){
       //getProfileCurrentKernel().TPSTART(QUDA_PROFILE_COMPUTE);
       innerProductQuda( quda_quark_bar, quda_quark[dil2], (std::complex<double>*)d_tmp + n_sites*n_in_block );
       n_in_block++ ;
       //getProfileCurrentKernel().TPSTOP(QUDA_PROFILE_COMPUTE);
 
-      if( n_in_block == block_size_mom_proj ) {
-
-	cublas_param_mom_sum.b_stride = n_mom*X[3] ;
-	cublas_param_mom_sum.c_stride = n_mom*X[3] ;
-	
-	// want a simple GEMM version for testing and expand it for striding and batching when I can be fucked
-	///getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);
-	blas_lapack::native::stridedBatchGEMM( d_mom, d_tmp,
-					       (std::complex<double>*)d_ret + idx_last*X[3]*n_mom,
-					       cublas_param_mom_sum,
-					       QUDA_CUDA_FIELD_LOCATION);
-
-	idx_last = 1+dil2+n2*dil1 ;
-	//getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);
-	n_in_block = 0 ;
-      }
+      ///getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);
+      blas_lapack::native::stridedBatchGEMM( d_mom, d_tmp,
+					     (std::complex<double>*)d_ret+(dil2+n2*dil1)*X[3]*n_mom,
+					     cublas_param_mom_sum,
+					     QUDA_CUDA_FIELD_LOCATION);
+      //getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);
+      idx_last += block_size_mom_proj ;
+      n_in_block = 0 ;
     }
   }
 
@@ -288,13 +265,16 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 2 , blockSizeMomProj = 1 , n1 = 2 , n2 = 2 ;
+  const int nmom = 2 , blockSizeMomProj = 4 , n1 = 2 , n2 = 2 ;
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
     LayoutInfo::getRankLattExtents()[3] } ;
   const int nspat  = X[0]*X[1]*X[2] ;
 
+  std::cout<<"n1,n2 "<< n1 << "," << n2 << " | nmom" << nmom <<
+    " | block " << blockSizeMomProj << std::endl ;
+  
   // host_mom should be complex
   double _Complex host_mom[ nmom*nspat ] = {} ;
   // host_mom should be complex                                                                                                           
@@ -314,17 +294,45 @@ int main(int argc, char *argv[]) {
   }
   
   double _Complex GPU_ret[ n1*n2*nmom*X[3] ] = {} ;
-  laphCurrentKernel( n1, n2,
-		     nmom,
-		     blockSizeMomProj,
-		     evList.data() , 
-		     evList.data() ,
-		     host_mom ,
-		     GPU_ret ,
-		     X ) ;
+
+  QudaInvertParam inv_param = newQudaInvertParam();
+  inv_param.dslash_type = QUDA_WILSON_DSLASH;
+  inv_param.solution_type = QUDA_MAT_SOLUTION;
+  inv_param.solve_type = QUDA_DIRECT_SOLVE;
+  inv_param.cpu_prec = QUDA_DOUBLE_PRECISION;
+  inv_param.cuda_prec = QUDA_DOUBLE_PRECISION;
+  inv_param.dirac_order = QUDA_DIRAC_ORDER;
+  inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
+  inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
+  inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
+
+  alamode( n1, n2,
+	   nmom,
+	   blockSizeMomProj,
+	   evList.data() , 
+	   evList.data() ,
+	   host_mom ,
+	   inv_param ,
+	   GPU_ret ,
+	   X ) ;  
+
   // GPU version
   StopWatch gpu ;
   gpu.start() ;
+    
+
+  memset( GPU_ret , 0.0 , n1*n2*nmom*X[3]*sizeof(double _Complex));
+
+  alamode( n1, n2,
+	   nmom,
+	   blockSizeMomProj,
+	   evList.data() , 
+	   evList.data() ,
+	   host_mom ,
+	   inv_param ,
+	   GPU_ret ,
+	   X ) ;
+  /*
   laphCurrentKernel( n1, n2,
 		     nmom,
 		     blockSizeMomProj,
@@ -333,6 +341,7 @@ int main(int argc, char *argv[]) {
 		     host_mom ,
 		     GPU_ret ,
 		     X ) ;
+  */
   gpu.stop();
   printLaph(make_strf("\nGPU current kernel in = %g seconds\n", gpu.getTimeInSeconds()));
 
@@ -356,11 +365,11 @@ int main(int argc, char *argv[]) {
     for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
       for( int p = 0 ; p < nmom ; p++ ) {
 	double sum = 0.0 ;
-	#ifdef VERBOSE
+	#ifdef VERBOSE_COMPARISON
 	printf( "(di1,dil2,p) %d,%d,%d\n" , dil1, dil2, p) ;
 	#endif
 	for( int t = 0 ; t < X[3] ; t++ ) {
-	  #ifdef VERBOSE
+	  #ifdef VERBOSE_COMPARISON
 	  printf( "(%f %f) == (%f %f)\n" ,
 		  creal( CPU_ret[t+X[3]*(p+nmom*(dil2+n2*dil1) )] ) ,
 		  cimag( CPU_ret[t+X[3]*(p+nmom*(dil2+n2*dil1) )] ) ,
