@@ -23,22 +23,27 @@ using namespace quda ;
 
 //#define VERBOSE_COMPARISON
 
-static void
+static inline void
 evprod( const double _Complex *coeffs ,
-	void **host_evec ,
+	const void *const *host_evec ,
 	const size_t n ,
 	const size_t nEv ,
 	const size_t nsites ,
 	double _Complex *q )
 {
-#pragma omp parallel for
+#pragma omp for
   for( size_t i = 0 ; i < nsites ; i++ ) {
-    for( size_t dil = 0 ; dil < n ; dil++ ) {
+    double _Complex *pt2[nEv] ;
+    for( size_t ev = 0 ; ev < nEv ; ev++ ) {
+      pt2[ev] = (double _Complex*)host_evec[ev]+3*i ; 
+    }
+
+    for( size_t dil = 0 ; dil < n ; dil++ ) {      
       for( size_t c = 0 ; c < 3 ; c++ ) {
 	double _Complex sum = 0.0 ;
-	for( size_t ev = 0 ; ev < nEv ; ev++ ) {
-	  double _Complex *pt = (double _Complex*)host_evec[ev]+c+3*i ; 
-	  sum += (*pt) * coeffs[ev+dil*nEv] ;
+	#pragma unroll
+	for( size_t ev = 0 ; ev < nEv ; ev++ ) {	  
+	  sum += (*(pt2[ev]+c) ) * coeffs[ev+dil*nEv] ;
 	}
 	q[c+3*(i+nsites*dil)] = sum ;
       }
@@ -62,38 +67,46 @@ void cpu_code( const int n1, const int n2, const int n3, const int nMom,
 	       const double _Complex *host_coeffs3,
 	       const double _Complex *host_mom, 
 	       const int nEv,
-	       void **host_evec, 
-	       double _Complex *return_arr,
+	       const void *const *host_evec, 
+	       double _Complex *return_array,
 	       const int blockSizeMomProj,
 	       const int X[4] )
 {
   const size_t nsites = X[0]*X[1]*X[2] ;
-  double _Complex q1[ n1*nsites*3 ] = {} , q2[ n2*nsites*3 ] = {} , q3[ n3*nsites*3 ] = {} ;
-  evprod( host_coeffs1 , host_evec , n1 , nEv , nsites , q1 ) ;
-  evprod( host_coeffs2 , host_evec , n2 , nEv , nsites , q2 ) ;
-  evprod( host_coeffs3 , host_evec , n3 , nEv , nsites , q3 ) ;
-
-  // ok and then it is just the baryon triplet contraction with q1,q2,q3
-  //#pragma omp parallel for collapse(3) reduction(+:return_arr[:n1*n2*n3*nMom])
-  for( size_t i = 0 ; i < nsites ; i++ ) {
-    for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
-      for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
-	double _Complex Diq[3] ;
-	diq( (const double _Complex*)q1 + 3*(i+nsites*dil1) ,
-	     (const double _Complex*)q2 + 3*(i+nsites*dil2) ,
-	     Diq ) ;
-	for( int dil3 = 0 ; dil3 < n3 ; dil3++ ) {
-	  const double _Complex Con = \
-	    Diq[0]*q3[0+3*(i+nsites*dil3)] +
-	    Diq[1]*q3[1+3*(i+nsites*dil3)] +
-	    Diq[2]*q3[2+3*(i+nsites*dil3)] ;
-	  for( int p = 0 ; p < nMom ; p++ ) {
-	    return_arr[dil3+n3*(dil2+n2*(dil1+n1*p))] += host_mom[i+nsites*p]*Con ; 
+  //double _Complex q1[ n1*nsites*3 ] = {} , q2[ n2*nsites*3 ] = {} , q3[ n3*nsites*3 ] = {} ;
+  double _Complex *q1 = (double _Complex*)calloc( n1*nsites*3 , sizeof(double _Complex) ) ;
+  double _Complex *q2 = (double _Complex*)calloc( n2*nsites*3 , sizeof(double _Complex) ) ;
+  double _Complex *q3 = (double _Complex*)calloc( n3*nsites*3 , sizeof(double _Complex) ) ;
+#pragma omp parallel
+  {
+    evprod( host_coeffs1 , host_evec , n1 , nEv , nsites , q1 ) ;
+    evprod( host_coeffs2 , host_evec , n2 , nEv , nsites , q2 ) ;
+    evprod( host_coeffs3 , host_evec , n3 , nEv , nsites , q3 ) ;
+    // ok and then it is just the baryon triplet contraction with q1,q2,q3
+#pragma omp for collapse(3) reduction(+:return_array[:n1*n2*n3*nMom])
+    for( size_t i = 0 ; i < nsites ; i++ ) {
+      for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
+	for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
+	  double _Complex Diq[3] ;
+	  diq( (const double _Complex*)q1 + 3*(i+nsites*dil1) ,
+	       (const double _Complex*)q2 + 3*(i+nsites*dil2) ,
+	       Diq ) ;
+	  for( int dil3 = 0 ; dil3 < n3 ; dil3++ ) {
+	    const double _Complex Con =		\
+	      Diq[0]*q3[0+3*(i+nsites*dil3)] +
+	      Diq[1]*q3[1+3*(i+nsites*dil3)] +
+	      Diq[2]*q3[2+3*(i+nsites*dil3)] ;
+	    for( int p = 0 ; p < nMom ; p++ ) {
+	      return_array[dil3+n3*(dil2+n2*(dil1+n1*p))] += host_mom[i+nsites*p]*Con ; 
+	    }
 	  }
 	}
       }
     }
   }
+  free(q1) ;
+  free(q2) ;
+  free(q3) ;
 }
 
 static void
@@ -182,6 +195,31 @@ alamode( const int n1, const int n2, const int n3, const int nMom,
   //getProfileBaryonKernel().TPSTART(QUDA_PROFILE_H2D);
   qudaMemcpy(d_mom, host_mom, data_mom_bytes, qudaMemcpyHostToDevice);  
   //getProfileBaryonKernel().TPSTOP(QUDA_PROFILE_H2D);
+
+  // this is a memory-cheaper version of the first caxpy stage
+  /*
+  for (int i=0; i<nEv; i++) {
+    quda_evec[0] = evec[i] ; // load here because fuck it why not                                                          
+    for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
+      std::vector<std::complex<double>> cf(1,coeffs1[dil1+n1*i]) ;
+      tmp[0] = quda_q1[dil1];
+      blas::axy( cf, quda_evec, tmp ) ;
+      quda_q1[dil1] = tmp[0];
+    }
+    for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
+      std::vector<std::complex<double>> cf(1,coeffs2[dil2+n2*i]) ;
+      tmp[0] = quda_q2[dil2] ;
+      blas::axy( cf, quda_evec, tmp ) ;
+      quda_q2[dil2] = tmp[0] ;
+    }
+    for( int dil3 = 0 ; dil3 < n3 ; dil3++ ) {
+      std::vector<std::complex<double>> cf(1,coeffs3[dil3+n3*i]) ;
+      tmp[0] = quda_q3[dil3] ;
+      blas::axy( cf, quda_evec, tmp ) ;
+      quda_q3[dil3] = tmp[0] ;
+    }
+  }
+  */
 
   // Perfrom the caxpy to compute all q-vectors
   //getProfileAccumulateEvecs().TPSTART(QUDA_PROFILE_COMPUTE);
@@ -346,7 +384,7 @@ int main(int argc, char *argv[]) {
   }  
   
   // what is this? exponentiated mom? Which index runs fastest? Fuck knows
-  double _Complex host_mom[ nsites*nmom ] = {} ;
+  double _Complex *host_mom = (double _Complex*)calloc(nsites*nmom,sizeof(double _Complex) ) ;
     // host_mom should be complex
   for( size_t p = 0 ; p < nmom ; p++ ) {
     const size_t mom[3] = { p+1, p+2, p+3 } ;
@@ -375,7 +413,6 @@ int main(int argc, char *argv[]) {
   inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
   
   double _Complex retGPU[ n1*n2*n3*nmom ] = {} ;
-  /*
   laphBaryonKernel( n1, n2, n3,
 		    nmom,
 		    coeffs1 ,
@@ -384,27 +421,28 @@ int main(int argc, char *argv[]) {
 		    host_mom ,
 		    Nev ,
 		    evList.data(),
+		    inv_param,
 		    retGPU,
 		    blockSizeMomProj,
 		    X ) ;
-  */
   StopWatch GPU ;
   GPU.start() ;
   memset( retGPU , 0.0 , n1*n2*n3*sizeof(double _Complex)) ;
-  alamode( n1, n2, n3,
-	   nmom,
-	   coeffs1 ,
-	   coeffs2 ,
-	   coeffs3 ,
-	   host_mom ,
-	   Nev ,
-	   evList.data(),
-	   inv_param ,
-	   retGPU,
-	   blockSizeMomProj,
-	   X ) ;
+  laphBaryonKernel( n1, n2, n3,
+		    nmom,
+		    coeffs1 ,
+		    coeffs2 ,
+		    coeffs3 ,
+		    host_mom ,
+		    Nev ,
+		    evList.data(),
+		    inv_param ,
+		    retGPU,
+		    blockSizeMomProj,
+		    X ) ;
   GPU.stop() ;
-  printLaph(make_strf("\nGPU baryonkernel in = %g seconds\n", GPU.getTimeInSeconds()));
+  const double GPUtime = GPU.getTimeInSeconds() ;
+  printLaph(make_strf("\nGPU baryonkernel in = %g seconds\n", GPUtime )) ;
 
   StopWatch CPU ;
   CPU.start() ;
@@ -421,7 +459,12 @@ int main(int argc, char *argv[]) {
 	    blockSizeMomProj,
 	    X ) ;
   CPU.stop() ;
-  printLaph(make_strf("\nCPU baryonkernel in = %g seconds\n", CPU.getTimeInSeconds()));
+  const double CPUtime = CPU.getTimeInSeconds() ;
+  printLaph(make_strf("\nCPU baryonkernel in = %g seconds\n", CPUtime)) ;
+
+  printf( "\n*************************************\n" ) ;
+  printf( "-----> GPU speedup factor %gx\n" , CPUtime/GPUtime ) ;
+  printf( "*************************************\n\n" ) ;
   
   // test outputs
   printf( "CPU == GPU\n" ) ;
@@ -438,7 +481,8 @@ int main(int argc, char *argv[]) {
     }
     std::cout<<"Summed diff p="<<p<<" "<<sum<<std::endl ;
   }
-  
+
+  free(host_mom);
   finalize();
 
   return 0;

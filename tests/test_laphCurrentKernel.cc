@@ -18,7 +18,7 @@
 using namespace quda ;
 using namespace LaphEnv ;
 
-#define VERBOSE_COMPARISON
+//#define VERBOSE_COMPARISON
 
 static void cpu_code( const int n1,
 		      const int n2,
@@ -32,8 +32,7 @@ static void cpu_code( const int n1,
 {
   const size_t nSp = X[0]*X[1]*X[2] ;
   const size_t nSites = nSp*X[3] ;
-  double _Complex loc_sum[ X[3]*nMom*n1*n2 ] = {} ;
-  
+  double _Complex *loc_sum = (double _Complex*)calloc( X[3]*nMom*n1*n2 , sizeof( double _Complex) );  
   // loop over all sites
 #pragma omp parallel for reduction(+:loc_sum[:X[3]*nMom*n1*n2])
   for( size_t i = 0 ; i < nSites ; i++ ) {
@@ -47,7 +46,6 @@ static void cpu_code( const int n1,
     }
     const double _Complex *Mom = host_mom + spidx ;
     for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
-
       // diagonal guy
       const double _Complex iP =		\
 	conj(q1[dil1][0])*(q2[dil1][0])+
@@ -57,7 +55,6 @@ static void cpu_code( const int n1,
       for( int p = 0 ; p < nMom ; p++ ) {
 	loc_sum[ T + X[3]*( p + nMom*( dil1 + n2*dil1 ) ) ] += Mom[ p*nSp ]*iP ;
       }
-
       for( int dil2 = dil1+1 ; dil2 < n2 ; dil2++ ) {
 	// do the inner product over color
 	const double _Complex iP =		\
@@ -71,8 +68,9 @@ static void cpu_code( const int n1,
 	}
       }
     }
-  }  
+  }
   memcpy( ret_arr , loc_sum , X[3]*n1*n2*nMom*sizeof(double _Complex) ) ;
+  free( loc_sum ) ;
 }
 
 // new GPU interface with better behaviour
@@ -276,7 +274,7 @@ int main(int argc, char *argv[]) {
     " | block " << blockSizeMomProj << std::endl ;
   
   // host_mom should be complex
-  double _Complex host_mom[ nmom*nspat ] = {} ;
+  double _Complex *host_mom = (double _Complex*)calloc( nmom*nspat , sizeof(double _Complex) ) ;
   // host_mom should be complex                                                                                                           
   for( size_t p = 0 ; p < nmom ; p++ ) {
     const size_t mom[3] = { p+1, p+2, p+3 } ;
@@ -292,8 +290,8 @@ int main(int argc, char *argv[]) {
       host_mom[ i + nspat*p ] = c+I*s ;
     }
   }
-  
-  double _Complex GPU_ret[ n1*n2*nmom*X[3] ] = {} ;
+
+  double _Complex *GPU_ret = (double _Complex*)calloc(n1*n2*nmom*X[3],sizeof(double _Complex)) ;
 
   QudaInvertParam inv_param = newQudaInvertParam();
   inv_param.dslash_type = QUDA_WILSON_DSLASH;
@@ -319,10 +317,7 @@ int main(int argc, char *argv[]) {
   // GPU version
   StopWatch gpu ;
   gpu.start() ;
-    
-
   memset( GPU_ret , 0.0 , n1*n2*nmom*X[3]*sizeof(double _Complex));
-
   alamode( n1, n2,
 	   nmom,
 	   blockSizeMomProj,
@@ -332,23 +327,14 @@ int main(int argc, char *argv[]) {
 	   inv_param ,
 	   GPU_ret ,
 	   X ) ;
-  /*
-  laphCurrentKernel( n1, n2,
-		     nmom,
-		     blockSizeMomProj,
-		     evList.data() , 
-		     evList.data() ,
-		     host_mom ,
-		     GPU_ret ,
-		     X ) ;
-  */
   gpu.stop();
-  printLaph(make_strf("\nGPU current kernel in = %g seconds\n", gpu.getTimeInSeconds()));
+  const double GPUtime = gpu.getTimeInSeconds();
+  printLaph(make_strf("\nGPU current kernel in = %g seconds\n", GPUtime)) ;
 
   // CPU version
   StopWatch cpu ;
   cpu.start() ;
-  double _Complex CPU_ret[ n1*n2*nmom*X[3] ] = {} ;
+  double _Complex *CPU_ret = (double _Complex*)calloc(n1*n2*nmom*X[3],sizeof(double _Complex)) ;
   cpu_code( n1, n2,
 	    nmom,
 	    blockSizeMomProj,
@@ -357,10 +343,14 @@ int main(int argc, char *argv[]) {
 	    host_mom ,
 	    CPU_ret ,
 	    X ) ;
-
   cpu.stop() ;
-  printLaph(make_strf("\nCPU current kernel in = %g seconds\n", cpu.getTimeInSeconds()));
+  const double CPUtime = cpu.getTimeInSeconds() ;
+  printLaph(make_strf("\nCPU current kernel in = %g seconds\n", CPUtime));
 
+  printf( "\n*************************************\n" ) ;
+  printf( "-----> GPU speedup factor %gx\n" , CPUtime/GPUtime ) ;
+  printf( "*************************************\n\n" ) ;
+  
   for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
     for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
       for( int p = 0 ; p < nmom ; p++ ) {
@@ -383,6 +373,11 @@ int main(int argc, char *argv[]) {
       }
     }
   }
+
+  free( host_mom ) ;
+  free( CPU_ret ) ;
+  free( GPU_ret ) ;
+  
   finalize();
 
   return 0;

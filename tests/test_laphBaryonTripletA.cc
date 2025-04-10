@@ -408,7 +408,7 @@ int main(int argc, char *argv[]) {
 
   std::cout<<"nmom "<<nmom<<" | block "<<blockSizeMomProj<<std::endl ;
   
-  double _Complex host_mom[ nmom*nspat ] = {} ;
+  double _Complex *host_mom = (double _Complex*)calloc( nmom*nspat , sizeof( double _Complex ) ) ;
 
   // host_mom should be complex
   for( size_t p = 0 ; p < nmom ; p++ ) {
@@ -440,7 +440,7 @@ int main(int argc, char *argv[]) {
 
 
   const size_t nEvChoose3 = Nev*(Nev-1)*(Nev-2)/6;
-  double _Complex retGPU[ nmom*nEvChoose3 ] = {} ;
+  double _Complex *retGPU = (double _Complex*)calloc( nmom*nEvChoose3 , sizeof( double _Complex  ) );
 
   laphBaryonKernelComputeModeTripletA( nmom, Nev,
 				       blockSizeMomProj,
@@ -461,10 +461,11 @@ int main(int argc, char *argv[]) {
 				       retGPU,
 				       X ) ;
   gpu.stop() ;
-  printLaph(make_strf("\nGPU modetripletA in = %g seconds\n", gpu.getTimeInSeconds()));
+  const double GPUtime = gpu.getTimeInSeconds() ;
+  printLaph(make_strf("\nGPU modetripletA in = %g seconds\n", GPUtime )) ;
 
+  double _Complex *retCPU = (double _Complex*)calloc( nmom*nEvChoose3 , sizeof( double _Complex  ) );
   {
-    double _Complex retCPU[ nmom*nEvChoose3 ] = {} ;
     StopWatch cpu ;
     cpu.start() ;
     cpu_code( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
@@ -472,7 +473,6 @@ int main(int argc, char *argv[]) {
     printLaph(make_strf("\nCPUv1 modetripletA in = %g seconds\n", cpu.getTimeInSeconds()));
   }
   {
-    double _Complex retCPU[ nmom*nEvChoose3 ] = {} ;
     StopWatch cpu ;
     cpu.start() ;
     cpu_codev2( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
@@ -480,12 +480,16 @@ int main(int argc, char *argv[]) {
     printLaph(make_strf("\nCPUv2 modetripletA in = %g seconds\n", cpu.getTimeInSeconds()));
   }
 
-  double _Complex retCPU[ nmom*nEvChoose3 ] = {} ;
   StopWatch cpu ;
   cpu.start() ;
   cpu_codev3( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
   cpu.stop() ;
-  printLaph(make_strf("\nCPUv3 modetripletA in = %g seconds\n", cpu.getTimeInSeconds()));
+  const double CPUtime = cpu.getTimeInSeconds() ;
+  printLaph(make_strf("\nCPUv3 modetripletA in = %g seconds\n", CPUtime ));
+
+  printf( "\n*************************************\n" ) ;
+  printf( "-----> GPU speedup factor %gx\n" , CPUtime/GPUtime ) ;
+  printf( "*************************************\n\n" ) ;
   
   // test outputs
   printf( "CPU == GPU\n" ) ;
@@ -502,6 +506,9 @@ int main(int argc, char *argv[]) {
     }
     std::cout<<"Summed diff p="<<p<<" "<<sum<<std::endl ;
   }
+
+  free( retGPU ) ;
+  free( retCPU ) ;
   
   finalize();
 
