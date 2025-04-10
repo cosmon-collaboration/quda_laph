@@ -427,28 +427,6 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  const size_t nEvChoose3 = Nev*(Nev-1)*(Nev-2)/6;
-  double _Complex retGPU[ nmom*nEvChoose3 ] = {} ;
-
-  laphBaryonKernelComputeModeTripletA( nmom, Nev,
-				       blockSizeMomProj,
-				       evList.data() ,
-				       host_mom ,
-				       retGPU, X ) ;
-  memset( retGPU , 0.0 , nmom*nEvChoose3*sizeof( double _Complex )) ;
-
-  StopWatch gpu ;
-  gpu.start() ;
-  /*
-  laphBaryonKernelComputeModeTripletA( nmom,
-				       Nev,
-				       blockSizeMomProj,
-				       evList.data() ,
-				       host_mom ,
-				       retGPU,
-				       X ) ;
-  */
-    // should be an argument
   QudaInvertParam inv_param = newQudaInvertParam();
   inv_param.dslash_type = QUDA_WILSON_DSLASH;
   inv_param.solution_type = QUDA_MAT_SOLUTION;
@@ -460,15 +438,28 @@ int main(int argc, char *argv[]) {
   inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
   inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
 
-  alamode( nmom,
-	   Nev,
-	   blockSizeMomProj,
-	   evList.data(),
-	   host_mom,
-	   inv_param,
-	   retGPU,
-	   X ) ;
-  
+
+  const size_t nEvChoose3 = Nev*(Nev-1)*(Nev-2)/6;
+  double _Complex retGPU[ nmom*nEvChoose3 ] = {} ;
+
+  laphBaryonKernelComputeModeTripletA( nmom, Nev,
+				       blockSizeMomProj,
+				       evList.data() ,
+				       host_mom ,
+				       inv_param,
+				       retGPU, X ) ;
+  memset( retGPU , 0.0 , nmom*nEvChoose3*sizeof( double _Complex )) ;
+
+  StopWatch gpu ;
+  gpu.start() ;
+  laphBaryonKernelComputeModeTripletA( nmom,
+				       Nev,
+				       blockSizeMomProj,
+				       evList.data() ,
+				       host_mom ,
+				       inv_param,
+				       retGPU,
+				       X ) ;
   gpu.stop() ;
   printLaph(make_strf("\nGPU modetripletA in = %g seconds\n", gpu.getTimeInSeconds()));
 
