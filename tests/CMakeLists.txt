@@ -35,4 +35,6 @@ add_executable(TestCurrentKernel test_laphCurrentKernel.cc)
 target_include_directories(TestCurrentKernel PUBLIC include)
 target_link_libraries(TestCurrentKernel PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
 
-
+add_executable(TestBatchGEMM test_BatchGEMM.cc)
+target_include_directories(TestBatchGEMM PUBLIC include)
+target_link_libraries(TestBatchGEMM PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)

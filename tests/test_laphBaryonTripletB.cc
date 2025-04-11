@@ -284,9 +284,9 @@ int main(int argc, char *argv[]) {
 #endif
   assert( global == 1 ) ; // for now
 
-  const int Nev = 2 ;
+  const int Nev = 128 ;
   const int NsubEv = Nev/global ;
-  const int nmom = 4 , n1 = 1 , n2 = 2 , n3 = 3 ;
+  const int nmom = 4 , n1 = 2 , n2 = 2 , n3 = 2 ;
 
   static std::uniform_real_distribution<double> unif(0.0,1.0) ;
   std::mt19937 mt ;
@@ -309,26 +309,26 @@ int main(int argc, char *argv[]) {
   }
 
   double _Complex host_ret_arr[ nmom*n1*n2*n3 ] = {} ;
-  alamode( n1, n2, n3,
-	   nmom,
-	   Nev ,
-	   host_coeffs1 ,
-	   host_coeffs2 ,
-	   host_coeffs3 ,
-	   host_mode_trip_buf ,
-	   host_ret_arr ) ;
+  laphBaryonKernelComputeModeTripletB( n1, n2, n3,
+				       nmom,
+				       Nev ,
+				       host_coeffs1 ,
+				       host_coeffs2 ,
+				       host_coeffs3 ,
+				       host_mode_trip_buf ,
+				       host_ret_arr ) ;
 
   memset( host_ret_arr, 0.0 , nmom*n1*n2*n3*sizeof( double _Complex) ) ;
   StopWatch gpu;
   gpu.start() ;
-  alamode( n1, n2, n3,
-	   nmom,
-	   Nev ,
-	   host_coeffs1 ,
-	   host_coeffs2 ,
-	   host_coeffs3 ,
-	   host_mode_trip_buf ,
-	   host_ret_arr ) ;
+  laphBaryonKernelComputeModeTripletB( n1, n2, n3,
+				       nmom,
+				       Nev ,
+				       host_coeffs1 ,
+				       host_coeffs2 ,
+				       host_coeffs3 ,
+				       host_mode_trip_buf ,
+				       host_ret_arr ) ;
   gpu.stop() ;
   const double GPUtime = gpu.getTimeInSeconds() ;
   printLaph(make_strf("\nGPU modetripletB in = %g seconds\n", GPUtime )) ;
