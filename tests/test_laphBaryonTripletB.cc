@@ -21,6 +21,8 @@
 using namespace LaphEnv ;
 using namespace quda ;
 
+//#define VERY_VERBOSE
+
 // ok so what is this doing?
 void
 cpu_code( const int n1,
@@ -45,12 +47,12 @@ cpu_code( const int n1,
   const double _Complex *mtb = host_mode_trip_buf ;
 
   // is the first product
-  double _Complex q3[ nMom*nSubEv*nEv*n3 ] = {} ;
+  double _Complex *q3 = (double _Complex*)calloc( nMom*nSubEv*nEv*n3 , sizeof( double _Complex ) ) ;
   
   // eg this is doing C_ij \sum_k A_ik Bjk strided for nMom*nSubEv
   // C_ij is size Nmom
   // nmom*nSubEv*Ev*Ev | n3*nEv
-  //#pragma omp parallel for collapse(3)
+#pragma omp parallel for collapse(3)
   for( int p = 0 ; p < nMom ; p++ ) {
     for( int n = 0 ; n < nSubEv ; n++ ) {
       for( int evo = 0 ; evo < nEv ; evo++ ) { 
@@ -70,7 +72,9 @@ cpu_code( const int n1,
   // second set of gemms
   // host_coeffs2*d_q3 -> dtmp
   // n1*nEv . nMom*nSubEv*nEv*n3 -> nSubEv*n1*n3 
-  for( int p = 0 ; p < nMom ; p++ ) {
+  int p ;
+#pragma omp parallel for private(p)
+  for( p = 0 ; p < nMom ; p++ ) {
     double _Complex tmp[ nSubEv*n2*n3 ] = {} ;
     for( int nsub = 0 ; nsub < nSubEv ; nsub++ ) {
       for( int nout = 0 ; nout < n2 ; nout++ ) {
@@ -83,6 +87,7 @@ cpu_code( const int n1,
 	}
       }
     }
+
     // host_coeffs1*d_tmp -> d_ret
     // n1*nEv . nSubEv*n2*n3 -> nmom.n1.n2.n3
     for( int i = 0 ; i < n1 ; i++ ) {
@@ -98,6 +103,7 @@ cpu_code( const int n1,
       }
     }
   }
+  free( q3 ) ;
 }
 
 static void
@@ -148,9 +154,6 @@ alamode( const int n1,
 	       (double)total_bytes/(OneGB)); 
   }
   
-  // All cuBLAS use these alpha and beta values
-  const __complex__ double alpha = 1.0, beta = 0.0;
-
   QudaBLASParam cublas_param_1 = newQudaBLASParam();
   cublas_param_1.trans_a = QUDA_BLAS_OP_N;
   cublas_param_1.trans_b = QUDA_BLAS_OP_T;
@@ -161,8 +164,7 @@ alamode( const int n1,
   cublas_param_1.ldb = nEv;
   cublas_param_1.ldc = n3;
   cublas_param_1.batch_count = 1;
-  cublas_param_1.alpha = alpha;  
-  cublas_param_1.beta  = beta;
+  cublas_param_1.alpha = 1.0 ; cublas_param_1.beta = 0.0 ;
   cublas_param_1.data_order = QUDA_BLAS_DATAORDER_ROW;
   cublas_param_1.data_type = QUDA_BLAS_DATATYPE_Z;
   //getProfileBaryonKernelModeTripletsB().TPSTOP(QUDA_PROFILE_INIT);
@@ -175,7 +177,8 @@ alamode( const int n1,
 
   // Compute ZGEMM 1:
   //getProfileBaryonKernelModeTripletsB().TPSTART(QUDA_PROFILE_COMPUTE);
-  blas_lapack::native::stridedBatchGEMM(d_tmp, d_coeffs3, d_q3, cublas_param_1, QUDA_CUDA_FIELD_LOCATION);
+  blas_lapack::native::stridedBatchGEMM(d_tmp, d_coeffs3, d_q3, cublas_param_1,
+					QUDA_CUDA_FIELD_LOCATION);
   //getProfileBaryonKernelModeTripletsB().TPSTOP(QUDA_PROFILE_COMPUTE);
    
   // d_coeffs3, d_mtb no longer needed.
@@ -215,12 +218,8 @@ alamode( const int n1,
   cublas_param_2.lda = nEv;
   cublas_param_2.ldb = n3;
   cublas_param_2.ldc = n3;
-  cublas_param_2.a_stride = 0; // Instruct cuBLAS to use the only the data in d_coeffs2 (single batch sized array)
-  cublas_param_2.b_stride = n3 * n3;
-  cublas_param_2.c_stride = n3 * n3;
-  cublas_param_2.batch_count = nSubEv;
-  cublas_param_2.alpha = alpha;  
-  cublas_param_2.beta  = beta;
+  cublas_param_2.batch_count = 1 ;
+  cublas_param_2.alpha = 1.0 ; cublas_param_2.beta = 0.0 ;
   cublas_param_2.data_order = QUDA_BLAS_DATAORDER_ROW;
   cublas_param_2.data_type = QUDA_BLAS_DATATYPE_Z;
 
@@ -233,8 +232,7 @@ alamode( const int n1,
   cublas_param_3.ldb = n2*n3;
   cublas_param_3.ldc = n2*n3;
   cublas_param_3.batch_count = 1;
-  cublas_param_3.alpha = alpha;  
-  cublas_param_3.beta  = beta;
+  cublas_param_3.alpha = 1.0 ; cublas_param_3.beta = 0.0 ;
   cublas_param_3.data_order = QUDA_BLAS_DATAORDER_ROW;
   cublas_param_3.data_type = QUDA_BLAS_DATATYPE_Z;
   //getProfileBaryonKernelModeTripletsB().TPSTOP(QUDA_PROFILE_INIT);
@@ -244,12 +242,18 @@ alamode( const int n1,
   
   // Compute ZGEMMs
   //getProfileBaryonKernelModeTripletsB().TPSTART(QUDA_PROFILE_COMPUTE);  
-  for(int i=0; i<nMom; i++) {
-    cublas_param_2.b_offset = i * nSubEv * nEv * n3;
-    blas_lapack::native::stridedBatchGEMM(d_coeffs2, d_q3, d_tmp, cublas_param_2, QUDA_CUDA_FIELD_LOCATION);
-    cublas_param_3.a_offset = iRank * nSubEv;
-    cublas_param_3.c_offset = i * n1 * n2 * n3;
-    blas_lapack::native::stridedBatchGEMM(d_coeffs1, d_tmp, d_ret, cublas_param_3, QUDA_CUDA_FIELD_LOCATION);
+  for(int p=0; p<nMom; p++) {
+    // this can be batched by Ev but I don't follow the interface
+    for( int j = 0 ; j < nSubEv ; j++ ) {
+      blas_lapack::native::stridedBatchGEMM( d_coeffs2,
+					     (double _Complex*)d_q3 + j*n3*nEv + p*n3*nEv*nEv ,
+					     (double _Complex*)d_tmp + j*n2*n3,
+					     cublas_param_2, QUDA_CUDA_FIELD_LOCATION);
+    }
+    cublas_param_3.a_offset = iRank*nSubEv;
+    cublas_param_3.c_offset = p*n1*n2*n3;
+    blas_lapack::native::stridedBatchGEMM(d_coeffs1, d_tmp, d_ret,
+					  cublas_param_3, QUDA_CUDA_FIELD_LOCATION);
   }
   //getProfileBaryonKernelModeTripletsB().TPSTOP(QUDA_PROFILE_COMPUTE);
    
@@ -321,6 +325,16 @@ int main(int argc, char *argv[]) {
   memset( host_ret_arr, 0.0 , nmom*n1*n2*n3*sizeof( double _Complex) ) ;
   StopWatch gpu;
   gpu.start() ;
+  alamode( n1, n2, n3,
+	   nmom,
+	   Nev ,
+	   host_coeffs1 ,
+	   host_coeffs2 ,
+	   host_coeffs3 ,
+	   host_mode_trip_buf ,
+	   host_ret_arr ) ;
+  
+  /*
   laphBaryonKernelComputeModeTripletB( n1, n2, n3,
 				       nmom,
 				       Nev ,
@@ -329,6 +343,7 @@ int main(int argc, char *argv[]) {
 				       host_coeffs3 ,
 				       host_mode_trip_buf ,
 				       host_ret_arr ) ;
+  */
   gpu.stop() ;
   const double GPUtime = gpu.getTimeInSeconds() ;
   printLaph(make_strf("\nGPU modetripletB in = %g seconds\n", GPUtime )) ;
@@ -356,10 +371,11 @@ int main(int argc, char *argv[]) {
     double Sum = 0. ;
     for( int dil = 0 ; dil < n1*n2*n3 ; dil++ ) {
       Sum += cabs( cpu_ret_arr[ dil + n1*n2*n3*p ] - host_ret_arr[ dil + n1*n2*n3*p ] ) ;
-
+      #ifdef VERY_VERBOSE
       printf( "(%f,%f) == (%f,%f)\n" ,
 	      creal( cpu_ret_arr[dil+n1*n2*n3*p] ) , cimag( cpu_ret_arr[dil+n1*n2*n3*p] ) ,
 	      creal( host_ret_arr[dil+n1*n2*n3*p] ) , cimag( host_ret_arr[dil+n1*n2*n3*p] ) ) ;
+      #endif
     }
     printf( "%d Sub %e\n" , p , Sum ) ;
   }
