@@ -96,9 +96,9 @@ gpu_code( const double _Complex *A ,
   cublas_param.lda = lda;
   cublas_param.ldb = ldb;
   cublas_param.ldc = ldc;
-  cublas_param.a_stride = m*k ;
-  cublas_param.b_stride = k*n ;
-  cublas_param.c_stride = m*n ;
+  cublas_param.a_stride = 1 ; //m*k ;
+  cublas_param.b_stride = 1 ; //k*n ;
+  cublas_param.c_stride = 1 ; //m*n ;
   cublas_param.batch_count = batch_count;
   cublas_param.alpha = (__complex__ double)alpha;  
   cublas_param.beta  = (__complex__ double)beta;

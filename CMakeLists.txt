@@ -26,7 +26,7 @@ set_property(CACHE HOSTCBLAS PROPERTY STRINGS ${VALID_BLAS_LIBS})
 
 set(BLAS_INC "/usr/include/openblas/" CACHE STRING "Include directory for BLAS library")
 set(BLAS_LIB "/usr/lib/openblas/" CACHE STRING "Lib directory for blas library")
-set(GPUTOOLKIT_DIR "/usr/local/cuda-11.4/" CACHE STRING "Specify where GPU toolkit is")
+set(GPUTOOLKIT_DIR "/usr/local/cuda-12.4/" CACHE STRING "Specify where GPU toolkit is")
 set(QUDA_DIR "" CACHE STRING "Tell us where the Quda install is")
 
 option(OPENMP "Compile/link openmp" ON )

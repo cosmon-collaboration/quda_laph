@@ -387,7 +387,7 @@ int main(int argc, char *argv[]) {
   assert( global == 1 ) ;
   
   // call rephase here
-  const int Nev = 12 ;
+  const int Nev = 32 ;
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
 
   std::cout<<"Constant Eigvecs"<<std::endl ;
