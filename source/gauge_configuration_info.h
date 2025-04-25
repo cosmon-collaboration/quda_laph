@@ -109,6 +109,8 @@ class GaugeConfigurationInfo
 
   void check_valid(const std::string& sdata, const std::string& tag, 
                    const std::vector<std::string>& allowed);
+  
+  void check_CLS();
 
   friend class GaugeConfigReader;
 

@@ -1715,7 +1715,7 @@ string tidyFileName(const string& str)
  string tmp(tidyString(str));
  size_t pos=tmp.rfind('/');
  if (pos==string::npos) return tmp;
- else return tmp.substr(pos+1,tmp.length()-pos);
+ else return tmp.substr(pos+1,tmp.length()-pos-1);
 }
 
 
@@ -1893,37 +1893,3 @@ bool headerMatch(const string& doc1, const string& doc2,
 }
 
 // ************************************************************
-/*
-std::vector<std::string> string_split(const std::string& astr, char delimiter)
-{
- std::vector<std::string> tokens;
- size_t lastpos=astr.find_first_not_of(delimiter);
- size_t pos=(lastpos==std::string::npos)?std::string::npos:astr.find_first_of(delimiter,lastpos+1);
- while (lastpos!=std::string::npos){
-    if (pos==std::string::npos) pos=astr.length();
-    tokens.push_back(astr.substr(lastpos,pos-lastpos));
-    lastpos=astr.find_first_not_of(delimiter,pos+1);
-    pos=(lastpos==std::string::npos)?std::string::npos:astr.find_first_of(delimiter,lastpos+1);}
- return tokens;
-}
-
-std::string string_extract(const std::string& astr, char left, char right)
-{
- size_t lpos=astr.find_first_of(left);
- size_t rpos=(lpos==std::string::npos)?std::string::npos:astr.find_first_of(right,lpos+1);
- if (rpos!=std::string::npos){
-    return astr.substr(lpos+1,rpos-lpos-1);}
- return std::string("");
-}
-
-int char_count(const std::string& astr, char delimiter)
-{
- int cnt=0;
- size_t pos=astr.find(delimiter);
- while (pos!=std::string::npos){
-    cnt++;
-    pos=astr.find(delimiter,pos+1);}
- return cnt;
-}
-*/
-// **********************************************************

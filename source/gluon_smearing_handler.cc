@@ -125,7 +125,7 @@ void GluonSmearingHandler::computeSmearedGaugeField()
  if (m_read_mode)
     throw(std::runtime_error("Cannot computeSmearedGaugeField in read mode"));
 
- if (GB::theSmearedGaugeConfigIsSet()){
+ if (GB::theSmearedGaugeConfigIsSet(*smearPtr,*uPtr)){
     return;}
  
     // check if output file exists; if so, we do not want to overwrite
@@ -174,9 +174,10 @@ void GluonSmearingHandler::computeSmearedGaugeField()
  uPtr->setQudaGaugeParam(smeared_gauge_info);
  smeared_gauge_info.type = QUDA_SMEARED_LINKS;
 
- GB::theSmearedGaugeConfig.resize(LayoutInfo::Ndim,FieldSiteType::ColorMatrix);
+ vector<LattField>& the_smeared_config(GB::setSmearedGaugeConfig(*smearPtr,*uPtr));
+ the_smeared_config.resize(LayoutInfo::Ndim,FieldSiteType::ColorMatrix);
  std::vector<char*> gaugeptrs(LayoutInfo::Ndim);
- for (int k=0;k<LayoutInfo::Ndim;++k) gaugeptrs[k]=GB::theSmearedGaugeConfig[k].getDataPtr();
+ for (int k=0;k<LayoutInfo::Ndim;++k) gaugeptrs[k]=the_smeared_config[k].getDataPtr();
  saveGaugeQuda(gaugeptrs.data(), &smeared_gauge_info);
 
      //  Now output to file if requested
@@ -184,7 +185,7 @@ void GluonSmearingHandler::computeSmearedGaugeField()
     DataPutHandlerSF<GluonSmearingHandler,UIntKey,vector<LattField>> 
                dhput(*this,h_filename,"Laph--SmearedGaugeField4D");
     UIntKey dummykey(0);
-    dhput.putData(dummykey,GB::theSmearedGaugeConfig);
+    dhput.putData(dummykey,the_smeared_config);
     printLaph("Write to file complete");}
 
  bulova.stop();
@@ -198,15 +199,15 @@ void GluonSmearingHandler::computeSmearedGaugeField()
 
 const vector<LattField>& GluonSmearingHandler::getSmearedGaugeField()
 {
- if (!GB::theSmearedGaugeConfigIsSet()){
+ if (!GB::theSmearedGaugeConfigIsSet(*smearPtr,*uPtr)){
     if (!loadSmearedGaugeField()){
        errorLaph("Was unable to get the smeared gauge field");}}
- return GB::theSmearedGaugeConfig;
+ return GB::getSmearedGaugeConfig(*smearPtr,*uPtr);
 }
 
 bool GluonSmearingHandler::querySmearedGaugeField()
 {
- if (!GB::theSmearedGaugeConfigIsSet()){
+ if (!GB::theSmearedGaugeConfigIsSet(*smearPtr,*uPtr)){
     return loadSmearedGaugeField();}
  return true;
 }
@@ -217,7 +218,7 @@ bool GluonSmearingHandler::loadSmearedGaugeField()
 {
  check_info_set("loadSmearedGaugeField");
  if (!m_read_mode) return false;
- if (GB::theSmearedGaugeConfigIsSet()) return true;
+ if (GB::theSmearedGaugeConfigIsSet(*smearPtr,*uPtr)) return true;
  if (h_filename.empty()) return false;
 
     // check that the file exists and contains the appropriate data
@@ -230,7 +231,8 @@ bool GluonSmearingHandler::loadSmearedGaugeField()
     DataGetHandlerSF<GluonSmearingHandler,RecordKey,vector<LattField>> DH(*this,h_filename,ftype);
     printLaph(make_strf("File %s successfully opened and header matches\n",h_filename));
     RecordKey dummykey(0);
-    GB::theSmearedGaugeConfig=DH.getData(dummykey);
+    vector<LattField>& the_smeared_config(GB::setSmearedGaugeConfig(*smearPtr,*uPtr));
+    the_smeared_config=DH.getData(dummykey);
     return true;}
  catch(const std::exception& xp){
    printLaph("unable to read smeared gauge from file(s)");
@@ -241,7 +243,7 @@ bool GluonSmearingHandler::loadSmearedGaugeField()
 
 void GluonSmearingHandler::clearData()
 {
- GB::theSmearedGaugeConfig.clear();
+ GB::clearSmearedGaugeConfigData();
 }
 
 

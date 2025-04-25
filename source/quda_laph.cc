@@ -161,8 +161,9 @@ Tasker::Tasker()
 {
  TaskMap["SMEAR_GAUGE_FIELD"]=&doSmearGaugeField;
  TaskMap["SMEAR_QUARK_FIELD"]=&doSmearQuarkField;
- TaskMap["LAPH_QUARK_LINE_ENDS"]=&doLaphQuarkLineEnds;
  TaskMap["LAPH_QUARK_PERAMBULATORS"]=&doLaphQuarkPerambulators;
+ TaskMap["LAPH_CHECK_PERAMBULATORS"]=&doLaphCheckPerambulators;
+ TaskMap["LAPH_MERGE_PERAMBULATORS"]=&doLaphMergePerambulators;
 };
 
 
@@ -204,6 +205,9 @@ void initRand()
 std::vector<LattField> HostGlobal::theGaugeConfig;
 std::vector<LattField> HostGlobal::theSmearedGaugeConfig;
 std::vector<LattField> HostGlobal::theLaphEigvecs;
+std::unique_ptr<GaugeConfigurationInfo> HostGlobal::theGaugeConfigInfoPtr;
+std::unique_ptr<GluonSmearingInfo> HostGlobal::theGluonSmearingInfoPtr;
+std::unique_ptr<QuarkSmearingInfo> HostGlobal::theQuarkSmearingInfoPtr;
 
 
 // ****************************************************************

@@ -40,7 +40,7 @@ namespace LaphEnv {
 // *          <MaxEigenvalue>15.0</MaxEigenvalue>                                     *
 // *          <CutoffEigenvalue>0.5</CutoffEigenvalue>                                *
 // *          <StartingVectorType>equal_components</StartingVectorType>               *
-// *          <CheckSolution>true</CheckSolution>                                     *
+// *          <CheckSolution/>    (optional)                                          *
 // *       </LaphEigenSolverInfo>                                                     *
 // *       <Verbosity>low</Verbosity> (optional: override default)                    *
 // *       <PrintEigenvalues/> (optional)                                             *

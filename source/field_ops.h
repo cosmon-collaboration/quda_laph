@@ -4,6 +4,7 @@
 #include "latt_field.h"
 #include "gauge_configuration_info.h"
 #include "quark_action_info.h"
+#include "momenta.h"
 #include <complex>
 
 
@@ -20,13 +21,16 @@ namespace LaphEnv {
 // *                                                                        *
 // **************************************************************************
 
-    //  This routine applies an inner product conj(leftfield).rightfield,
-    //  where leftfield and rightfield are color-vector fields, but the
+    //  This routine applies an inner product 
+    //         conj(leftfield).rightfield     if "left_conj" is true,
+    //              leftfield .rightfield     if "left_conj" is false,
+    //  where leftfield and rightfield are fields of the same site type, but the
     //  inner product is taken over the time slices.  The ntime inner
-    //  products are returned.
+    //  products are returned.  
 
 std::vector<std::complex<double>> getTimeSlicedInnerProducts(const LattField& leftfield, 
-                                                             const LattField& rightfield);
+                                                             const LattField& rightfield, 
+                                                             bool left_conj=true);
 
 
 void setConstantField(LattField& field, const std::complex<double>& zconst);
@@ -80,6 +84,29 @@ void applyCloverDirac(LattField& outfield, const LattField& infield,
 
 void applyMinusSpatialLaplacian(LattField& outfield, const LattField& infield,
                                 const std::vector<LattField>& smeared_gauge_field);
+
+
+
+    //  Evaluates sum_a conj( qbar[a](x,t) ) q[a](x,t)   a = color index
+
+void doColorContract(LattField& result, const LattField& qbar, const LattField& q);
+
+    //  Evaluates   sum_a,b,c epsilson(a,b,c)  q1[a](x,t) q2[b](x,t) q3[c](x,t) 
+
+void doColorContract(LattField& result, const LattField& q1, const LattField& q2, 
+                     const LattField& q3);
+
+    //  Evaluates   sum_a,b epsilson(a,b,c)  q1[a](x,t) q2[b](x,t)
+
+void doColorCrossProduct(LattField& result, const LattField& q1, const LattField& q2);
+
+    //  Evaluates sum_a  q1[a](x,t) q2[a](x,t)   a = color index
+
+void doColorVectorContract(LattField& result, const LattField& q1, const LattField& q2);
+
+    //  Returns the field   exp( -I * pvec.x )  in  "phases"
+
+void makeMomentumPhaseField(LattField& phases, const Momentum& pvec);
 
 
 // **************************************************************************

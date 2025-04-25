@@ -55,7 +55,7 @@ class Launcher
      puts " Do the modules need to be set? (y/n) "
      reply=gets.chomp.strip
      if (reply=="y")
-        cmds=["module purge",
+        cmds=["module --force purge",
               "module load allocations",
               "module load gcc/10.2.0",
               "module load openmpi/4.0.5-gcc10.2.0",
@@ -70,15 +70,14 @@ class Launcher
      puts " Do the modules need to be set? (y/n) "
      reply=gets.chomp.strip
      if (reply=="y")
-        cmds=["module purge",
+        cmds=["module --force purge",
               "module load PrgEnv-gnu/8.5.0",
               "module load gpu",
               "module load cmake/3.30.2",
-              "module load cpe-cuda/23.12",
-              "module load cudatoolkit/12.2",
+              #"module load cpe-cuda/23.12",
+              #"module load cudatoolkit/12.2",
               "module load craype-accel-nvidia80",
-              "module load craype-x86-milan",
-              "module load eigen/3.4.0"]
+              "module load craype-x86-milan"]
      end
   end
 
@@ -87,7 +86,7 @@ class Launcher
      puts " Do the modules need to be set? (y/n) "
      reply=gets.chomp.strip
      if (reply=="y")
-        cmds=["module purge",
+        cmds=["module --force purge",
               "module load gcc/12.1.0",
               "module load cuda/12.2.0",
               "module load spectrum-mpi/10.4.0.6-20230210",
@@ -98,208 +97,39 @@ class Launcher
 
   if (@machine=="frontier")
 
-     envchoices=Array.new
-     envchoices.push("cray")
-     envchoices.push("amd")
-     puts "Which environment to use?"
-     nchoices=envchoices.size
-     for k in 1..nchoices
-        puts " ["+k.to_s+"]  "+envchoices[k-1]
-        end
-     print "Choice? "
-     choice = gets.to_i
-     abort("Invalid entry") if (choice<1)||(choice>nchoices)
-     @env=envchoices[choice-1]
-     envstr = { "cray" => "cray", "amd" => "amd" }
-     vsuffix += "_"+envstr[@env]
-
-     rocmchoices=Array.new
-     rocmchoices.push("5.3.0")
-     rocmchoices.push("5.4.0")
-     rocmchoices.push("5.4.3") 
-     rocmchoices.push("5.5.1")
-     rocmchoices.push("5.6.0")
-     rocmchoices.push("5.7.0")
-     rocmchoices.push("5.7.1")
-     rocmchoices.push("6.2.4")
-     rocmchoices.push("6.3.1")
-     puts "Which rocm version?"
-     nchoices=rocmchoices.size
-     for k in 1..nchoices
-        puts " ["+k.to_s+"]  "+rocmchoices[k-1]
-        end
-     print "Choice? "
-     choice = gets.to_i
-     abort("Invalid entry") if (choice<1)||(choice>nchoices)
-     @rocm=rocmchoices[choice-1]
-     rocmstr = { "5.3.0" => "530", "5.4.0" => "540", "5.4.3" => "543", 
-                 "5.5.1" => "551", "5.6.0" => "560", "5.7.0" => "570", 
-                 "5.7.1" => "571", "6.2.4" => "624", "6.3.1" => "631"}
-     vsuffix += "_"+rocmstr[@rocm]
-
-
+     vsuffix += "_amd_631"
+     @rocm = "6.3.1"
      puts " Do the modules need to be set? (y/n) "
      reply=gets.chomp.strip
      if (reply=="y")
 
-    #    cmds=["module purge",
-    #          "module load PrgEnv-amd/8.5.0",
-    #          "module load Core",
-    #          "module load cmake",
-    #          "module load amd/6.1.3",
-    #          "module load rocm/6.1.3",
-    #          "module load craype-accel-amd-gfx90a",
-    #          "module load cray-mpich/8.1.30"]
-         if (@env=="cray" and @rocm=="6.3.1")
-     #   cmds=["module purge",
-     #         "module load Core",
-     #         "module load cmake",
-     #         "module load PrgEnv-cray",
-     #         "module load cpe/24.11",   
-     #         "module load rocm/6.3.1",
-     #         "module load craype-accel-amd-gfx90a",
-     #         "module load cray-hdf5-parallel/1.14.3.3"]
-
-        elsif (@env=="cray" and @rocm=="5.3.0")
-        cmds=["module purge",
-              "module load Core",
-              "module load cmake",
-              "module load PrgEnv-cray/8.3.3",
-              "module load craype-x86-trento",
-              "module load cpe/23.03",   
-              "module load rocm/5.3.0",
-              "module load craype-accel-amd-gfx90a",
-              "module load cray-hdf5-parallel/1.12.2.1"]
-
-        elsif (@env=="amd" and @rocm=="5.3.0")
-        cmds=["module purge",
-              "module load Core",
-              "module load cmake",
-              "module load PrgEnv-amd/8.3.3",
-              "module load craype-x86-trento",
-              "module load amd/5.3.0", 
-              "module load rocm/5.3.0",
-              "module load cray-mpich/8.1.23",
-              "module load cray-libsci/22.12.1.1",
-              "module load craype/2.7.31.11",
-              "module load craype-accel-amd-gfx90a"]
-        elsif (@env=="amd" and @rocm=="5.4.0")
-        cmds=["module purge",
-              "module load Core",
-              "module load cmake",
-              "module load PrgEnv-amd/8.5.0",
-              "module load craype-x86-trento",
-              "module load amd/5.4.0", 
-              "module load rocm/5.4.0",
-              "module load cray-mpich/8.1.25",
-              "module load craype/2.7.31.11",
-              "module load cray-libsci/23.12.5",
-              "module load craype-accel-amd-gfx90a"]
-        elsif (@env=="amd" and @rocm=="5.4.3")
-        cmds=["module purge",
-              "module load Core",
-              "module load cmake",
-              "module load PrgEnv-amd/8.5.0",
-              "module load craype-x86-trento",
-              "module load amd/5.4.3", 
-              "module load rocm/5.4.3",
-              "module load cray-mpich/8.1.26",
-              "module load craype/2.7.31.11",
-              "module load cray-libsci/23.12.5",
-              "module load craype-accel-amd-gfx90a"]
-        elsif (@env=="amd" and @rocm=="5.5.1")
-        cmds=["module purge",
-              "module load Core",
-              "module load cmake",
-              "module load PrgEnv-amd/8.5.0",
-              "module load craype-x86-trento",
-              "module load amd/5.5.1", 
-              "module load rocm/5.5.1",
-              "module load cray-mpich/8.1.27",
-              "module load craype/2.7.31.11",
-              "module load cray-libsci/23.12.5",
-              "module load craype-accel-amd-gfx90a"]
-       # cmds=["module purge",
-       #       "module load Core",
-       #       "module load cmake",
-       #       "module load PrgEnv-amd",
-       #       "module load cpe/23.09",
-       #       "module load amd/5.5.1", 
-       #       "module load rocm/5.5.1",
-       #       "module load craype-x86-trento",
-       #       "module load craype-accel-amd-gfx90a"]
-        elsif (@env=="amd" and @rocm=="5.6.0")
-        cmds=["module purge",
-              "module load Core",
-              "module load cmake",
-              "module load PrgEnv-amd/8.5.0",
-              "module load craype-x86-trento",
-              "module load amd/5.6.0", 
-              "module load rocm/5.6.0",
-              "module load cray-mpich/8.1.27",
-              "module load craype/2.7.31.11",
-              "module load cray-libsci/23.12.5",
-              "module load craype-accel-amd-gfx90a"]
-
-
-
-        elsif (@env=="amd" and @rocm=="5.7.0")
-        cmds=["module purge",
-              "module load Core",
-              "module load cmake",
-              "module load PrgEnv-amd/8.5.0",
-              "module load craype-x86-trento",
-              "module load amd/5.7.0", 
-              "module load rocm/5.7.0",
-              "module load cray-mpich/8.1.28",
-              "module load craype/2.7.31.11",
-              "module load cray-libsci/23.12.5",
-              "module load craype-accel-amd-gfx90a"]
-        elsif (@env=="amd" and @rocm=="5.7.1")
-        cmds=["module purge",
-              "module load Core",
-              "module load cmake",
-              "module load PrgEnv-amd/8.5.0",
-              "module load craype-x86-trento",
-              "module load amd/5.7.1", 
-              "module load rocm/5.7.1",
-              "module load cray-mpich/8.1.28",
-              "module load craype/2.7.31.11",
-              "module load cray-libsci/23.12.5",
-              "module load craype-accel-amd-gfx90a"]
-        elsif (@env=="amd" and @rocm=="6.2.4")
-        cmds=["module purge",
-              "module load Core",
-              "module load cmake",
-              "module load PrgEnv-amd/8.6.0",
-              "module load craype-x86-trento",
-              "module load amd/6.2.4", 
-              "module load rocm/6.2.4",
-              "module load cray-mpich/8.1.31",
-              "module load craype/2.7.31.11",
-              "module load cray-libsci/23.12.5",
-              "module load craype-accel-amd-gfx90a"]
-        elsif (@env=="amd" and @rocm=="6.3.1")
-        cmds=["module purge",
+        cmds=["module --force purge",
               "module load Core",
               "module load cmake",
               "module load PrgEnv-amd/8.6.0",
               "module load craype-x86-trento",
               "module load amd/6.3.1", 
               "module load rocm/6.3.1",
+              "module load craype/2.7.33",
               "module load cray-mpich/8.1.31",
-              "module load craype/2.7.31.11",
               "module load cray-libsci/23.12.5",
               "module load craype-accel-amd-gfx90a"]
+     end
+  end
 
-              #"module load cpe/23.03",   
-              #"module load rocm/5.3.0",
-              #"module load craype-accel-amd-gfx90a",
-              #"module load cray-hdf5-parallel/1.12.2.1"]
-         end
+  if (@machine=="tioga")
 
+     puts " Do the modules need to be set? (y/n) "
+     reply=gets.chomp.strip
+     if (reply=="y")
 
-
+        cmds=["module --force purge",
+              "module load cmake",
+              "module load PrgEnv-amd/8.6.0",
+              "module load craype-x86-trento",
+              "module load amd/6.2.1",
+              "module load rocm/6.2.1",
+              "module load craype-accel-amd-gfx942"]
      end
   end
 
@@ -359,6 +189,12 @@ class Launcher
      @srcdir=@qudadir+"/source"
      @builddir=@qudadir+"/build/"+nowstr
      @installdir=@qudadir+"/install/"+nowstr
+     @qmpdir=""
+  elsif (@machine=="tioga")
+     @qudadir="/usr/workspace/coldqcd/colin/quda"
+     @srcdir="/usr/workspace/coldqcd/colin/quda/source"
+     @builddir=@qudadir+"/build/"+nowstr
+     @installdir="/usr/workspace/coldqcd/colin/quda/install/"+nowstr
      @qmpdir=""
   else
      abort("Unsupported machine ")
@@ -477,7 +313,7 @@ class Launcher
         @cxx="/usr/bin/g++"
      end
      @gpu="cuda"
-     @gpudir="/usr/local/cuda-11.4"
+     @gpudir="/usr/local/cuda-12.4"
      @gpubindir=@gpudir+"/bin"
      @gpuincdir=@gpudir+"/include"
      @gpuarch="sm_86"
@@ -574,6 +410,24 @@ class Launcher
      @cxxflags="-O3 -Wall -fopenmp -I${MPICH_DIR}/include -D__HIP_ROCclr__ -D__HIP_ARCH_GFX90A__=1 --rocm-path=${ROCM_PATH} --offload-arch=gfx90a "
      @linkerflags=" --rocm-path=${ROCM_PATH} -L${ROCM_PATH}/lib -lamdhip64 "   #    --offload-arch=gfx90a"
 
+  elsif (@machine=="tioga")
+
+    if (@comm=="mpi-parallel")
+        @cc="mpicc"
+        @cxx="mpicxx"
+     elsif (@comm=="none-serial")
+        abort("Not currently supported")
+     end
+     @gpu="hip"
+     @gpudir="/opt/rocm-6.3.1"
+     @gpubindir=@gpudir+"/bin"
+     @gpuincdir=@gpudir+"/include"
+     @gpuarch="gfx942"
+     @makeopt="-j8"
+     @cflags="-O3 -fopenmp  -D__HIP_PLATFORM_AMD__ -Wall --offload-arch=gfx942"
+     @cxxflags="-O3 -fopenmp  -D__HIP_PLATFORM_AMD__ -Wall --offload-arch=gfx942"
+     @linkerflags="--offload-arch=gfx942"
+
   end
  end
 
@@ -623,18 +477,16 @@ class Launcher
        " -DCMAKE_CXX_FLAGS=\""+@cxxflags+"\""+
        " -DCMAKE_C_FLAGS=\""+@cflags+"\""+
        gpuoptions+
+       " -DQUDA_DIRAC_DEFAULT_OFF=ON"+
+       " -DQUDA_DIRAC_WILSON=ON"+
        " -DQUDA_DIRAC_CLOVER=ON"+
-       " -DQUDA_DIRAC_DOMAIN_WALL=OFF"+
+       " -DQUDA_DIRAC_LAPLACE=ON"+
        " -DQUDA_DIRAC_CLOVER_HASENBUSCH=OFF"+
+       " -DQUDA_DIRAC_DOMAIN_WALL=OFF"+
        " -DQUDA_MDW_FUSED_LS_LIST=\"8,12,16,20\""+
        " -DQUDA_DIRAC_STAGGERED=OFF"+
        " -DQUDA_DIRAC_TWISTED_MASS=OFF"+
        " -DQUDA_DIRAC_TWISTED_CLOVER=OFF"+
-       " -DQUDA_DIRAC_WILSON=ON"+
-       " -DQUDA_FORCE_GAUGE=OFF"+
-       " -DQUDA_FORCE_HISQ=OFF"+
-       " -DQUDA_GAUGE_ALG=OFF"+
-       " -DQUDA_GAUGE_TOOLS=OFF"+
        " -DQUDA_CLOVER_DYNAMIC=ON"+
        " -DQUDA_CLOVER_RECONSTRUCT=ON"+
        " -DQUDA_QDPJIT=OFF"+
@@ -647,7 +499,6 @@ class Launcher
        " -DQUDA_QIO=OFF"+
        " -DQUDA_OPENMP=ON"+
        " -DQUDA_MULTIGRID=ON"+
-       " -DQUDA_LAPLACE=ON"+
        " -DQUDA_MPI="+mpi+
        " -DQUDA_NVSHMEM=OFF"+
        " -DQUDA_MAX_MULTI_BLAS_N=9"+

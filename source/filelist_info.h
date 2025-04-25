@@ -79,6 +79,8 @@ class FileListInfo
 
    std::string str() const;
 
+   std::string output(int indent = 0) const;
+
  private:
 
    void set_info(const XMLHandler& xml_in);

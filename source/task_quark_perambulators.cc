@@ -51,6 +51,7 @@ namespace LaphEnv {
 // *            <ExtraSolutionChecks/> (optional)                                          *
 // *         </QuarkPerambulatorInfo>                                                      *
 // *         <ComputationSet>                                                              *
+// *            <UseMultiSrcInverter> yes </UseMultiSrcInverter> (optional: yes default)   *
 // *            <NumSinksBeforeProject>  4 </NumSinksBeforeProject>                        *
 // *            <NumSinksInProjectBatch> 4 </NumSinksInProjectBatch>                       *
 // *            <NumEigsInProjectBatch>  4 </NumEigsInProjectBatch>                        *
@@ -66,6 +67,7 @@ namespace LaphEnv {
 // *         </ComputationSet>                                                             *
 // *         <Verbosity>full</Verbosity>  (optional: override default)                     *
 // *         <PrintCoefficients/>  (optional)                                              *
+// *         <ReportGflops/>  (optional)                                                   *
 // *      </Task>                                                                          *
 // *                                                                                       *
 // *   If the tag <SmearedQuarkFileStub> is set, then the LapH eigenvectors will be read   *
@@ -74,6 +76,15 @@ namespace LaphEnv {
 // *                                                                                       *
 // *   The default verbosity from the main program is used, unless overridden by           *
 // *   the <Verbosity> tag above.                                                          *
+// *                                                                                       *
+// *   The following tags relate to control of the computations:                           *
+// *      <UseMultiSrcInverter>  -- yes or no (yes can speed up, uses more memory)         *
+// *      <NumSinksBeforeProject>  -- number of inversions to do before projecting         *
+// *                                  onto Laph evs (the number to do in multi-src)        *
+// *      <NumSinksInProjectBatch> -- while projecting onto Laph evs, the number of        *
+// *                                  quark sinks to project at a time as one batch        *
+// *                                  (generally should be same as value for previous tag) *
+// *      <NumEigsInProjectBatch> -- number of Laph evs to project at a time as one batch  *
 // *                                                                                       *
 // *   If the <PrintCoefficients/> is present, then the coefficients are printed           *
 // *   to standard output.                                                                 *
@@ -113,6 +124,9 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
  bool print_coeffs=false;
  if (xml_tag_count(xmltask,"PrintCoefficients")>0){
     print_coeffs=true;}
+ bool report_gflops=false;
+ if (xml_tag_count(xmltask,"ReportGflops")>0){
+    report_gflops=true;}
  PerambulatorHandler::Mode mode=PerambulatorHandler::Compute;
 
  printLaph("\n");
@@ -153,11 +167,231 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
 
      // now do the computations!
  StopWatch outer; outer.start();
- Q.computePerambulators(extra_soln_check,print_coeffs);
+ Q.computePerambulators(extra_soln_check,print_coeffs,report_gflops);
  outer.stop();
  printLaph(make_strf("LAPH_PERAMBULATORS: total time = %g secs",
            outer.getTimeInSeconds()));
  printLaph("LAPH_PERAMBULATORS: ran successfully\n"); 
+} 
+
+
+// *****************************************************************************************
+// *                                                                                       *
+// *   Task to check the LapH quark perambulators previously computed and written to       *
+// *   file.  The input XML is expected to have the following  form:                       *
+// *                                                                                       *
+// *      <Task>                                                                           *
+// *         <Name>LAPH_CHECK_PERAMBULATORS</Name>                                         *
+// *         <QuarkPerambulatorInfo>                                                       *
+// *            <GaugeConfigurationInfo>                                                   *
+// *               <EnsembleName>CLS_A653</EnsembleName>                                   *
+// *               <FileFormat>CERN</FileFormat>                                           *
+// *               <ConfigType>WilsonImproved</ConfigType>                                 *
+// *               <FileName>/path/A653r000n1</FileName>                                   *
+// *               <ConfigNumber>1</ConfigNumber>                                          *
+// *               <FermionTimeBC>antiperiodic</FermionTimeBC>                             *
+// *            </GaugeConfigurationInfo>                                                  *
+// *            <GluonStoutSmearingInfo>                                                   *
+// *               <LinkIterations>20</LinkIterations>                                     *
+// *               <LinkStapleWeight>0.1</LinkStapleWeight>                                *
+// *            </GluonStoutSmearingInfo>                                                  *
+// *            <QuarkLaphSmearingInfo>                                                    *
+// *               <LaphSigmaCutoff>0.32</LaphSigmaCutoff>                                 *
+// *               <NumberLaphEigvecs> 32 </NumberLaphEigvecs>                             *
+// *            </QuarkLaphSmearingInfo>                                                   *
+// *            <SmearedQuarkFileStub>/path/sq_field</SmearedQuarkFileStub>                *
+// *            <QuarkActionInfo>                                                          *
+// *               <Name> WILSON_CLOVER </Name>                                            *
+// *               <Flavor> ud </Flavor>                                                   *
+// *               <Kappa>0.1365716</Kappa>                                                *
+// *               <clovCoeff>2.0668577</clovCoeff>                                        *
+// *               <TimeBC> antiperiodic </TimeBC>                                         *
+// *             </QuarkActionInfo>                                                        *
+// *            <FileListInfo>/path/quark_perambs_1</FileNameStub>                         *
+// *               <MinFileNumber>0</MinFileNumber>                                        *
+// *               <MaxFileNumber>200</MaxFileNumber>                                      *
+// *            </FileListInfo>                                                            *
+// *         </QuarkPerambulatorInfo>                                                      *
+// *         <CheckSet>                                                                    *
+// *            <Check>                                                                    *
+// *               <SourceTime>8</SourceTime>                                              *
+// *               <SourceLaphEigvecIndices>12 17 23 24 25</SourceLaphEigvecIndices>       *
+// *            </Check>                                                                   *
+// *            <Check>                                                                    *
+// *               <SourceTime>12</SourceTime>                                             *
+// *               <SourceLaphEigvecIndexMin>24</SourceLaphEigvecIndexMin>                 *
+// *               <SourceLaphEigvecIndexMax>32</SourceLaphEigvecIndexMax>                 *
+// *            </Check>                                                                   *
+// *         </CheckSet>                                                                   *
+// *         <LogFileStub>/path/logfilestub</LogFileStub>                                  *
+// *         <VerboseOutput/> (optional)                                                   *
+// *      </Task>                                                                          *
+// *                                                                                       *
+// *****************************************************************************************
+
+void doLaphCheckPerambulators(XMLHandler& xmltask)
+{
+ if (xml_tag_count(xmltask,"QuarkPerambulatorInfo")!=1){
+    errorLaph("Must have one <QuarkPerambulatorInfo> tag");}
+ XMLHandler xmlr(xmltask,"QuarkPerambulatorInfo");
+ GaugeConfigurationInfo gaugeinfo(xmlr);
+ GluonSmearingInfo gSmear(xmlr);
+ QuarkSmearingInfo qSmear(xmlr);
+ QuarkActionInfo quark(xmlr);
+ FileListInfo files(xmlr);
+ bool upper_spin_only=false;
+ if (xml_tag_count(xmlr,"UpperSpinComponentsOnly")>0){
+    upper_spin_only=true;}
+ bool verbose_output=false;
+ if (xml_tag_count(xmltask,"VerboseOutput")>0){
+    verbose_output=true;}
+ string logfilestub("perambs_check");
+ xmlreadif(xmltask,"LogFileStub",logfilestub,"LAPH_CHECK_PERAMBULATORS");
+ PerambulatorHandler::Mode mode=PerambulatorHandler::Check;
+
+ printLaph("\n");
+ printLaph(" ***********************************************************");
+ printLaph(" *                                                         *");
+ printLaph(" *   Laph Task: Check the quark perambulators and          *");
+ printLaph(" *              output results to log files                *");
+ printLaph(" *                                                         *");
+ printLaph(" ***********************************************************\n");
+ printLaph(make_strf("\n%s\n",gaugeinfo.output()));
+ printLaph(make_strf("\n\nGluon Smearing:\n%s\n",gSmear.output()));
+ printLaph(make_strf("\n\nQuark Smearing:\n%s\n",qSmear.output()));
+ printLaph(make_str("\nQuarkAction:\n",quark.output()));
+ if (upper_spin_only){
+    printLaph("Only upper spin components used");}
+ else{
+    printLaph("All spin components used");}
+ printLaph(make_strf("LogFileStub: %s",logfilestub));
+
+     // create handler
+ PerambulatorHandler Q(gaugeinfo,gSmear,qSmear,quark,files,
+                       "",upper_spin_only,mode);
+
+    // read the set of computations (time sources, src eigvec indices)
+    // as well as the batching parameters
+ XMLHandler xmlchk(xmltask,"CheckSet");
+ Q.setChecks(xmlchk);
+
+     // now do the checks!
+ StopWatch outer; outer.start();
+ Q.doChecks(logfilestub,verbose_output);
+ outer.stop();
+ printLaph(make_strf("LAPH_CHECK_PERAMBULATORS: total time = %g secs",
+           outer.getTimeInSeconds()));
+ printLaph("LAPH_CHECK_PERAMBULATORS: ran successfully\n"); 
+} 
+
+
+// *****************************************************************************************
+// *                                                                                       *
+// *   Task to merge the LapH quark perambulators previously computed and written to       *
+// *   file.  The input XML is expected to have the following  form:                       *
+// *                                                                                       *
+// *      <Task>                                                                           *
+// *         <Name>LAPH_MERGE_PERAMBULATORS</Name>                                         *
+// *         <QuarkPerambulatorInfo>                                                       *
+// *            <GaugeConfigurationInfo>                                                   *
+// *               <EnsembleName>CLS_A653</EnsembleName>                                   *
+// *               <FileFormat>CERN</FileFormat>                                           *
+// *               <ConfigType>WilsonImproved</ConfigType>                                 *
+// *               <FileName>/path/A653r000n1</FileName>                                   *
+// *               <ConfigNumber>1</ConfigNumber>                                          *
+// *               <FermionTimeBC>antiperiodic</FermionTimeBC>                             *
+// *            </GaugeConfigurationInfo>                                                  *
+// *            <GluonStoutSmearingInfo>                                                   *
+// *               <LinkIterations>20</LinkIterations>                                     *
+// *               <LinkStapleWeight>0.1</LinkStapleWeight>                                *
+// *            </GluonStoutSmearingInfo>                                                  *
+// *            <QuarkLaphSmearingInfo>                                                    *
+// *               <LaphSigmaCutoff>0.32</LaphSigmaCutoff>                                 *
+// *               <NumberLaphEigvecs> 32 </NumberLaphEigvecs>                             *
+// *            </QuarkLaphSmearingInfo>                                                   *
+// *            <SmearedQuarkFileStub>/path/sq_field</SmearedQuarkFileStub>                *
+// *            <QuarkActionInfo>                                                          *
+// *               <Name> WILSON_CLOVER </Name>                                            *
+// *               <Flavor> ud </Flavor>                                                   *
+// *               <Kappa>0.1365716</Kappa>                                                *
+// *               <clovCoeff>2.0668577</clovCoeff>                                        *
+// *               <TimeBC> antiperiodic </TimeBC>                                         *
+// *             </QuarkActionInfo>                                                        *
+// *            <FileListInfo>/path/quark_perambs_1</FileNameStub>                         *
+// *               <MinFileNumber>0</MinFileNumber>                                        *
+// *               <MaxFileNumber>200</MaxFileNumber>                                      *
+// *            </FileListInfo>                                                            *
+// *         </QuarkPerambulatorInfo>                                                      *
+// *         <InputFileListInfos>                                                          *
+// *            <FileListInfo>/path/quark_perambs_1</FileNameStub>                         *
+// *               <MinFileNumber>0</MinFileNumber>                                        *
+// *               <MaxFileNumber>200</MaxFileNumber>                                      *
+// *            </FileListInfo>                                                            *
+// *            <FileListInfo>/path/quark_perambs_2</FileNameStub>                         *
+// *               <MinFileNumber>0</MinFileNumber>                                        *
+// *               <MaxFileNumber>200</MaxFileNumber>                                      *
+// *            </FileListInfo>                                                            *
+// *                    ...                                                                *
+// *         </InputFileListInfos>                                                         *
+// *      </Task>                                                                          *
+// *                                                                                       *
+// *****************************************************************************************
+
+void doLaphMergePerambulators(XMLHandler& xmltask)
+{
+ if (xml_tag_count(xmltask,"QuarkPerambulatorInfo")!=1){
+    errorLaph("Must have one <QuarkPerambulatorInfo> tag");}
+ XMLHandler xmlr(xmltask,"QuarkPerambulatorInfo");
+ GaugeConfigurationInfo gaugeinfo(xmlr);
+ GluonSmearingInfo gSmear(xmlr);
+ QuarkSmearingInfo qSmear(xmlr);
+ QuarkActionInfo quark(xmlr);
+ FileListInfo files(xmlr);
+ bool upper_spin_only=false;
+ if (xml_tag_count(xmlr,"UpperSpinComponentsOnly")>0){
+    upper_spin_only=true;}
+ PerambulatorHandler::Mode mode=PerambulatorHandler::Merge;
+
+ printLaph("\n");
+ printLaph(" ***********************************************************");
+ printLaph(" *                                                         *");
+ printLaph(" *   Laph Task: Merge the quark perambulators              *");
+ printLaph(" *                                                         *");
+ printLaph(" ***********************************************************\n");
+ printLaph(make_strf("\n%s\n",gaugeinfo.output()));
+ printLaph(make_strf("\n\nGluon Smearing:\n%s\n",gSmear.output()));
+ printLaph(make_strf("\n\nQuark Smearing:\n%s\n",qSmear.output()));
+ printLaph(make_str("\nQuarkAction:\n",quark.output()));
+ if (upper_spin_only){
+    printLaph("Only upper spin components used");}
+ else{
+    printLaph("All spin components used");}
+
+ if (xml_tag_count(xmltask,"InputFileListInfos")!=1){
+    errorLaph("Must have one <InputFileListInfos> tag");}
+ XMLHandler xmlinf(xmltask,"InputFileListInfos");
+ list<XMLHandler> infxmls=xmlinf.find_among_children("FileListInfo");
+ list<FileListInfo> inflos;
+ for (list<XMLHandler>::iterator it=infxmls.begin();it!=infxmls.end();++it){
+    inflos.push_back(FileListInfo(*it));}
+
+     // create handler
+ PerambulatorHandler Q(gaugeinfo,gSmear,qSmear,quark,files,
+                       "",upper_spin_only,mode);
+
+    // read the set of computations (time sources, src eigvec indices)
+    // as well as the batching parameters
+ XMLHandler xmlchk(xmltask,"CheckSet");
+ Q.setChecks(xmlchk);
+
+     // now do the checks!
+ StopWatch outer; outer.start();
+ for (list<FileListInfo>::iterator it=inflos.begin();it!=inflos.end();++it){
+    Q.mergeData(*it);}
+ outer.stop();
+ printLaph(make_strf("LAPH_MERGE_PERAMBULATORS: total time = %g secs",
+           outer.getTimeInSeconds()));
+ printLaph("LAPH_MERGE_PERAMBULATORS: ran successfully\n"); 
 } 
 
 

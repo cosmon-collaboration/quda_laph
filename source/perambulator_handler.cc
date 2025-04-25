@@ -9,8 +9,6 @@
 #include "cblas.h"
 #endif
 
-    // STILL TO DO:  single asynchronous thread for output so can continue next computations
-    //                   while output occurs
 
 using namespace std;
 
@@ -27,6 +25,13 @@ void PerambulatorHandler::RecordKey::output(XMLHandler& xmlw) const
  xmlw.put_child("SinkSpin",make_string(getSinkSpin()));
  xmlw.put_child("SinkTime",make_string(getSinkTime()));
  xmlw.put_child("SourceLaphEigvecIndex",make_string(getSourceLaphEigvecIndex()));
+}
+
+std::string PerambulatorHandler::RecordKey::output(int indent) const
+{
+ XMLHandler xmlout;
+ output(xmlout);
+ return xmlout.output(indent);
 }
 
 // *************************************************************************
@@ -60,6 +65,13 @@ void PerambulatorHandler::FileKey::output(XMLHandler& xmlw) const
  xmlw.set_root("FileKey");
  xmlw.put_child("SourceTime",make_string(src_time));
  xmlw.put_child("SourceSpin",make_string(src_spin));
+}
+
+std::string PerambulatorHandler::FileKey::output(int indent) const
+{
+ XMLHandler xmlout;
+ output(xmlout);
+ return xmlout.output(indent);
 }
 
 bool PerambulatorHandler::FileKey::operator<(const FileKey& rhs) const
@@ -135,18 +147,19 @@ void PerambulatorHandler::set_info(const GaugeConfigurationInfo& gaugeinfo,
     fPtr = new FileListInfo(flist);
     Nspin = (upper_spin_components_only) ? 2 : 4;
     mode = in_mode;
-    if (mode!=ReadOnly){
+    if ((mode==Compute)||(mode==Merge)){
        DHputPtr=new DataPutHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType>(
                        *this,*fPtr,"Laph--QuarkPeramb","PerambulatorHandlerDataFile");}
-    if (mode!=Compute){
+    if ((mode==ReadOnly)||(mode==Check)){
+       bool globalmode=(mode==ReadOnly); 
        DHgetPtr=new DataGetHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType>(
-                    *this,*fPtr,"Laph--QuarkPeramb","PerambulatorHandlerDataFile");}}
+                    *this,*fPtr,"Laph--QuarkPeramb","PerambulatorHandlerDataFile",globalmode);}}
  catch(const std::exception& xp){
     errorLaph(make_strf("allocation problem in PerambulatorHandler: %s",xp.what()));}
 
  if (mode==Compute){
-    connectGaugeConfigurationHandler();}
- connectQuarkSmearingHandler(smeared_quark_filestub);
+    connectGaugeConfigurationHandler();
+    connectQuarkSmearingHandler(smeared_quark_filestub);}
 }
 
 
@@ -277,6 +290,11 @@ void PerambulatorHandler::setComputationSet(const XMLHandler& xmlin)
     errorLaph("Cannot setComputationSet in PerambulatorHandler since no <ComputationSet> tag");}
  
  XMLHandler xmlrd(xmlrdr,"ComputationSet");
+ string multisrc_reply="yes";
+ xmlreadif(xmlrd,"useMultiSrcInverter",multisrc_reply,"LAPH_PERAMBULATORS");
+ if ((multisrc_reply=="YES")||(multisrc_reply=="Y")||(multisrc_reply=="Yes")||(multisrc_reply=="y")){
+    multisrc_reply="yes";}
+ if (multisrc_reply!="yes") multisrc_reply="no";
  uint nSinkLaphBatch,nSinkQudaBatch,nEigQudaBatch;
  xmlread(xmlrd,"NumSinksBeforeProject",nSinkLaphBatch,"LAPH_PERAMBULATORS");
  xmlread(xmlrd,"NumSinksInProjectBatch",nSinkQudaBatch,"LAPH_PERAMBULATORS"); 
@@ -294,6 +312,7 @@ void PerambulatorHandler::setComputationSet(const XMLHandler& xmlin)
  perambComps.nSinkLaphBatch=nSinkLaphBatch;
  perambComps.nSinkQudaBatch=nSinkQudaBatch;
  perambComps.nEigQudaBatch=nEigQudaBatch;
+ perambComps.useMultiSrcInverter=(multisrc_reply=="yes")?true:false;
 
  list<XMLHandler> xmlcs(xmlrd.find("Computation"));
  for (list<XMLHandler>::iterator it=xmlcs.begin();it!=xmlcs.end();++it){
@@ -331,6 +350,7 @@ void PerambulatorHandler::setComputationSet(const XMLHandler& xmlin)
  printLaph(make_strf("  NumSinksBeforeProject = %d",perambComps.nSinkLaphBatch));
  printLaph(make_strf(" NumSinksInProjectBatch = %d",perambComps.nSinkQudaBatch));
  printLaph(make_strf("  NumEigsInProjectBatch = %d\n",perambComps.nEigQudaBatch));
+ printLaph(make_strf("    UseMultiSrcInverter = %s\n",multisrc_reply));
  printLaph(make_strf(" Number of computations = %d",perambComps.computations.size()));
  int count=0;
  for (list<PerambComputation>::const_iterator it=perambComps.computations.begin();
@@ -364,7 +384,7 @@ void PerambulatorHandler::setComputationSet(const XMLHandler& xmlin)
 
 void PerambulatorHandler::getFileMap(XMLHandler& xmlout) const
 {
-// if (isInfoSet()) DHputPtr->getFileMap(xmlout);
+ if (isInfoSet()) DHputPtr->getFileMap(xmlout);
 }
 
 map<int,PerambulatorHandler::FileKey> PerambulatorHandler::getSuffixMap() const
@@ -389,6 +409,21 @@ void PerambulatorHandler::outputSuffixMap()
  printLaph("\n");
 }
 
+
+void PerambulatorHandler::outputSuffixMap(XMLHandler& xmlout)
+{
+ check_info_set("getSuffixMap");
+ map<int,PerambulatorHandler::FileKey> suffixmap=getSuffixMap();
+ xmlout.set_root("SuffixMap");
+ for (map<int,PerambulatorHandler::FileKey>::const_iterator it=suffixmap.begin();
+      it!=suffixmap.end();++it){
+    XMLHandler xmltmp;
+    xmltmp.set_root("Suffix");
+    xmltmp.put_child("Index",make_string(it->first));
+    xmltmp.put_child("SourceTime",make_string(it->second.src_time));
+    xmltmp.put_child("SourceSpin",make_string(it->second.src_spin));
+    xmlout.put_child(xmltmp);}
+}
 
 
 bool PerambulatorHandler::isInfoSet() const
@@ -446,21 +481,23 @@ int PerambulatorHandler::getTimeExtent() const
  return uPtr->getTimeExtent();
 }
 
-/*
+
 void PerambulatorHandler::getHeader(XMLHandler& xmlout) const
 {
- if (isInfoSet()){
-    push(xmlout,"PerambulatorHandlerDataFile");
-    uPtr->output(xmlout);
-    gSmearPtr->output(xmlout);
-    qSmearPtr->output(xmlout);
-    qactionPtr->output(xmlout); 
-    write(xmlout,"NumSpinComponents",Nspin);
-    pop(xmlout);}
+ check_info_set("getHeader"); 
+ xmlout.set_root("PerambulatorHandlerDataFile");
+ XMLHandler xmltmp;
+ uPtr->output(xmltmp); xmlout.put_child(xmltmp);
+ gSmearPtr->output(xmltmp); xmlout.put_child(xmltmp);
+ qSmearPtr->output(xmltmp); xmlout.put_child(xmltmp);
+ qactionPtr->output(xmltmp); xmlout.put_child(xmltmp);
+ xmlout.put_child("NumSpinComponents",make_string(Nspin));
 }
-*/
+
+
 bool PerambulatorHandler::checkHeader(XMLHandler& xmlin, int suffix)
 {
+ check_info_set("getHeader"); 
  XMLHandler xml_in(xmlin);
  if (xml_tag_count(xml_in,"PerambulatorHandlerDataFile")!=1) return false;
  XMLHandler xmlr(xml_in,"PerambulatorHandlerDataFile");
@@ -485,6 +522,7 @@ void PerambulatorHandler::writeHeader(XMLHandler& xmlout,
                                      const PerambulatorHandler::FileKey& fkey,
                                      int suffix)
 {
+ check_info_set("writeHeader"); 
  xmlout.set_root("PerambulatorHandlerDataFile");
  XMLHandler xmltmp;
  uPtr->output(xmltmp); xmlout.put_child(xmltmp);
@@ -500,6 +538,10 @@ void PerambulatorHandler::writeHeader(XMLHandler& xmlout,
 
 bool PerambulatorHandler::setUpPreconditioning(QudaInvertParam& invParam)
 {
+ if (mode!=Compute){
+    errorLaph("Cannot setUpPreconditioning in PerambulatorHandler unless in compute mode");}
+ if (!isInfoSet()){
+    errorLaph("Cannot setUpPreconditioning in PerambulatorHandler unless info is set");}
  if (invertPtr->getName()=="GCR_MULTIGRID"){
     if (invertPtr->QudaMGInfoPtr){
        if (preconditioner){
@@ -521,7 +563,7 @@ bool PerambulatorHandler::setUpPreconditioning(QudaInvertParam& invParam)
     //  at the sink are computed. 
  
 
-void PerambulatorHandler::computePerambulators(bool extra_soln_check, bool print_coeffs)
+void PerambulatorHandler::computePerambulators(bool extra_soln_check, bool print_coeffs, bool report_gflops)
 {
  if ((!isInfoSet())||(invertPtr==0)||(mode!=Compute)){
     errorLaph(make_str("cannot computePerambulators in PerambulatorHandler until info ",
@@ -631,7 +673,7 @@ for (int i=0;i<72;++i,++tmp){
     printLaph(" *************************************************************");
 
     computePerambulators(it->src_time,it->src_lapheigvec_indices,evList,print_coeffs,extra_soln_check,
-                         srctime,invtime,evprojtime,writetime);
+                         report_gflops,srctime,invtime,evprojtime,writetime,perambComps.useMultiSrcInverter);
     }
 
  totaltime.stop();
@@ -651,14 +693,203 @@ for (int i=0;i<72;++i,++tmp){
 }
 
 
-
-    //  do inversions for one source time, one requested selection
-    //  of source laph-eigenvector dilution indices (all source spins)
-
 void PerambulatorHandler::computePerambulators(int src_time, const set<int>& src_evindices,
                                                const std::vector<void*>& evList, bool print_coeffs,
-                                               bool extra_soln_check, double& makesrc_time, double& inv_time,
-                                               double& evproj_time, double& write_time)
+                                               bool extra_soln_check, bool report_gflops, 
+                                               double& makesrc_time, double& inv_time,
+                                               double& evproj_time, double& write_time,
+                                               bool use_multisrc_inverter)
+{
+ if (use_multisrc_inverter){
+    computePerambulatorsMS(src_time,src_evindices,evList,print_coeffs,extra_soln_check,report_gflops, 
+                           makesrc_time,inv_time,evproj_time,write_time); }
+ else{
+    computePerambulatorsSS(src_time,src_evindices,evList,print_coeffs,extra_soln_check,report_gflops, 
+                           makesrc_time,inv_time,evproj_time,write_time); }
+}
+
+
+    //  do inversions for one source time, one requested selection
+    //  of source laph-eigenvector dilution indices (all source spins) 
+    // VERSION which uses multi-src (MS) inverter
+
+void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& src_evindices,
+                                                 const std::vector<void*>& evList, bool print_coeffs,
+                                                 bool extra_soln_check, bool report_gflops, 
+                                                 double& makesrc_time, double& inv_time,
+                                                 double& evproj_time, double& write_time)
+{
+ StopWatch bulova; bulova.start();
+ printLaph("\nQuark perambulator computation for one source time,");
+ printLaph(" one set of source eigvec indices beginning");
+ printLaph(make_strf(" Source time = %d",src_time));
+
+ int Textent = uPtr->getTimeExtent();
+ int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
+ int minTime=0;
+ int maxTime=Textent-1;
+ uint nSinkLaphBatch=perambComps.nSinkLaphBatch;
+ uint nSinkQudaBatch=perambComps.nSinkQudaBatch;
+ uint nEigQudaBatch=perambComps.nEigQudaBatch;
+ double soln_rescale=qactionPtr->getSolutionRescaleFactor();
+
+        // allocate space for batched solutions and sources, and make pointers suitable for quda
+ vector<int> sinkBatchInds(nSinkLaphBatch);
+ vector<int> sinkBatchDoneInds(nSinkLaphBatch);
+ vector<LattField> sinkBatchData(nSinkLaphBatch,FieldSiteType::ColorSpinVector);
+ vector<LattField> srcBatchData(nSinkLaphBatch,FieldSiteType::ColorSpinVector);
+ vector<void*> sinkList(nSinkLaphBatch);
+ vector<void*> srcList(nSinkLaphBatch);
+ vector<void*> doneList(nSinkLaphBatch);
+ for (int iSink=0; iSink<int(nSinkLaphBatch); iSink++){
+    sinkList[iSink] = (void*)(sinkBatchData[iSink].getDataPtr());
+    srcList[iSink] = (void*)(srcBatchData[iSink].getDataPtr());}
+ void** sinks_ptr=(void**)sinkList.data();
+ void** srcs_ptr=(void**)srcList.data();
+ void** evs_ptr=(void**)evList.data();
+ void** done_sinks_ptr=(void**)doneList.data();
+
+ bulova.stop();
+ double srctime=bulova.getTimeInSeconds();
+ double invtime=0.0;
+ double writetime=0.0;
+ double evprojtime=0.0;
+ int ninv=src_evindices.size();
+
+
+     // loop over source laph eigvec indices and source spin
+
+ for (int srcspin=1;srcspin<=int(Nspin);++srcspin){
+
+     // get the file key and open file for writing
+  FileKey fkey(src_time,srcspin);
+  DHputPtr->open(fkey);
+  int invcount=0;
+  int iSinkBatch = 0;
+ 
+
+  for (set<int>::const_iterator vt=src_evindices.begin();vt!=src_evindices.end();++vt,++invcount){
+
+    int srcev_ind=*vt;
+    printLaph(make_strf("\nStarting source number %d (with %d as last) with source spin %d",invcount,ninv-1,srcspin));
+    bool doneflag=true;
+    for (int sink_time=0;sink_time<Textent;++sink_time){
+    for (int sinkspin=1;sinkspin<=int(Nspin);++sinkspin){
+       if (!DHputPtr->queryData(RecordKey(sinkspin,sink_time,srcev_ind))){
+          doneflag=false; sinkspin=Nspin+1; sink_time=Textent;}}}
+
+    if ((!fPtr->isModeOverwrite())&&(doneflag)){
+       printLaph("warning: these quark sinks already computed...");
+       printLaph("  skip re-computing since fileMode not overwrite");}
+    else{
+        //  initialize source (include gamma_4) in Dirac-Pauli basis, allocate sink
+       bulova.reset();bulova.start();
+       make_source(srcBatchData[iSinkBatch],evList[srcev_ind],src_time,srcspin);
+       bulova.stop();
+       double addsrctime=bulova.getTimeInSeconds();
+       printLaph(make_str(" fermion source set up in Dirac-Pauli basis in ",addsrctime," seconds"));
+       srctime+=addsrctime;
+       sinkBatchInds[iSinkBatch] = srcev_ind;
+       iSinkBatch++; }
+
+       // do the inversions if all sources made
+       //   (source and sink should be on host in Dirac-Pauli basis)
+    if ((iSinkBatch == int(nSinkLaphBatch))||((invcount==(ninv-1))&&(iSinkBatch>0))) {
+       bulova.reset(); bulova.start();
+       int nSinks=iSinkBatch;
+       iSinkBatch=0;
+       quda_inv_param.num_src=nSinks;
+
+       invertMultiSrcQuda(sinks_ptr, srcs_ptr, &quda_inv_param);
+ 
+       bulova.stop(); 
+       double addinvtime=bulova.getTimeInSeconds();
+       invtime+=addinvtime;
+       printLaph(make_strf("Inversions done:  number of iterations = %d",quda_inv_param.iter));
+       printLaph(make_str(" Time for ",nSinks," inversions was ",addinvtime," seconds"));
+       if (report_gflops) printLaph(make_strf("Multi-source inversion speed was %g gflops",quda_inv_param.gflops));
+
+       if (!((quda_inv_param.iter>0)&&(quda_inv_param.iter<int(invertPtr->getMaxIterations())))){
+          printLaph("\n\nSome inversions in this batch FAILED to converge before max iteration reached");
+          printLaph("Some solution NOT WRITTEN to file\n\n");}
+
+       int iSinkDone=0;
+       for (int iSink=0;iSink<nSinks;++iSink){
+          printLaph(make_strf(" Residual for src %d = %g",iSink,quda_inv_param.true_res[iSink]));
+          if (quda_inv_param.true_res[iSink]>quda_inv_param.tol){
+             printLaph("    This inversion failed to reach required tolerance");}
+          else{
+
+             sinkBatchDoneInds[iSinkDone]=sinkBatchInds[iSink];
+             doneList[iSinkDone]=(void*)(sinkBatchData[iSink].getDataPtr());
+             iSinkDone++;
+
+             // additional checks of the solution
+
+             if (extra_soln_check){
+                printLaph("Performing additional check on solution using quda::MatQuda");
+                LattField sol_check(FieldSiteType::ColorSpinVector);
+                void *sol_checkptr=sol_check.getDataPtr();
+                MatQuda(sol_checkptr,sinkList[iSink],&quda_inv_param);
+                LaphEnv::compare_latt_fields(sol_check,srcBatchData[iSink]);}
+             }}
+       nSinks=iSinkDone;
+
+       // carry out projections
+       if (nSinks>0){
+
+          bulova.reset(); bulova.start();
+          int nSinksBatch=std::min(nSinks,int(nSinkQudaBatch));
+
+          Array<dcmplx> qudaRes(Nspin, Textent, nEigs, nSinks);   // quda laph reversing major order
+          __complex__ double* qudaResPtr = (__complex__ double*)(&qudaRes(0,0,0,0));
+
+            // do the projections
+          printLaph("projecting batch of solutions onto LapH eigenvectors");
+          laphSinkProject(qudaResPtr, done_sinks_ptr, nSinks, nSinksBatch, evs_ptr, nEigs, 
+                          nEigQudaBatch, &quda_inv_param, LayoutInfo::getRankLattExtents().data());
+
+          bulova.stop(); 
+          double addevprojtime=bulova.getTimeInSeconds();
+          printLaph(make_str(" this batch of projections onto Laph evs took ",addevprojtime," seconds"));
+          evprojtime+=addevprojtime;
+
+            // rearrange data then output to file
+          bulova.reset(); bulova.start();
+          for (int iSink=0; iSink<nSinks; ++iSink) {
+             for (int t=minTime;t<=maxTime;t++){
+                for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
+                   vector<dcmplx> quark_sink(nEigs);
+                   for (int iEv=0; iEv<nEigs; ++iEv) {
+                      quark_sink[iEv] = soln_rescale*qudaRes(iSpin, t, iEv, iSink);}
+                      DHputPtr->putData(RecordKey(iSpin+1,t,sinkBatchDoneInds[iSink]),quark_sink);
+                      if (print_coeffs){
+                         printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchDoneInds[iSink],iSpin+1,t));
+                         for (int n=0;n<nEigs;n++){
+                            printLaph(make_strf("coef for eigenlevel %d = (%14.8f, %14.8f)",
+                                      n,real(quark_sink[n]),imag(quark_sink[n])));}}}}}
+          bulova.stop();
+          double otime=bulova.getTimeInSeconds();
+          printLaph(make_str(" Output of this batch to file took ",otime," seconds"));
+          writetime+=otime;}}  // 	batch end
+
+    DHputPtr->flush();}}   // src_ind, src_spin loop end
+
+ inv_time+=invtime;
+ makesrc_time+=srctime; 
+ evproj_time+=evprojtime; 
+ write_time+=writetime;
+}
+
+    //  do inversions for one source time, one requested selection
+    //  of source laph-eigenvector dilution indices (all source spins) 
+    //  VERSION which does not use multi-src inverter, but single src (SS)
+
+void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& src_evindices,
+                                                 const std::vector<void*>& evList, bool print_coeffs,
+                                                 bool extra_soln_check, bool report_gflops, 
+                                                 double& makesrc_time, double& inv_time,
+                                                 double& evproj_time, double& write_time)
 {
  StopWatch bulova; bulova.start();
  printLaph("\nQuark perambulator computation for one source time,");
@@ -690,43 +921,6 @@ void PerambulatorHandler::computePerambulators(int src_time, const set<int>& src
  double writetime=0.0;
  double evprojtime=0.0;
  int ninv=src_evindices.size();
-
-
-
-
-
-
-
-#ifdef EXTRA_LAPH_CHECKS
- {printLaph("Testing Dirac Clover matrix on arbitrary source vector");
- LattField field1(FieldSiteType::ColorSpinVector);
- //setConstantField(field1, complex<double>(0.7342, -0.6532));
- setVariablePhaseField(field1, {0.65321, -2.15327, 0.91235, -1.21193}, 1.502812);
- LattField field2(FieldSiteType::ColorSpinVector);
- applyCloverDirac(field2,field1,gaugeHandler->getData(),*uPtr,*qactionPtr);
- LattField field2check(FieldSiteType::ColorSpinVector);
- void *checkptr1=field1.getDataPtr();
- void *checkptr2=field2check.getDataPtr();
-// setVariablePhaseField(field1, {3.65321, -1.15327, -0.91235, 1.21193}, 1.26);
- MatQuda(checkptr2,checkptr1,&quda_inv_param);  // leaves answer,initial on device?
-
- printLaph("Comparing MatQuda result with quda_laph host result");
- compare_fields(field2check,field2);
- printLaph("Comparison DONE");}
-#endif
-
-
-
-
-
-
-
-
-
-
-
-
-
 
      // loop over source laph eigvec indices and source spin
  
@@ -768,6 +962,8 @@ void PerambulatorHandler::computePerambulators(int src_time, const set<int>& src
 
     invertQuda(spinor_snk, spinor_src, &quda_inv_param);
 
+
+
     bulova.stop(); 
     double addinvtime=bulova.getTimeInSeconds();
     invtime+=addinvtime;
@@ -775,10 +971,11 @@ void PerambulatorHandler::computePerambulators(int src_time, const set<int>& src
     printLaph(make_strf("Inversion done:  number of iterations = %d",quda_inv_param.iter));
     printLaph(make_strf(" Residual = %g",quda_inv_param.true_res[0]));
     printLaph(make_str("  Inversion time was ",addinvtime," seconds"));
-    printLaph(make_str("  Inverter used was ",invertPtr->getName()));
+    if (report_gflops) printLaph(make_strf("Inversion speed was %g gflops",quda_inv_param.gflops));
+    //printLaph(make_str("  Inverter used was ",invertPtr->getName()));
 
-    if (quda_inv_param.true_res[0]>quda_inv_param.tol){
-       printLaph("Inverter failed to reach required tolerance");} 
+    if (quda_inv_param.true_res[0]>quda_inv_param.tol){ 
+       printLaph("Inverter failed to reach required tolerance");}
 
        // additional checks of the solution
 
@@ -787,7 +984,7 @@ void PerambulatorHandler::computePerambulators(int src_time, const set<int>& src
        LattField sol_check(FieldSiteType::ColorSpinVector);
        void *sol_checkptr=sol_check.getDataPtr();
        MatQuda(sol_checkptr,spinor_snk,&quda_inv_param);
-       LaphEnv::compare_latt_fields(sol_check,ferm_src);}
+       LaphEnv::compare_latt_fields(sol_check,ferm_src);} 
 
     if ((quda_inv_param.iter>0)&&(quda_inv_param.iter<int(invertPtr->getMaxIterations()))){
        sinkBatchInds[iSinkBatch] = srcev_ind;
@@ -918,6 +1115,248 @@ void PerambulatorHandler::make_source(LattField& ferm_src, const void* ev_src_pt
           cblas_caxpy(n2,(fcmplx*)(zrho),(fcmplx*)(x2),incx,(fcmplx*)(y2),incy);}
        x1+=cbytes; y1+=cbytes; x2+=cbytes; y2+=cbytes;}}
  printLaph("Source for this inversion created");
+}
+
+
+const PerambulatorHandler::DataType& PerambulatorHandler::getData(
+                             int snk_time, int snk_spin, int src_time, int src_spin,
+                             int src_eigvec_index) const
+{
+ if (!isInfoSet()){
+    errorLaph("Cannot getData in PerambulatorHandler unless info is set");}
+ if (mode==Compute){
+    errorLaph("Cannot getData in PerambulatorHandler unless not in compute mode");}
+ int Textent = uPtr->getTimeExtent();
+ int nEigs=getNumberOfLaplacianEigenvectors();
+ if ((src_time<0)||(src_time>=Textent)||(snk_time<0)||(snk_time>=Textent)
+    ||(src_spin<1)||(src_spin>int(Nspin))||(snk_spin<1)||(snk_spin>int(Nspin))
+    ||(src_eigvec_index<0)||(src_eigvec_index>=nEigs)){
+    errorLaph("Invalid parameters passed to getData in PerambulatorHandler");}
+ FileKey fkey(src_time,src_spin);
+ RecordKey rkey(snk_spin,snk_time,src_eigvec_index);
+ return DHgetPtr->getData(fkey,rkey);
+}
+
+
+Array<std::complex<double>> PerambulatorHandler::getFullData(
+                 int snk_time, int snk_spin, int src_time, int src_spin, int nEigsUse) const
+{
+ if (!isInfoSet()){
+    errorLaph("Cannot getData in PerambulatorHandler unless info is set");}
+ if (mode==Compute){
+    errorLaph("Cannot getData in PerambulatorHandler unless not in compute mode");}
+ int Textent = uPtr->getTimeExtent();
+ int nEigs=getNumberOfLaplacianEigenvectors();
+ if ((src_time<0)||(src_time>=Textent)||(snk_time<0)||(snk_time>=Textent)
+    ||(src_spin<1)||(src_spin>int(Nspin))||(snk_spin<1)||(snk_spin>int(Nspin))
+    ||(nEigsUse<1)||(nEigsUse>nEigs)){
+    errorLaph("Invalid parameters passed to getFullData in PerambulatorHandler");}
+ FileKey fkey(src_time,src_spin);
+ Array<std::complex<double>> result(nEigsUse,nEigsUse);
+ for (int srcev_ind=0;srcev_ind<nEigsUse;srcev_ind++){
+    RecordKey rkey(snk_spin,snk_time,srcev_ind);
+    const PerambulatorHandler::DataType& buff=DHgetPtr->getData(fkey,rkey);
+    for (int n=0;n<nEigsUse;n++){
+       result(n,srcev_ind)=buff[n];}
+    DHgetPtr->removeData(fkey,rkey);}
+ return result;
+}
+
+
+bool PerambulatorHandler::queryData(int snk_time, int snk_spin, int src_time, int src_spin,
+                                    int src_eigvec_index) const
+{
+ if (!isInfoSet()) return false;
+ if (mode==Compute) return false;
+ int Textent = uPtr->getTimeExtent();
+ int nEigs=getNumberOfLaplacianEigenvectors();
+ if ((src_time<0)||(src_time>=Textent)||(snk_time<0)||(snk_time>=Textent)
+    ||(src_spin<1)||(src_spin>int(Nspin))||(snk_spin<1)||(snk_spin>int(Nspin))
+    ||(src_eigvec_index<0)||(src_eigvec_index>=nEigs)){
+    return false;}
+ FileKey fkey(src_time,src_spin);
+ RecordKey rkey(snk_spin,snk_time,src_eigvec_index);
+ return DHgetPtr->queryData(fkey,rkey);
+}
+
+
+bool PerambulatorHandler::queryFullData(int snk_time, int snk_spin, 
+                                        int src_time, int src_spin, int nEigsUse) const
+{
+ if (!isInfoSet()) return false;
+ if (mode==Compute) return false;
+ int Textent = uPtr->getTimeExtent();
+ int nEigs=getNumberOfLaplacianEigenvectors();
+ if ((src_time<0)||(src_time>=Textent)||(snk_time<0)||(snk_time>=Textent)
+    ||(src_spin<1)||(src_spin>int(Nspin))||(snk_spin<1)||(snk_spin>int(Nspin))
+    ||(nEigsUse<1)||(nEigsUse>nEigs)){
+    return false;}
+ FileKey fkey(src_time,src_spin);
+ Array<std::complex<double>> result(nEigsUse,nEigsUse);
+ for (int srcev_ind=0;srcev_ind<nEigsUse;srcev_ind++){
+    RecordKey rkey(snk_spin,snk_time,srcev_ind);
+    if (!DHgetPtr->queryData(fkey,rkey)) return false;}
+ return true;
+}
+
+        // merge data
+
+void PerambulatorHandler::mergeData(const FileListInfo& input_files)
+{
+ if (!isInfoSet()){
+    errorLaph("Cannot mergeData in PerambulatorHandler unless info is set");}
+ if (mode!=Merge){
+    errorLaph("Cannot mergeData in PerambulatorHandler unless in merge mode");}
+ DataGetHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType> DHget(
+           *this,input_files,"Laph--QuarkPeramb","PerambulatorHandlerDataFile");
+ set<FileKey> fkeys(DHget.getFileKeys());
+ for (set<FileKey>::iterator it=fkeys.begin();it!=fkeys.end();++it){
+    DHputPtr->open(*it);
+    set<RecordKey> rkeys(DHget.getKeys(*it));
+    for (set<RecordKey>::iterator rt=rkeys.begin();rt!=rkeys.end();++rt){
+        const DataType& buff=DHget.getData(*it,*rt);
+        DHputPtr->putData(*rt,buff);
+        DHget.removeData(*it,*rt);}}
+}
+
+
+        // check data
+   
+void PerambulatorHandler::setChecks(const XMLHandler& xmlin)
+{
+ if (!isInfoSet()){
+    errorLaph("Cannot setChecks in PerambulatorHandler unless info is set");}
+ if (mode!=Check){
+    errorLaph("Cannot setChecks in PerambulatorHandler unless in check mode");}
+ XMLHandler xmlrdr(xmlin);
+ if (!perambComps.computations.empty()) perambComps.computations.clear();
+ uint Textent = uPtr->getTimeExtent();
+ uint nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
+ if (xml_tag_count(xmlrdr,"CheckSet")!=1){
+    errorLaph("Cannot setCheckSet in PerambulatorChecker since no <CheckSet> tag");}
+ XMLHandler xmlrd(xmlrdr,"CheckSet");
+ list<XMLHandler> xmlcs(xmlrd.find("Check"));
+ for (list<XMLHandler>::iterator it=xmlcs.begin();it!=xmlcs.end();++it){
+    int source_time;
+    xmlread(*it,"SourceTime",source_time,"LAPH_CHECK_PERAMBULATORS");
+    if ((source_time<0)||(source_time>=int(Textent))){
+       errorLaph(make_strf("Invalid source time %d",source_time));}
+    set<int> srcev_indices;
+    if (xml_tag_count(*it,"SourceLaphEigvecIndices")==1){
+       vector<int> srcev_inds;
+       xmlread(*it,"SourceLaphEigvecIndices",srcev_inds,"LAPH_CHECK_PERAMBULATORS");
+       for (int k=0;k<int(srcev_inds.size());++k){
+          if ((srcev_inds[k]<0)||(srcev_inds[k]>=int(nEigs))){
+             errorLaph(make_strf("Invalid src laph eigvec index %d",srcev_inds[k]));}
+       srcev_indices.insert(srcev_inds[k]);}}
+    else if (  (xml_tag_count(*it,"SourceLaphEigvecIndexMin")==1)
+             &&(xml_tag_count(*it,"SourceLaphEigvecIndexMax")==1)){
+       int sevmin=-1, sevmax=-1;
+       xmlread(*it,"SourceLaphEigvecIndexMin",sevmin,"LAPH_CHECK_PERAMBULATORS");
+       xmlread(*it,"SourceLaphEigvecIndexMax",sevmax,"LAPH_CHECK_PERAMBULATORS");
+       if (sevmin<0) sevmin=0;
+       if (sevmax>=int(nEigs)) sevmax=nEigs-1;
+       if (sevmax<sevmin) sevmax=sevmin;
+       for (int ev=sevmin;ev<=sevmax;++ev){
+          srcev_indices.insert(ev);}}
+    else{
+       for (int ev=0;ev<int(nEigs);++ev){
+          srcev_indices.insert(ev);}}
+    if (srcev_indices.empty()){
+       errorLaph("Empty src laph eigvec indices set");}
+    perambComps.computations.push_back(PerambComputation(source_time,srcev_indices));}
+}
+
+   
+
+void PerambulatorHandler::doChecks(const std::string& logfilestub, bool verbose_output)
+{
+ printLaph("Performing quark perambulator checks");
+ int myrank=LayoutInfo::getMyRank();
+ int numranks=LayoutInfo::getNumRanks();
+ int count=0;
+ for (list<PerambComputation>::const_iterator it=perambComps.computations.begin();
+      it!=perambComps.computations.end();++it){
+    for (uint src_spin=1;src_spin<=Nspin;++src_spin,++count){
+       string logfile(logfilestub);
+       logfile+=string("_")+make_string(count)+string(".checklog");
+       printLaph(make_str("Check results will be sent to ",logfile));
+       if (count%numranks==myrank){
+          doACheck(*it,src_spin,logfile,verbose_output);}}}
+#ifdef ARCH_PARALLEL
+ comm_barrier();
+#endif
+}
+
+
+   //  DHGetPtr should be in local mode
+
+void PerambulatorHandler::doACheck(const PerambComputation& pcomp, int src_spin,
+                                   const std::string& logfile, bool verbose_output)
+{
+ XMLHandler xmlout("PerambulatorDataCheck");
+ xmlout.put_child("SourceTime",make_string(pcomp.src_time));
+ xmlout.put_child("SourceSpin",make_string(src_spin));
+ string srcevindstr;
+ const set<int>& indices(pcomp.src_lapheigvec_indices);
+ set<int>::const_iterator vt=indices.begin();
+ int rangestart=*vt; int rangestop=*vt+1; ++vt;
+ bool keep_going=true;
+ while (keep_going){
+    if ((vt!=indices.end())&&(rangestop==(*vt))){   // in a started range, increase rangestop
+       rangestop++; ++vt;}
+    else{                    // end of a range
+       if (rangestop==(rangestart+1)){             // only one in range
+          srcevindstr+=make_string(rangestart);}
+       else{                                       // more than one in range
+          srcevindstr+=make_string(rangestart)+"-"+make_string(rangestop-1);}
+       if (vt!=indices.end()){
+          rangestart=*vt; rangestop=rangestart+1;
+          srcevindstr+=" "; ++vt;}
+       else{
+          keep_going=false;}}}
+ xmlout.put_child("SourceLaphEigvecIndices",srcevindstr);
+
+ ofstream fout(logfile);
+ fout << "Perambulator check: "<<endl;
+ fout << xmlout.output() <<endl;
+ uint Textent = uPtr->getTimeExtent();
+ uint nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
+ uint src_time=pcomp.src_time;
+ bool flag=true;
+ FileKey fkey(src_time,src_spin);
+ if (!DHgetPtr->queryFile(fkey)){
+    if (verbose_output) fout << " Could not find data for src spin "<<src_spin<<endl;
+    flag=false;}
+ else{
+    for (uint sink_time=0;sink_time<Textent;++sink_time){
+    for (uint sinkspin=1;sinkspin<=Nspin;++sinkspin){
+    for (set<int>::iterator st=pcomp.src_lapheigvec_indices.begin();
+         st!=pcomp.src_lapheigvec_indices.end();++st){
+       uint srcev_ind=*st;
+       RecordKey rkey(sinkspin,sink_time,srcev_ind);
+       if (!DHgetPtr->queryData(fkey,rkey)){
+          if (verbose_output) fout << "Could not find record for "<<rkey.output()<<endl;
+          flag=false;}
+       else{
+          const DataType& data=DHgetPtr->getData(fkey,rkey);
+          if (data.size()!=nEigs){
+             if (verbose_output) fout << "Incorrect data size for record key "<<rkey.output()<<endl;
+             flag=false;}
+          else{
+             bool nanflag=false;
+             for (uint k=0;k<data.size();k++){
+                if ((std::isnan(data[k].real()))||(std::isnan(data[k].imag()))){
+                   nanflag=true; break;}}
+             if (nanflag){
+                if (verbose_output) fout << "Data contains NaNs for record key "<<rkey.output()<<endl;
+                flag=false;}}}}}}}
+
+ if (flag){
+    fout << "     Checks OK"<<endl;;}
+ else{
+    fout << "     Some checks FAILED"<<endl;}
+ fout.close();
 }
 
 

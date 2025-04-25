@@ -28,6 +28,8 @@ class Launcher
 
   if (@machine.index("qcdcomp-2-1")!=nil)
      @machine="cmucluster"
+  elsif (@machine.index("qcdcomp-2-2")!=nil)
+     @machine="cmucluster"
   elsif (@machine.index("bridges")!=nil)
      @machine="bridges"
   elsif (@machine.index("perlmutter")!=nil)
@@ -36,6 +38,8 @@ class Launcher
      @machine="summit"
   elsif (@machine.index("frontier")!=nil)
      @machine="frontier"
+  elsif (@machine.index("tioga")!=nil)
+     @machine="tioga"
   else
      abort(" Unsupported machine "+`hostname`)
   end
@@ -47,14 +51,17 @@ class Launcher
   
   if (@machine=="bridges")
 
-     puts
-     puts "  intelmpi module must be used"
-     puts "    must load modules  phdf5/hdf5"
-     puts "  Are these module loaded? (y/n)"
+     puts " Do the modules need to be set? (y/n) "
      reply=gets.chomp.strip
-     abort("aborting...") if (reply!="y")
-     puts
-
+     if (reply=="y")
+        cmds=["module --force purge",
+              "module load allocations",
+              "module load gcc/10.2.0",
+              "module load openmpi/4.0.5-gcc10.2.0",
+              "module load phdf5/1.10.7-openmpi4.0.5-gcc10.2.0",
+              "module load cuda/12.6.1",
+              "module load openblas/0.3.12-gcc10.2.0"]
+     end
   end
 
   if (@machine=="perlmutter")
@@ -62,29 +69,15 @@ class Launcher
      puts " Do the modules need to be set? (y/n) "
      reply=gets.chomp.strip
      if (reply=="y")
-        cmds=["module purge",
+        cmds=["module --force purge",
               "module load PrgEnv-gnu/8.5.0",
               "module load gpu",
               "module load cmake/3.24.3",
               "module load cpe-cuda/23.12",
               "module load cudatoolkit/12.2",
               "module load craype-accel-nvidia80",
-              "module load craype-x86-milan",
-              "module load eigen/3.4.0"]
+              "module load craype-x86-milan"]
      end
-  end
-
-  if (@machine=="summit")
-
-     puts
-     puts "  IBM compiler fails/takes very long to compile chroma"
-     puts "  gcc/12.1.0, hdf5, spectrum-mpi, netlib-lapack, libxml2, binutils, gmp modules must be loaded"
-     puts "  Use an interactive bsub to compile on a node: then can use -j 32"
-     puts "  Are these modules loaded? (y/n)"
-     reply=gets.chomp.strip
-     abort("aborting...") if (reply!="y")
-     puts
-
   end
 
   if (@machine=="frontier")
@@ -92,18 +85,34 @@ class Launcher
      puts " Do the modules need to be set? (y/n) "
      reply=gets.chomp.strip
      if (reply=="y")
-        cmds=["module purge",
+        cmds=["module --force purge",
               "module load Core",
               "module load cmake",
               "module load PrgEnv-amd/8.6.0",
               "module load craype-x86-trento",
               "module load amd/6.3.1", 
               "module load rocm/6.3.1",
+              "module load craype/2.7.33",
               "module load cray-mpich/8.1.31",
-              "module load craype/2.7.31.11",
               "module load cray-libsci/23.12.5",
               "module load craype-accel-amd-gfx90a",
               "module load openblas/0.3.26-omp"]
+     end
+  end
+
+  if (@machine=="tioga")
+
+     puts " Do the modules need to be set? (y/n) "
+     reply=gets.chomp.strip
+     if (reply=="y")
+
+        cmds=["module --force purge",
+              "module load cmake",
+              "module load PrgEnv-amd/8.6.0",
+              "module load craype-x86-trento",
+              "module load amd/6.3.1",
+              "module load rocm/6.3.1",
+              "module load craype-accel-amd-gfx942"]
      end
   end
 
@@ -139,7 +148,7 @@ class Launcher
      @srcdir=@qudalaphdir+"/source"
      @builddir=@qudalaphdir+"/build/"+nowstr
      @installdir=@qudalaphdir+"/install/"+nowstr
-     @qudainstalldir="/home/colin/quda/install/DATE-2025-1-9"
+     @qudainstalldir="/home/colin/quda/install/DATE-2025-1-31"
   elsif (@machine=="perlmutter")
      @qudalaphdir="/global/cfs/cdirs/m2986/stoch_nn/colin/quda_laph"
      @srcdir=@qudalaphdir+"/source"
@@ -163,7 +172,13 @@ class Launcher
      @srcdir=@qudalaphdir+"/source"
      @builddir=@qudalaphdir+"/build/"+nowstr
      @installdir=@qudalaphdir+"/install/"+nowstr
-     @qudainstalldir=""
+     @qudainstalldir="/jet/home/mornings/quda/install/DATE-2025-1-27"
+  elsif (@machine=="tioga")
+     @qudalaphdir="/usr/workspace/coldqcd/colin/quda_laph"
+     @srcdir=@qudalaphdir+"/source"
+     @builddir=@qudalaphdir+"/build/"+nowstr
+     @installdir=@qudalaphdir+"/install/"+nowstr
+     @qudainstalldir="/usr/workspace/coldqcd/colin/quda/install/"+nowstr
   else
      abort("Unsupported machine ")
   end
@@ -285,7 +300,7 @@ class Launcher
         @cxx="/usr/bin/g++"
      end
      @gpu="cuda"
-     @gpudir="/usr/local/cuda-11.4"
+     @gpudir="/usr/local/cuda-12.4"
      #@gpubindir=@gpudir+"/bin"
      #@gpuincdir=@gpudir+"/include"
      #@gpuarch="sm_86"
@@ -324,24 +339,24 @@ class Launcher
   elsif (@machine=="bridges")
   
      if (@comm=="mpi-parallel")
-        @cc="mpiicc"
-        @cxx="mpiicpc"
+        @cc="mpicc"
+        @cxx="mpicxx"
      elsif (@comm=="none-serial")
         @cc="icc"
         @cxx="icpc"
      end
      @gpu="cuda"
-     @gpudir="/opt/packages/cuda/v12.4.0"
+     @gpudir="/opt/packages/cuda/v12.6.1"
      #@gpubindir=@gpudir+"/bin"
      #@gpuincdir=@gpudir+"/include"
      #@gpuarch="sm_70"
-     @makeopt="-j16"
-     @cflags="-O3 -qopenmp"
-     @cxxflags="-O3 -qopenmp"
-     @linkerflags=""
-     @hostcblas="gsl"
-     @cblaslib=""
-     @cblasinc=""
+     @makeopt="-j8"
+     @cflags="-O3 -fopenmp"
+     @cxxflags="-O3 -fopenmp"
+     @linkerflags=" -L/opt/packages/cuda/v12.6.1/lib64/stubs -lcuda -lnvidia-ml "
+     @hostcblas="openblas"
+     @cblaslib="/jet/packages/spack/opt/spack/linux-centos8-zen2/gcc-10.2.0/openblas-0.3.12-fvq742gpvmvamo2n63uths7ghjtaz74o/lib/libopenblas.so"
+     @cblasinc="/jet/packages/spack/opt/spack/linux-centos8-zen2/gcc-10.2.0/openblas-0.3.12-fvq742gpvmvamo2n63uths7ghjtaz74o/include"
 
   elsif (@machine=="summit")
   
@@ -381,13 +396,36 @@ class Launcher
      #@gpuincdir=@gpudir+"/include"
      #@gpuarch="gfx90a"
      @makeopt="-j32"
-     @cflags=" -D__HIP_PLATFORM_AMD__ -O2  -fopenmp"
-     @cxxflags=" -D__HIP_PLATFORM_AMD__ -O2 -fopenmp"
+     @cflags=" -D__HIP_PLATFORM_AMD__ -O3  -fopenmp"
+     @cxxflags=" -D__HIP_PLATFORM_AMD__ -O3 -fopenmp"
      @linkerflags=""
      @hostcblas="openblas"
      @cblaslib="/sw/frontier/spack-envs/core-24.07/opt/gcc-7.5.0/openblas-0.3.26-2uukuglbn3pfur3tzlfe5dxmj6fjauoi/lib/libopenblas.so"
      @cblasinc="/sw/frontier/spack-envs/core-24.07/opt/gcc-7.5.0/openblas-0.3.26-2uukuglbn3pfur3tzlfe5dxmj6fjauoi/include"
-  end
+
+  elsif (@machine=="tioga")
+  
+     if (@comm=="mpi-parallel")||(@comm=="qmp-parallel")
+       # @cc="hipcc"
+       # @cxx="hipcc"
+        @cc="mpicc"
+        @cxx="mpicxx"
+     elsif (@comm=="none-serial")
+        abort("Not currently supported")
+     end
+     @gpu="hip"
+     @gpudir="/opt/rocm-6.3.1"
+     @gpubindir=@gpudir+"/bin"
+     @gpuincdir=@gpudir+"/include"
+     @gpuarch="gfx942"
+     @makeopt="-j32"
+     @cflags=" -D__HIP_PLATFORM_AMD__ -O2  -fopenmp -Wall --offload-arch=gfx942"
+     @cxxflags=" -D__HIP_PLATFORM_AMD__ -O2 -fopenmp -Wall --offload-arch=gfx942"
+     @linkerflags=""
+     @hostcblas="openblas"
+     @cblaslib="/opt/cray/pe/libsci/24.11.0/AMD/6.0/x86_64/lib/libsci_amd_mp.so" # Dynamic Shared, Serial nonthreaded, MPI
+     @cblasinc="/opt/cray/pe/libsci/24.11.0/AMD/6.0/x86_64/include"  end
+
  end
 
 
@@ -403,7 +441,7 @@ class Launcher
    FileUtils.mkdir_p @builddir
 
    if (@hostcblas=="gsl")
-      hostcblas="GSL"
+      hostcblas="GSLCBLAS"
    elsif (@hostcblas=="openblas")
       hostcblas="OPENBLAS"
    else

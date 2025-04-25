@@ -1100,12 +1100,4 @@ bool headerMatch(const std::string& doc1, const std::string& doc2,
 
 
 // *********************************************************
-
-//std::vector<std::string> string_split(const std::string& astr, char delimiter);
-
-//std::string string_extract(const std::string& astr, char left, char right);
-
-//int char_count(const std::string& astr, char delimiter);
-
-// *********************************************************
 #endif

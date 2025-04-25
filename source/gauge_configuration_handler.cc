@@ -39,11 +39,10 @@ void GaugeConfigurationHandler::setData()
 {
  check_info_set("setData");
       // check first to see if configuration has already been read
- if (GB::theGaugeConfigIsSet()){
-    m_cfg = &GB::theGaugeConfig; }
-   
- else{      // if not already in the HostGlobal, then must read it now
-    initialize_config();}
+ if (GB::theGaugeConfigIsSet(*m_gauge_info)){
+    m_cfg = &GB::getGaugeConfig(*m_gauge_info); }
+ else{      // if not already in the HostGlobal or data in HostGlobal
+    initialize_config();}          //  has different info, then must read it now
 }
 
 
@@ -68,7 +67,7 @@ void GaugeConfigurationHandler::clear()
      
 void GaugeConfigurationHandler::eraseDataOnHost()
 {
- GB::theGaugeConfig.clear();
+ GB::clearGaugeConfig();
 }
  
 
@@ -105,10 +104,11 @@ void GaugeConfigurationHandler::getXMLInfo(XMLHandler& gauge_xmlinfo) const
 void GaugeConfigurationHandler::initialize_config()
 {
  try{
-    m_cfg=&GB::theGaugeConfig;
+    std::vector<LattField>& the_config(GB::setGaugeConfig(*m_gauge_info));
     GaugeConfigReader GR;
     XMLHandler gauge_xmlinfo;
-    GR.read(GB::theGaugeConfig,gauge_xmlinfo,*m_gauge_info);
+    GR.read(the_config,gauge_xmlinfo,*m_gauge_info);
+    m_cfg=&the_config;
         // if the fermion field is antiperiodic in time, then multiply the temporal
         // links on the last time slice by -1.  This does not change the plaquette
         // nor any spatial smearing or hadron operators defined on single time slices.
@@ -128,7 +128,8 @@ void GaugeConfigurationHandler::applyFermionTemporalAntiPeriodic()
  if (!isDataSet()){
     errorLaph("Gauge configuration must already be in the HostGlobal to apply fermion temporal antiperiodic b.c.");}
  try{
-    GB::theGaugeConfig[Tdir].applyFermionTemporalAntiPeriodic();}
+    std::vector<LattField>& the_config(GB::setGaugeConfig(*m_gauge_info));
+    the_config[Tdir].applyFermionTemporalAntiPeriodic();}
  catch(const std::exception& xp){
     errorLaph(make_strf("applyFermionTemporalAntiPeriodic failed: %s",xp.what()));}
 }
@@ -153,7 +154,7 @@ void GaugeConfigurationHandler::copyDataToDevice(bool removeFromHost)
  gauge_param.location = QUDA_CPU_FIELD_LOCATION;
 
       // load onto gpu device (stored in gaugePrecise pointer)
- loadGaugeQuda((void *)gauge_ptrs.data(), &gauge_param);
+ loadGaugeQuda((void *)gauge_ptrs.data(), &gauge_param); 
  QudaInfo::gauge_config_on_device=true;
 
  QudaGaugeObservableParam param = newQudaGaugeObservableParam();

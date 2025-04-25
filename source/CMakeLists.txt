@@ -7,8 +7,6 @@ project(QudaLaph
 
 set(CMAKE_CXX_STANDARD 17)
 include(GNUInstallDirs)
-
-set(CMAKE_SKIP_BUILD_RPATH FALSE)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 set(ARCH "INVALID" CACHE STRING "Must set either -DARCH=PARALLEL or -DARCH=SERIAL" )
@@ -25,7 +23,7 @@ else()
 endif()
 
 set(HOSTCBLAS "INVALID" CACHE STRING "Must define HOSTCBLAS")
-if(HOSTCBLAS STREQUAL "GSL")
+if(HOSTCBLAS STREQUAL "GSLCBLAS")
    message(STATUS "using GSL cblas on hosts")
    add_compile_definitions(USE_GSL_CBLAS)
 elseif(HOSTCBLAS STREQUAL "OPENBLAS")
@@ -42,6 +40,8 @@ if(NOT QUDA_DIR)
    message(FATAL_ERROR "QUDA_DIR must be set")
 endif()
 
+set(CMAKE_SKIP_RPATH FALSE)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 set(QUDA_LIBDIR ${QUDA_DIR}/lib)
 set(QUDA_INCDIR ${QUDA_DIR}/include)
 
@@ -71,6 +71,10 @@ set(QUDA_DIR ${QUDA_DIR}/lib/cmake/QUDA)
 find_package(QUDA REQUIRED)
 #find_package(MPI REQUIRED)
 
+#if(BUILD_MULTISRCINVERTER)
+#   add_compile_definitions(USE_MULTI_SRC_INVERTER)
+#endif()
+
 add_executable(quda_laph)
 
 target_sources(quda_laph PRIVATE
@@ -92,14 +96,13 @@ target_sources(quda_laph PRIVATE
     laph_stdio.cc
     latt_field.cc
     layout_info.cc
+    momenta.cc
     perambulator_handler.cc
     quark_action_info.cc
-    quark_handler.cc
     quark_smearing_handler.cc
     quda_info.cc
     read_gauge_field.cc
     stop_watch.cc
-    task_quark_line_ends.cc
     task_quark_perambulators.cc
     task_smear_gauge_field.cc
     task_smear_quark_field.cc

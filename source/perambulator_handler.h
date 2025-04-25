@@ -4,6 +4,7 @@
 #include "gauge_configuration_handler.h"
 #include "quark_smearing_handler.h"
 #include "inverter_info.h"
+#include "array.h"
 
 
 namespace LaphEnv {
@@ -13,6 +14,18 @@ namespace LaphEnv {
 // *                                                               *
 // *  "PerambulatorHandler" handles computation of and subsequent  *
 // *  access to the quark perambulators.                           *
+// *                                                               *
+// *  This handler operators in one of four modes:                 *
+// *      enum Mode { ReadOnly, Merge, Compute, Check };           *
+// *                                                               *
+// *  Computations are done in "Compute" mode.  If computations    *
+// *  for all source eigvec indices cannot be done in a single     *
+// *  run and are sent to separate files, then these results       *
+// *  can be merged when in "Merge" mode.  In "Check" mode,        *
+// *  the results in the files are checked that they are all       *
+// *  available and are not NaNs.  "ReadOnly" mode is used for     *
+// *  accessing the results when computing correlators, for        *
+// *  example.                                                     *
 // *                                                               *
 // *  One of these handlers deals with quark perambulators         *
 // *  for **one** set of info parameters, given by                 *
@@ -109,7 +122,7 @@ class PerambulatorHandler
 
  public:
 
-   enum Mode { ReadOnly, Merge, Compute };
+   enum Mode { ReadOnly, Merge, Compute, Check };
 
 
        // sink spin is 1,2,3,4  (but stored as 0,1,2,3 in right-most two bits)
@@ -142,6 +155,7 @@ class PerambulatorHandler
       unsigned int getSourceLaphEigvecIndex() const {return (code>>17);}
 
       void output(XMLHandler& xmlw) const;
+      std::string output(int indent=0) const;
       
       explicit RecordKey(const unsigned int* buf) {code=*buf;}
       static int numints() {return 1;}
@@ -181,6 +195,7 @@ class PerambulatorHandler
       FileKey& operator=(const FileKey& rhs);
       ~FileKey(){}
       void output(XMLHandler& xmlw) const;
+      std::string output(int indent=0) const;
       bool operator<(const FileKey& rhs) const;
       bool operator==(const FileKey& rhs) const;
       bool operator!=(const FileKey& rhs) const;
@@ -195,12 +210,13 @@ class PerambulatorHandler
 
    struct PerambComputations {
       std::list<PerambComputation> computations;
-      uint nSinkLaphBatch;   // number of inversions before projecting on Laph evs
-      uint nSinkQudaBatch;   // number of quark sinks to project at a time as one batch
-      uint nEigQudaBatch;    // number of Laph evs to project at a time as one batch
+      uint nSinkLaphBatch;      // number of inversions before projecting on Laph evs
+      uint nSinkQudaBatch;      // number of quark sinks to project at a time as one batch
+      uint nEigQudaBatch;       // number of Laph evs to project at a time as one batch
+      bool useMultiSrcInverter;  
    };
 
-  typedef std::vector<std::complex<double>> DataType;   // store in double precision even if single precision
+   typedef std::vector<std::complex<double>> DataType;   // store in double precision even if single precision
 
  private:
 
@@ -286,8 +302,7 @@ class PerambulatorHandler
 
    int getTimeExtent() const;
 
-   //void getHeader(XMLHandler& xmlout) const;
-
+   void getHeader(XMLHandler& xmlout) const;
 
    void getFileMap(XMLHandler& xmlout) const;
 
@@ -295,7 +310,7 @@ class PerambulatorHandler
 
    std::map<int,FileKey> getSuffixMap() const;
 
-   //void outputSuffixMap(TextFileWriter& fout);
+   void outputSuffixMap(XMLHandler& xmlout);
 
    void setInverter(const InverterInfo& invinfo);
 
@@ -303,18 +318,39 @@ class PerambulatorHandler
 
    bool setUpPreconditioning(QudaInvertParam& invParam);
 
+        // compute quark perambulators
+
    void clearComputationSet();
       
    void setComputationSet(const XMLHandler& xmlcmp);
 
-
-        // compute quark perambulators (exact distillation); useful for smearing studies
-
    void computePerambulators(bool extra_soln_check=false,
-                             bool print_coeffs=false);
+                             bool print_coeffs=false,
+                             bool report_gflops=false);
 
-///   void mergeData(const FileListInfo& input_files);
+        // get routines
 
+   const DataType& getData(int snk_time, int snk_spin, int src_time, int src_spin,
+                           int src_eigvec_index) const;
+
+   Array<std::complex<double>> getFullData(int snk_time, int snk_spin, 
+                                           int src_time, int src_spin, int nEigsUse) const;
+
+   bool queryData(int snk_time, int snk_spin, int src_time, int src_spin,
+                  int src_eigvec_index) const;
+
+   bool queryFullData(int snk_time, int snk_spin, int src_time, int src_spin, int nEigsUse) const;
+
+        // merge data
+
+   void mergeData(const FileListInfo& input_files);
+   
+        // check data
+   
+   void setChecks(const XMLHandler& xmlin);
+   
+   void doChecks(const std::string& logfilestub, bool verbose_output=true);
+   
 
  private:
 
@@ -345,8 +381,22 @@ class PerambulatorHandler
 
    void computePerambulators(int src_time, const std::set<int>& src_evindices,
                              const std::vector<void*>& evList, bool print_coeffs,
-                             bool extra_soln_check, double& makesrc_time, double& inv_time,
-                             double& evproj_time, double& write_time);
+                             bool extra_soln_check, bool report_gflops, 
+                             double& makesrc_time, double& inv_time,
+                             double& evproj_time, double& write_time,
+                             bool use_multisrc_inverter);
+
+   void computePerambulatorsMS(int src_time, const std::set<int>& src_evindices,
+                               const std::vector<void*>& evList, bool print_coeffs,
+                               bool extra_soln_check, bool report_gflops, 
+                               double& makesrc_time, double& inv_time,
+                               double& evproj_time, double& write_time);
+
+   void computePerambulatorsSS(int src_time, const std::set<int>& src_evindices,
+                               const std::vector<void*>& evList, bool print_coeffs,
+                               bool extra_soln_check, bool report_gflops, 
+                               double& makesrc_time, double& inv_time,
+                               double& evproj_time, double& write_time);
 
           // Makes the source in the Dirac-Pauli basis.  The source is
 	  // gamma_4 times the usual source since we use the chi = psi-bar gamma_4
@@ -354,6 +404,9 @@ class PerambulatorHandler
 
    void make_source(LattField& ferm_src, const void* ev_src_ptr, 
                     int src_time, int src_spin);
+
+   void doACheck(const PerambComputation& pcomp, int src_spin,
+                 const std::string& logfile, bool verbose_output);
 
    friend class DataPutHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType>;
    friend class DataGetHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType>;

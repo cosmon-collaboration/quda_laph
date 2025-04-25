@@ -129,6 +129,12 @@ string FileListInfo::str() const
  return xmlout.str();
 }
 
+string FileListInfo::output(int indent) const
+{
+ XMLHandler xmlout;
+ output(xmlout);
+ return xmlout.output(indent);
+}
 
 // ***************************************************************
 }

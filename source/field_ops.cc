@@ -29,17 +29,19 @@ namespace LaphEnv {
 // *                                                                        *
 // **************************************************************************
 
-    //  This routine applies an inner product conj(leftfield).rightfield,
-    //  where leftfield and rightfield are color-vector fields, but the
+    //  This routine applies an inner product 
+    //         conj(leftfield).rightfield     if "left_conj" is true,
+    //              leftfield .rightfield     if "left_conj" is false,
+    //  where leftfield and rightfield are fields of the same site type, but the
     //  inner product is taken over the time slices.  The ntime inner
-    //  products are returned.
+    //  products are returned.  
 
 std::vector<complex<double>> getTimeSlicedInnerProducts(const LattField& leftfield, 
-                                                        const LattField& rightfield)
+                                                        const LattField& rightfield, 
+                                                        bool left_conj)
 {
- if ((leftfield.getFieldSiteType()!=FieldSiteType::ColorVector)
-   ||(rightfield.getFieldSiteType()!=FieldSiteType::ColorVector)){
-    errorLaph("getTimeSlicedInnerProducts only supports ColorVector fields");}
+ if (leftfield.getFieldSiteType()!=rightfield.getFieldSiteType()){
+    errorLaph("getTimeSlicedInnerProducts only supports fields of the same site type");}
  if (leftfield.bytesPerWord()!=rightfield.bytesPerWord()){
     errorLaph("getTimeSlicedInnerProducts requires both fields have same precision");}
  bool dp=(leftfield.bytesPerWord()==sizeof(std::complex<double>));
@@ -51,6 +53,7 @@ std::vector<complex<double>> getTimeSlicedInnerProducts(const LattField& leftfie
             *LayoutInfo::getRankLattExtents()[2];
  int cbytes=(dp)?sizeof(std::complex<double>):sizeof(std::complex<float>);
  int bps=leftfield.bytesPerSite();
+ int nelems_per_site=leftfield.elemsPerSite();
 
  vector<char> iprods1(nloctime*cbytes);
  vector<char> iprods2(nloctime*cbytes);
@@ -62,21 +65,29 @@ std::vector<complex<double>> getTimeSlicedInnerProducts(const LattField& leftfie
     int parshift=loc_npsites*((start_parity+tloc)%2);
     int start1=((tstride*tloc)/2) + parshift;
     int stop1=((1+tstride*(tloc+1))/2) + parshift;
-    int n1=FieldNcolor*(stop1-start1);
+    int n1=nelems_per_site*(stop1-start1);
     parshift=loc_npsites*((start_parity+1+tloc)%2);
     int start2=((1+tstride*tloc)/2) + parshift;
     int stop2=((tstride*(tloc+1))/2) + parshift;
-    int n2=FieldNcolor*(stop2-start2);
+    int n2=nelems_per_site*(stop2-start2);
     const char* x1=lp+bps*start1;
     const char* x2=lp+bps*start2;
     const char* y1=rp+bps*start1;
     const char* y2=rp+bps*start2;
     if (dp){
-       cblas_zdotc_sub(n1,x1,1,y1,1,ip1);
-       cblas_zdotc_sub(n2,x2,1,y2,1,ip2);}
+       if (left_conj){
+          cblas_zdotc_sub(n1,x1,1,y1,1,ip1);
+          cblas_zdotc_sub(n2,x2,1,y2,1,ip2);}
+       else{
+          cblas_zdotu_sub(n1,x1,1,y1,1,ip1);
+          cblas_zdotu_sub(n2,x2,1,y2,1,ip2);}}
     else{
-       cblas_cdotc_sub(n1,x1,1,y1,1,ip1);
-       cblas_cdotc_sub(n2,x2,1,y2,1,ip2);}}
+       if (left_conj){
+          cblas_cdotc_sub(n1,x1,1,y1,1,ip1);
+          cblas_cdotc_sub(n2,x2,1,y2,1,ip2);}
+       else{
+          cblas_cdotu_sub(n1,x1,1,y1,1,ip1);
+          cblas_cdotu_sub(n2,x2,1,y2,1,ip2);}}}
 
  int ntime=LayoutInfo::getLattExtents()[3];
  vector<complex<double>> iprods(ntime);
@@ -136,6 +147,221 @@ void setZeroField(LattField& field)
  setConstantField(field,complex<double>(0.0,0.0));
 }
 
+    //  Returns the field   exp( -I * pvec.x )  in  "phases"
+
+void makeMomentumPhaseField(LattField& phases, const Momentum& pvec)
+{
+ phases.reset(FieldSiteType::Complex);
+ int locNt=LayoutInfo::getRankLattExtents()[3];
+ int locNz=LayoutInfo::getRankLattExtents()[2];
+ int locNy=LayoutInfo::getRankLattExtents()[1];
+ int locNx=LayoutInfo::getRankLattExtents()[0];
+ vector<complex<double>> xphases(locNx);
+ vector<complex<double>> yphases(locNy);
+ vector<complex<double>> zphases(locNz);
+ double twopi=6.2831853071795864770;
+ double momquantum=twopi*pvec.x / double(LayoutInfo::getLattExtents()[0]);
+ int gx=LayoutInfo::getMyCommCoords()[0]*locNx;
+ for (int x=0;x<locNx;++x,++gx){
+    double xpx=momquantum*double(gx);
+    xphases[x]=complex<double>(std::cos(xpx), -std::sin(xpx));}
+ momquantum=twopi*pvec.y / double(LayoutInfo::getLattExtents()[1]);
+ int gy=LayoutInfo::getMyCommCoords()[1]*locNy;
+ for (int y=0;y<locNy;++y,++gy){
+    double ypy=momquantum*double(gy);
+    yphases[y]=complex<double>(std::cos(ypy), -std::sin(ypy));}
+ momquantum=twopi*pvec.z / double(LayoutInfo::getLattExtents()[2]);
+ int gz=LayoutInfo::getMyCommCoords()[2]*locNz;
+ for (int z=0;z<locNz;++z,++gz){
+    double zpz=momquantum*double(gz);
+    zphases[z]=complex<double>(std::cos(zpz), -std::sin(zpz));}
+   //  make phases in lexicographic order
+   //  make phases first for time = 0
+ LattField lexico(FieldSiteType::Complex);
+ if (lexico.bytesPerWord()==sizeof(complex<double>)){
+    complex<double>* rp=reinterpret_cast<complex<double>*>(lexico.getDataPtr());
+    for (int z=0;z<locNz;++z){
+       for (int y=0;y<locNy;++y){
+          complex<double> zyphase=zphases[z]*yphases[y];
+          for (int x=0;x<locNx;++x,++rp){
+             *rp=xphases[x]*zyphase;}}}}
+ else{
+    complex<float>* rp=reinterpret_cast<complex<float>*>(lexico.getDataPtr());
+    for (int z=0;z<locNz;++z){
+       for (int y=0;y<locNy;++y){
+          complex<double> zyphase=zphases[z]*yphases[y];
+          for (int x=0;x<locNx;++x,++rp){
+             *rp=xphases[x]*zyphase;}}}}
+   //  copy phases from time = 0 to all other times
+ const char* src=lexico.getDataConstPtr();
+ char* dest=lexico.getDataPtr();
+ size_t tslicebytes=locNx*locNy*locNz*lexico.bytesPerSite();
+ for (int t=1;t<locNt;++t){
+    dest+=tslicebytes;
+    std::memcpy(dest,src,tslicebytes);}
+   //  now rearrange into even-odd checkerboard
+ LayoutInfo::lexico_to_evenodd(phases.getDataPtr(),lexico.getDataConstPtr(),
+                               lexico.bytesPerWord());
+}
+
+           //  Evaluates sum_a conj( qbar[a](x,t) ) q[a](x,t)   a = color index
+           //  (This could easily be threaded, but the fast version will run on the device)
+
+void doColorContract(LattField& result, const LattField& qbar, const LattField& q)
+{
+ if ((qbar.getFieldSiteType()!=FieldSiteType::ColorVector)
+     ||(q.getFieldSiteType()!=FieldSiteType::ColorVector)){
+    errorLaph("doColorContract only works with ColorVector lattice fields");}
+ result.reset(FieldSiteType::Complex);
+
+ int s1=qbar.get_cpu_prec_bytes();
+ int s2=q.get_cpu_prec_bytes();
+ if (s1!=s2){
+    errorLaph("doColorContract requires lattice fields have same precision");}
+ int nsites=LayoutInfo::getRankLatticeNumSites();
+ if (s1==sizeof(complex<double>)){
+    const complex<double>* z1=reinterpret_cast<const complex<double>*>(qbar.getDataConstPtr());
+    const complex<double>* z2=reinterpret_cast<const complex<double>*>(q.getDataConstPtr());
+    complex<double>* rp=reinterpret_cast<complex<double>*>(result.getDataPtr());
+    for (int k=0;k<nsites;++k){
+       complex<double> res=std::conj(*z1)*(*z2); ++z1; ++z2;
+       res+=std::conj(*z1)*(*z2); ++z1; ++z2;
+       res+=std::conj(*z1)*(*z2); ++z1; ++z2;
+       *rp=res; ++rp;}}
+ else{
+    const complex<float>* z1=reinterpret_cast<const complex<float>*>(qbar.getDataConstPtr());
+    const complex<float>* z2=reinterpret_cast<const complex<float>*>(q.getDataConstPtr());
+    complex<float>* rp=reinterpret_cast<complex<float>*>(result.getDataPtr());
+    for (int k=0;k<nsites;++k){
+       complex<float> res=std::conj(*z1)*(*z2); ++z1; ++z2;
+       res+=std::conj(*z1)*(*z2); ++z1; ++z2;
+       res+=std::conj(*z1)*(*z2); ++z1; ++z2;
+       *rp=res; ++rp;}}
+}
+
+
+           //  Evaluates sum_a  q1[a](x,t)  q2[a](x,t)   a = color index
+           //  (This could easily be threaded, but the fast version will run on the device)
+
+void doColorVectorContract(LattField& result, const LattField& q1, const LattField& q2)
+{
+ if  ((q1.getFieldSiteType()!=FieldSiteType::ColorVector)
+    ||(q2.getFieldSiteType()!=FieldSiteType::ColorVector)){
+    errorLaph("doColorContract only works with ColorVector lattice fields");}
+ result.reset(FieldSiteType::Complex);
+
+ int s1=q1.get_cpu_prec_bytes();
+ int s2=q2.get_cpu_prec_bytes();
+ if (s1!=s2){
+    errorLaph("doColorContract requires lattice fields have same precision");}
+ int nsites=LayoutInfo::getRankLatticeNumSites();
+ if (s1==sizeof(complex<double>)){
+    const complex<double>* z1=reinterpret_cast<const complex<double>*>(q1.getDataConstPtr());
+    const complex<double>* z2=reinterpret_cast<const complex<double>*>(q2.getDataConstPtr());
+    complex<double>* rp=reinterpret_cast<complex<double>*>(result.getDataPtr());
+    for (int k=0;k<nsites;++k){
+       complex<double> res=(*z1)*(*z2); ++z1; ++z2;
+       res+=(*z1)*(*z2); ++z1; ++z2;
+       res+=(*z1)*(*z2); ++z1; ++z2;
+       *rp=res; ++rp;}}
+ else{
+    const complex<float>* z1=reinterpret_cast<const complex<float>*>(q1.getDataConstPtr());
+    const complex<float>* z2=reinterpret_cast<const complex<float>*>(q2.getDataConstPtr());
+    complex<float>* rp=reinterpret_cast<complex<float>*>(result.getDataPtr());
+    for (int k=0;k<nsites;++k){
+       complex<float> res=(*z1)*(*z2); ++z1; ++z2;
+       res+=(*z1)*(*z2); ++z1; ++z2;
+       res+=(*z1)*(*z2); ++z1; ++z2;
+       *rp=res; ++rp;}}
+}
+
+           // Evaluates   sum_a,b,c epsilson(a,b,c)  q1[a](x,t) q2[b](x,t) q3[c](x,t) 
+           //  (This could easily be threaded, but the fast version will run on the device)
+
+void doColorContract(LattField& result, const LattField& q1, const LattField& q2, 
+                     const LattField& q3)
+{
+ if  ((q1.getFieldSiteType()!=FieldSiteType::ColorVector)
+    ||(q2.getFieldSiteType()!=FieldSiteType::ColorVector)
+    ||(q3.getFieldSiteType()!=FieldSiteType::ColorVector)){
+    errorLaph("doColorContract only works with ColorVector lattice fields");}
+ result.reset(FieldSiteType::Complex);
+ int s1=q1.get_cpu_prec_bytes();
+ int s2=q2.get_cpu_prec_bytes();
+ int s3=q3.get_cpu_prec_bytes();
+ if ((s1!=s2)||(s2!=s3)){
+    errorLaph("doColorContract requires lattice fields have same precision");}
+ int nsites=LayoutInfo::getRankLatticeNumSites();
+ if (s1==sizeof(complex<double>)){
+    const complex<double>* z1a=reinterpret_cast<const complex<double>*>(q1.getDataConstPtr());
+    const complex<double>* z2a=reinterpret_cast<const complex<double>*>(q2.getDataConstPtr());
+    const complex<double>* z3a=reinterpret_cast<const complex<double>*>(q3.getDataConstPtr());
+    const complex<double>* z1b=z1a+1;  const complex<double>* z1c=z1b+1;
+    const complex<double>* z2b=z2a+1;  const complex<double>* z2c=z2b+1;
+    const complex<double>* z3b=z3a+1;  const complex<double>* z3c=z3b+1;
+    complex<double>* rp=reinterpret_cast<complex<double>*>(result.getDataPtr());
+    for (int k=0;k<nsites;++k){
+       *rp=(*z1a)*((*z2b)*(*z3c)-(*z2c)*(*z3b))
+          +(*z1b)*((*z2c)*(*z3a)-(*z2a)*(*z3c))
+          +(*z1c)*((*z2a)*(*z3b)-(*z2b)*(*z3a));
+       z1a+=3; z2a+=3; z3a+=3; z1b+=3; z2b+=3; z3b+=3; 
+       z1c+=3; z2c+=3; z3c+=3; ++rp;}}
+ else{
+    const complex<float>* z1a=reinterpret_cast<const complex<float>*>(q1.getDataConstPtr());
+    const complex<float>* z2a=reinterpret_cast<const complex<float>*>(q2.getDataConstPtr());
+    const complex<float>* z3a=reinterpret_cast<const complex<float>*>(q3.getDataConstPtr());
+    const complex<float>* z1b=z1a+1;  const complex<float>* z1c=z1b+1;
+    const complex<float>* z2b=z2a+1;  const complex<float>* z2c=z2b+1;
+    const complex<float>* z3b=z3a+1;  const complex<float>* z3c=z3b+1;
+    complex<float>* rp=reinterpret_cast<complex<float>*>(result.getDataPtr());
+    for (int k=0;k<nsites;++k){
+       *rp=(*z1a)*((*z2b)*(*z3c)-(*z2c)*(*z3b))
+          +(*z1b)*((*z2c)*(*z3a)-(*z2a)*(*z3c))
+          +(*z1c)*((*z2a)*(*z3b)-(*z2b)*(*z3a));
+       z1a+=3; z2a+=3; z3a+=3; z1b+=3; z2b+=3; z3b+=3; 
+       z1c+=3; z2c+=3; z3c+=3; ++rp;}}
+}
+
+
+           // Evaluates   sum_a,b epsilson(a,b,c)  q1[a](x,t) q2[b](x,t)
+           //  (This could easily be threaded, but the fast version will run on the device)
+
+void doColorCrossProduct(LattField& result, const LattField& q1, const LattField& q2)
+{
+ if  ((q1.getFieldSiteType()!=FieldSiteType::ColorVector)
+    ||(q2.getFieldSiteType()!=FieldSiteType::ColorVector)){
+    errorLaph("doColorContract only works with ColorVector lattice fields");}
+ result.reset(FieldSiteType::ColorVector);
+ int s1=q1.get_cpu_prec_bytes();
+ int s2=q2.get_cpu_prec_bytes();
+ if (s1!=s2){
+    errorLaph("doColorContract requires lattice fields have same precision");}
+ int nsites=LayoutInfo::getRankLatticeNumSites();
+ if (s1==sizeof(complex<double>)){
+    const complex<double>* z1a=reinterpret_cast<const complex<double>*>(q1.getDataConstPtr());
+    const complex<double>* z2a=reinterpret_cast<const complex<double>*>(q2.getDataConstPtr());
+    const complex<double>* z1b=z1a+1;  const complex<double>* z1c=z1b+1;
+    const complex<double>* z2b=z2a+1;  const complex<double>* z2c=z2b+1;
+    complex<double>* rp=reinterpret_cast<complex<double>*>(result.getDataPtr());
+    for (int k=0;k<nsites;++k){
+       *rp=(*z1b)*(*z2c)-(*z1c)*(*z2b); ++rp;
+       *rp=(*z1c)*(*z2a)-(*z1a)*(*z2c); ++rp;
+       *rp=(*z1a)*(*z2b)-(*z1b)*(*z2a); ++rp;
+       z1a+=3; z2a+=3; z1b+=3; z2b+=3; z1c+=3; z2c+=3;}}
+ else{
+    const complex<float>* z1a=reinterpret_cast<const complex<float>*>(q1.getDataConstPtr());
+    const complex<float>* z2a=reinterpret_cast<const complex<float>*>(q2.getDataConstPtr());
+    const complex<float>* z1b=z1a+1;  const complex<float>* z1c=z1b+1;
+    const complex<float>* z2b=z2a+1;  const complex<float>* z2c=z2b+1;
+    complex<float>* rp=reinterpret_cast<complex<float>*>(result.getDataPtr());
+    for (int k=0;k<nsites;++k){
+       *rp=(*z1b)*(*z2c)-(*z1c)*(*z2b); ++rp;
+       *rp=(*z1c)*(*z2a)-(*z1a)*(*z2c); ++rp;
+       *rp=(*z1a)*(*z2b)-(*z1b)*(*z2a); ++rp;
+       z1a+=3; z2a+=3; z1b+=3; z2b+=3; z1c+=3; z2c+=3;}}
+}
+
+
 
    // Sets the zeroth element at a site to exp(I*sum(site[k]*momfactors[k],k))
    // and each subsequent element at the site gets multiplied by another
@@ -183,6 +409,7 @@ void compare_latt_fields(const LattField& src1, const LattField& src2)
  bool flag=true;
  int n1=src1.elemsPerSite();
  int n2=src2.elemsPerSite();
+ double df=0.0;
  if (n1!=n2){ flag=false;}
  else{
     int s1=src1.get_cpu_prec_bytes();
@@ -190,23 +417,23 @@ void compare_latt_fields(const LattField& src1, const LattField& src2)
     if (s1!=s2){flag=false;}
     else{
        if (s1==sizeof(complex<double>)){
-          double eps=1e-9;
           const complex<double>* z1=reinterpret_cast<const complex<double>*>(src1.getDataConstPtr());
           const complex<double>* z2=reinterpret_cast<const complex<double>*>(src2.getDataConstPtr());
           int ncomp=n1*LayoutInfo::getRankLatticeNumSites();
           for (int k=0;k<ncomp;++k,++z1,++z2){
-             if (std::abs((*z1)-(*z2))>eps){
-                flag=false; break;}}}
+             double dff=std::abs((*z1)-(*z2));
+             if (dff>df){df=dff;}}}
        else{
-          float eps=1e-5;
           const complex<float>* z1=reinterpret_cast<const complex<float>*>(src1.getDataConstPtr());
           const complex<float>* z2=reinterpret_cast<const complex<float>*>(src2.getDataConstPtr());
           int ncomp=n1*LayoutInfo::getRankLatticeNumSites();
           for (int k=0;k<ncomp;++k,++z1,++z2){
-             if (std::abs((*z1)-(*z2))>eps){
-                flag=false; break;}}}}}
- if (globalAnd(flag)){ printLaph("Fields AGREE");}
- else printLaph("Fields DISAGREE");
+             double dff=double(std::abs((*z1)-(*z2)));
+             if (dff>df){df=dff;}}}}}
+ bool gflag=globalAnd(flag);
+ double gdf=globalMax(df);
+ if (gflag){ printLaph(make_strf("Fields AGREE within %g",gdf));}
+ else printLaph("Fields DIFFER in precision or site type");
 }
 
 

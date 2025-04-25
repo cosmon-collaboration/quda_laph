@@ -38,6 +38,8 @@ void GaugeConfigurationInfo::set_info(XMLHandler& xml_in)
  xmlreadif(xmlg,"FermionTimeBC",response,"GaugeConfigurationInfo");
  check_valid(response,"FermionTimeBC",{"antiperiodic","periodic"});
  fermion_time_bc=(response=="antiperiodic")?'A':'P';
+
+ if ((file_format=="CLS")||(file_format=="CERN")) check_CLS();
 }
 
 
@@ -119,6 +121,27 @@ void GaugeConfigurationInfo::output(XMLHandler& xmlout) const
  xmlout.put_child("FermionTimeBC",fermtimebc);
 }
 
+    //  This checks for consistency between the file name and the
+    //  configuration number and Markov chain number.  It assumes that
+    //  the CERN or CLS format config has name  XXXXrYYYnZZZ where
+    //  YYY is the Markov Chain number and ZZZ is the trajectory number.
+    //  XXXX is the ensemble name and usually is 4 characters.
+
+void GaugeConfigurationInfo::check_CLS()
+{
+ string cfgfile(tidyFileName(file_name));  // remove leading subdirectory path
+ size_t rloc=cfgfile.find('r');
+ size_t nloc=cfgfile.find('n');
+ size_t namesize=cfgfile.length();
+ if ((nloc==string::npos)||(rloc==string::npos)||(nloc<=rloc)){
+    throw(std::invalid_argument("Bad CLS configuration file name"));}
+ string replicastr=cfgfile.substr(rloc+1,nloc-rloc-1);
+ string trajstr=cfgfile.substr(nloc+1,namesize-nloc-1);
+ int stream=std::stoi(replicastr);
+ int traj=std::stoi(trajstr);
+ if ((mc_chain_num!=stream)||(config_num!=traj)){
+    throw(std::invalid_argument("Metadata does not match CLS configuration file name"));}
+}
 
 // *********************************************************
 
