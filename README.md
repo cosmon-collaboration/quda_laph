@@ -1,8 +1,8 @@
 # quda_laph
 Lattice QCD computations with stochastic Laph and distillation using the QUDA library.
 
-Date: January 26, 2025
-Version 0.9  (not yet 1.0)
+Date: April 25, 2025
+Version 1.0
 
 Quda_laph carries out lattice QCD computations involving Laplacian-Heaviside (LapH) smeared
 Wilson-type quarks.  It utilizes the QUDA library in order to carry out its calculations on GPUs.
