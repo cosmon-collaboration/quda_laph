@@ -44,7 +44,13 @@ namespace LaphEnv {
 // *     <Name>CGNR</Name>                                              *
 // *     <Tolerance>1.0e-10</Tolerance>                                 *
 // *     <MaxIterations>10000</MaxIterations>                           *
+// *     <ReliableDelta>0.01</ReliableDelta>                            *
 // *   </InverterInfo>                                                  *
+// *                                                                    *
+// *      A mixed precision solver is used, and <ReliableDelta>         *
+// *      specifies what decrease factor in the residual triggers a     *
+// *      high precision computation of the residual to keep            *
+// *      solution on track                                             *
 // *                                                                    *
 // *    Biconjugate Gradient Stabilized:                                *
 // *                                                                    *
@@ -52,6 +58,7 @@ namespace LaphEnv {
 // *     <Name>BICGSTAB</Name>                                          *
 // *     <Tolerance>1.0e-10</Tolerance>                                 *
 // *     <MaxIterations>6000</MaxIterations>                            *
+// *     <ReliableDelta>0.01</ReliableDelta>                            *
 // *   </InverterInfo>                                                  *
 // *                                                                    *
 // *    Generalized Conjugate Residual (GCR)                            *
@@ -61,7 +68,12 @@ namespace LaphEnv {
 // *     <Tolerance>1.0e-10</Tolerance>                                 *
 // *     <MaxIterations>5000</MaxIterations>                            *
 // *     <NKrylov>16</NKrylov>                                          *
+// *     <RestartDelta>0.01</RestartDelta>                              *
 // *   </InverterInfo>                                                  *
+// *                                                                    *
+// *      A mixed precision solver is used, and <RestartDelta>          *
+// *      specifies what decrease factor in the residual triggers a     *
+// *      restart of the Krylov space                                   *
 // *                                                                    *
 // *    Generalized Conjugate Residual (GCR) with Adaptive Multigrid    *
 // *      preconditioning                                               *
@@ -71,6 +83,7 @@ namespace LaphEnv {
 // *     <Tolerance>1.0e-12</Tolerance>                                 *
 // *     <MaxIterations>5000</MaxIterations>                            *
 // *     <NKrylov>24</NKrylov>                                          *
+// *     <RestartDelta>1e-4</RestartDelta>                              *
 // *     .... (see below)                                               *
 // *   </InverterInfo>                                                  *
 // *                                                                    *

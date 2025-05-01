@@ -7,7 +7,6 @@
 
 using namespace std;
 
-
 namespace LaphEnv {
 
 //   NOTE:  in multigrid,  CGNR or GCR   ---  give a choice???
@@ -116,9 +115,11 @@ void InverterInfo::setQudaInvertParam(QudaInvertParam& invParam,
 // *     <Name>CGNR</Name>                                              *
 // *     <Tolerance>1.0e-10</Tolerance>                                 *
 // *     <MaxIterations>10000</MaxIterations>                           *
+// *     <ReliableDelta>0.01</ReliableDelta>                            *
 // *   </InvertInfo>                                                    *
 // *                                                                    *
 // *         rvalues[0]=tolerance in residual                           *
+// *         rvalues[1]=reliable_delta                                  *
 // *         ivalues[0]=maximum iterations                              *
 // *                                                                    *
 // **********************************************************************
@@ -126,13 +127,14 @@ void InverterInfo::setQudaInvertParam(QudaInvertParam& invParam,
 void InverterInfo::set_info_cgnr(XMLHandler& xmlr)
 {
  svalues.resize(1);
- rvalues.resize(1);
+ rvalues.resize(2);
  ivalues.resize(1);
  svalues[0]="CGNR";
  int rvalindex=0;
  int ivalindex=0;
  xmlsetQLReal(xmlr,"Tolerance",rvalues,rvalindex,true,1e-10);
  xmlsetQLInt(xmlr,"MaxIterations",ivalues,ivalindex,true,10000);
+ xmlsetQLReal(xmlr,"ReliableDelta",rvalues,rvalindex,true,0.01);
 }
 
 
@@ -144,6 +146,7 @@ void InverterInfo::output_cgnr(XMLHandler& xmlout) const
  int rvalindex=0;
  xmlout.put_child(xmloutputQLReal("Tolerance",rvalues,rvalindex));
  xmlout.put_child(xmloutputQLInt("MaxIterations",ivalues,ivalindex));
+ xmlout.put_child(xmloutputQLReal("ReliableDelta",rvalues,rvalindex));
 }
  
 
@@ -159,8 +162,8 @@ void InverterInfo::setQudaInvertParam_cgnr(QudaInvertParam& invParam) const
  int ivalindex=0;
  int rvalindex=0;
  invParam.tol = xmlputQLReal("Tolerance",rvalues,rvalindex);
- invParam.reliable_delta = 0.01;    //  mixed precision parameter (how often
- invParam.maxiter = xmlputQLInt("MaxIterations",ivalues,ivalindex);  // compute high precision residual
+ invParam.reliable_delta = xmlputQLReal("ReliableDelta",rvalues,rvalindex); //  mixed precision parameter (how often
+ invParam.maxiter = xmlputQLInt("MaxIterations",ivalues,ivalindex);         // compute high precision residual)
  invParam.pipeline = 0;
  invParam.dagger = QUDA_DAG_NO;
  invParam.verbosity = getVerbosity();
@@ -184,9 +187,11 @@ void InverterInfo::setQudaInvertParam_cgnr(QudaInvertParam& invParam) const
 // *     <Name>BICGSTAB</Name>                                             *
 // *     <Tolerance>1.0e-10</Tolerance>                                    *
 // *     <MaxIterations>6000</MaxIterations>                               *
+// *     <ReliableDelta>0.01</ReliableDelta>                               *
 // *   </InvertInfo>                                                       *
 // *                                                                       *
 // *         rvalues[0]=tolerance in residual                              *
+// *         rvalues[1]=reliable_delta                                     *
 // *         ivalues[0]=maximum iterations                                 *
 // *                                                                       *
 // *************************************************************************
@@ -194,13 +199,14 @@ void InverterInfo::setQudaInvertParam_cgnr(QudaInvertParam& invParam) const
 void InverterInfo::set_info_bicgstab(XMLHandler& xmlr)
 {
  svalues.resize(1);
- rvalues.resize(1);
+ rvalues.resize(2);
  ivalues.resize(1);
  svalues[0]="BICGSTAB";
  int rvalindex=0;
  int ivalindex=0;
  xmlsetQLReal(xmlr,"Tolerance",rvalues,rvalindex,true,1e-10);
  xmlsetQLInt(xmlr,"MaxIterations",ivalues,ivalindex,true,6000);
+ xmlsetQLReal(xmlr,"ReliableDelta",rvalues,rvalindex,true,0.01);
 }
 
 
@@ -212,6 +218,7 @@ void InverterInfo::output_bicgstab(XMLHandler& xmlout) const
  int rvalindex=0;
  xmlout.put_child(xmloutputQLReal("Tolerance",rvalues,rvalindex));
  xmlout.put_child(xmloutputQLInt("MaxIterations",ivalues,ivalindex));
+ xmlout.put_child(xmloutputQLReal("ReliableDelta",rvalues,rvalindex));
 }
  
 
@@ -227,8 +234,8 @@ void InverterInfo::setQudaInvertParam_bicgstab(QudaInvertParam& invParam) const
  int ivalindex=0;
  int rvalindex=0;
  invParam.tol = xmlputQLReal("Tolerance",rvalues,rvalindex);
- invParam.reliable_delta = 0.01;    //  mixed precision parameter (how often
- invParam.maxiter = xmlputQLInt("MaxIterations",ivalues,ivalindex);  // compute high precision residual
+ invParam.reliable_delta = xmlputQLReal("ReliableDelta",rvalues,rvalindex);  //  mixed precision parameter (how often
+ invParam.maxiter = xmlputQLInt("MaxIterations",ivalues,ivalindex);          // compute high precision residual
  invParam.pipeline = 0;
  invParam.dagger = QUDA_DAG_NO;
  invParam.verbosity = getVerbosity();
@@ -258,9 +265,11 @@ void InverterInfo::setQudaInvertParam_bicgstab(QudaInvertParam& invParam) const
 // *     <Tolerance>1.0e-10</Tolerance>                                 *
 // *     <MaxIterations>5000</MaxIterations>                            *
 // *     <NKrylov>16</NKrylov>                                          *
+// *     <RestartDelta>0.01</RestartDelta>                              *
 // *   </InvertInfo>                                                    *
 // *                                                                    *
 // *         rvalues[0]=tolerance in residual                           *
+// *         rvalues[1]=restart_delta                                   *
 // *         ivalues[0]=maximum iterations                              *
 // *         ivalues[1]=NKrylov                                         *
 // *                                                                    *
@@ -270,7 +279,7 @@ void InverterInfo::setQudaInvertParam_bicgstab(QudaInvertParam& invParam) const
 void InverterInfo::set_info_gcr(XMLHandler& xmlr)
 {
  svalues.resize(1);
- rvalues.resize(1);
+ rvalues.resize(2);
  ivalues.resize(2);
  svalues[0]="GCR";
  int rvalindex=0;
@@ -278,6 +287,7 @@ void InverterInfo::set_info_gcr(XMLHandler& xmlr)
  xmlsetQLReal(xmlr,"Tolerance",rvalues,rvalindex,true,1e-10);
  xmlsetQLInt(xmlr,"MaxIterations",ivalues,ivalindex,true,5000);
  xmlsetQLInt(xmlr,"NKrylov",ivalues,ivalindex,true,16);
+ xmlsetQLReal(xmlr,"RestartDelta",rvalues,rvalindex,true,0.0001);
 }
 
 
@@ -290,6 +300,7 @@ void InverterInfo::output_gcr(XMLHandler& xmlout) const
  xmlout.put_child(xmloutputQLReal("Tolerance",rvalues,rvalindex));
  xmlout.put_child(xmloutputQLInt("MaxIterations",ivalues,ivalindex));
  xmlout.put_child(xmloutputQLInt("NKrylov",ivalues,ivalindex));
+ xmlout.put_child(xmloutputQLReal("RestartDelta",rvalues,rvalindex));
 }
  
 
@@ -305,8 +316,8 @@ void InverterInfo::setQudaInvertParam_gcr(QudaInvertParam& invParam) const
  int ivalindex=0;
  int rvalindex=0;
  invParam.tol = xmlputQLReal("Tolerance",rvalues,rvalindex);
- invParam.reliable_delta = 0.01;    //  mixed precision parameter (how often
- invParam.maxiter = xmlputQLInt("MaxIterations",ivalues,ivalindex);  // compute high precision residual
+ invParam.reliable_delta = xmlputQLReal("RestartDelta",rvalues,rvalindex); //  mixed precision parameter (how often
+ invParam.maxiter = xmlputQLInt("MaxIterations",ivalues,ivalindex);        // compute high precision residual
  invParam.gcrNkrylov = xmlputQLInt("NKrylov",ivalues,ivalindex);
  invParam.pipeline = 0;
  invParam.dagger = QUDA_DAG_NO;
@@ -333,6 +344,7 @@ void InverterInfo::setQudaInvertParam_gcr(QudaInvertParam& invParam) const
 // *     <Tolerance>1.0e-11</Tolerance>                                          *
 // *     <MaxIterations>200</MaxIterations>                                      *
 // *     <NKrylov>24</NKrylov>                                                   *
+// *     <RestartDelta>1e-4</RestartDelta>                                       *
 // *     <MGPreconditioner>                                                      *
 // *        <NumLevels>2</NumLevels>    2,3,4 (2 or 3 usually best)              *
 // *        <Level0>                                                             *
@@ -381,7 +393,7 @@ void InverterInfo::set_info_gcr_multigrid(XMLHandler& xmlr)
  svalues.resize(1);
  const int mg_max_levels=4;
  int deflate=1;
- rvalues.resize(2+(mg_max_levels-1)+2*deflate);
+ rvalues.resize(3+(mg_max_levels-1)+2*deflate);
  ivalues.resize(11+9*(mg_max_levels-1)+3*deflate);
  svalues[0]="GCR_MULTIGRID";
  int rvalindex=0;
@@ -389,6 +401,7 @@ void InverterInfo::set_info_gcr_multigrid(XMLHandler& xmlr)
  xmlsetQLReal(xmlr,"Tolerance",rvalues,rvalindex,true,1e-11);
  xmlsetQLInt(xmlr,"MaxIterations",ivalues,ivalindex,true,200);
  xmlsetQLInt(xmlr,"NKrylov",ivalues,ivalindex,true,24);
+ xmlsetQLReal(xmlr,"RestartDelta",rvalues,rvalindex,true,1e-4);
  XMLHandler xmlmg(getXML_nofail(xmlr,"MGPreconditioner"));
  vector<int> localextents=LayoutInfo::getRankLattExtents();
      // set default value of nlevels
@@ -398,7 +411,7 @@ void InverterInfo::set_info_gcr_multigrid(XMLHandler& xmlr)
  nlevels=ivalues[ivalindex-1];
  if ((nlevels<2)||(nlevels>mg_max_levels)){
     throw(std::invalid_argument("Unsupported number of levels in MultiGrid inverter"));}
- rvalues.resize(2+(nlevels-1)+2*deflate);
+ rvalues.resize(3+(nlevels-1)+2*deflate);
  ivalues.resize(11+9*(nlevels-1)+3*deflate);
 
      // loop over levels, except for coarsest last level
@@ -445,7 +458,7 @@ void InverterInfo::set_info_gcr_multigrid(XMLHandler& xmlr)
  else{
     deflate=0;
     ivalues[ivalindex]=0; ++ivalindex;
-    rvalues.resize(2+(nlevels-1)+2*deflate);
+    rvalues.resize(3+(nlevels-1)+2*deflate);
     ivalues.resize(11+9*(nlevels-1)+3*deflate);}
 
  xmlsetQLBool(xmlmg,"LoadNullVectors",ivalues,ivalindex,true,false);
@@ -468,6 +481,7 @@ void InverterInfo::output_gcr_multigrid(XMLHandler& xmlout) const
  xmlout.put_child(xmloutputQLReal("Tolerance",rvalues,rvalindex));
  xmlout.put_child(xmloutputQLInt("MaxIterations",ivalues,ivalindex));
  xmlout.put_child(xmloutputQLInt("NKrylov",ivalues,ivalindex));
+ xmlout.put_child(xmloutputQLReal("RestartDelta",rvalues,rvalindex));
  XMLHandler xmlmg("MGPreconditioner");
  xmlmg.put_child(xmloutputQLInt("NumLevels",ivalues,ivalindex));
  int nlevels=ivalues[ivalindex-1];
@@ -518,6 +532,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(QudaInvertParam& invParam,
  double outer_tolerance=rvalues[rvalindex]; ++rvalindex;
  int outer_maxiter=ivalues[ivalindex]; ++ivalindex;
  int outer_Nkrylov=ivalues[ivalindex]; ++ivalindex;
+ double restart_delta=rvalues[rvalindex]; ++rvalindex;
  int nlevels=ivalues[ivalindex]; ++ivalindex;
 
  vector<vector<int>> blockextents(nlevels,vector<int>(LayoutInfo::Ndim));
@@ -573,7 +588,7 @@ void InverterInfo::setQudaInvertParam_gcr_multigrid(QudaInvertParam& invParam,
  invParam.matpc_type = QUDA_MATPC_EVEN_EVEN;
  invParam.inv_type = QUDA_GCR_INVERTER;    // the outer solver
  invParam.tol = outer_tolerance;
- invParam.reliable_delta = 0.01;  
+ invParam.reliable_delta = restart_delta;
  invParam.maxiter = outer_maxiter;
  invParam.pipeline = 0;
  invParam.dagger = QUDA_DAG_NO;
