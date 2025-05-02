@@ -281,11 +281,16 @@ void alamode( const int nMom,
   cublas_param_mom_sum.trans_b = QUDA_BLAS_OP_T;
   cublas_param_mom_sum.m = nMom;
   cublas_param_mom_sum.k = nSites;
-  cublas_param_mom_sum.n = blockSizeMomProj;
+  cublas_param_mom_sum.n = 1 ; //blockSizeMomProj;
   cublas_param_mom_sum.lda = nSites;
   cublas_param_mom_sum.ldb = nSites;
   cublas_param_mom_sum.ldc = nEvChoose3;
-  cublas_param_mom_sum.batch_count = 1;
+
+  cublas_param_mom_sum.a_stride = 0 ;
+  cublas_param_mom_sum.b_stride = nSites ;
+  cublas_param_mom_sum.c_stride = 1 ;
+  
+  cublas_param_mom_sum.batch_count = blockSizeMomProj;
   cublas_param_mom_sum.alpha = (__complex__ double)alpha;  
   cublas_param_mom_sum.beta  = (__complex__ double)beta;
   cublas_param_mom_sum.data_order = QUDA_BLAS_DATAORDER_ROW;
@@ -442,16 +447,26 @@ int main(int argc, char *argv[]) {
   const size_t nEvChoose3 = Nev*(Nev-1)*(Nev-2)/6;
   double _Complex *retGPU = (double _Complex*)calloc( nmom*nEvChoose3 , sizeof( double _Complex  ) );
 
+  alamode( nmom, Nev,
+				       blockSizeMomProj,
+				       evList.data() ,
+				       host_mom ,
+				       inv_param,
+				       retGPU, X ) ;
+
+	  /*
   laphBaryonKernelComputeModeTripletA( nmom, Nev,
 				       blockSizeMomProj,
 				       evList.data() ,
 				       host_mom ,
 				       inv_param,
 				       retGPU, X ) ;
+	  */
   memset( retGPU , 0.0 , nmom*nEvChoose3*sizeof( double _Complex )) ;
 
   StopWatch gpu ;
   gpu.start() ;
+  /*
   laphBaryonKernelComputeModeTripletA( nmom,
 				       Nev,
 				       blockSizeMomProj,
@@ -460,6 +475,16 @@ int main(int argc, char *argv[]) {
 				       inv_param,
 				       retGPU,
 				       X ) ;
+  */
+  alamode( nmom,
+	   Nev,
+	   blockSizeMomProj,
+	   evList.data() ,
+	   host_mom ,
+	   inv_param,
+	   retGPU,
+	   X ) ;
+
   gpu.stop() ;
   const double GPUtime = gpu.getTimeInSeconds() ;
   printLaph(make_strf("\nGPU modetripletA in = %g seconds\n", GPUtime )) ;

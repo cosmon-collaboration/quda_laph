@@ -240,11 +240,16 @@ alamode( const int n1, const int n2, const int n3, const int nMom,
   cublas_param_mom_sum.trans_a = QUDA_BLAS_OP_N;
   cublas_param_mom_sum.trans_b = QUDA_BLAS_OP_T;
   cublas_param_mom_sum.m = nMom;
+  cublas_param_mom_sum.n = 1 ; //blockSizeMomProj ;
   cublas_param_mom_sum.k = nSites;
   cublas_param_mom_sum.lda = nSites;
   cublas_param_mom_sum.ldb = nSites;
   cublas_param_mom_sum.ldc = n1*n2*n3;
-  cublas_param_mom_sum.batch_count = 1;
+  // strides for the batching
+  cublas_param_mom_sum.a_stride = 0 ;
+  cublas_param_mom_sum.b_stride = nSites ;
+  cublas_param_mom_sum.c_stride = 1 ;  
+  cublas_param_mom_sum.batch_count = blockSizeMomProj;
   cublas_param_mom_sum.alpha = (__complex__ double)alpha;  
   cublas_param_mom_sum.beta  = (__complex__ double)beta;
   cublas_param_mom_sum.data_order = QUDA_BLAS_DATAORDER_ROW;
@@ -269,12 +274,10 @@ alamode( const int n1, const int n2, const int n3, const int nMom,
 	if (nInBlock == blockSizeMomProj ) {
 	  // To gauge how to block the calls to remove launch latency.
 	  printfQuda("dil1 = %d, dil2 = %d, dil3 = %d, nInBlock = %d\n", dil1, dil2, dil3, nInBlock);
-	  cublas_param_mom_sum.n = nInBlock;
-	  cublas_param_mom_sum.c_offset = (dil1*n2 + dil2)*n3 + dil3 - nInBlock + 1;
-          //cublas_param_mom_sum.b_stride = nInBlock * nSites;
-          //cublas_param_mom_sum.c_stride = nInBlock * nSites;
 	  //getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);	  
-	  blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp, d_ret, cublas_param_mom_sum, QUDA_CUDA_FIELD_LOCATION);
+	  blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp,
+						(std::complex<double>*)d_ret + (dil1*n2 + dil2)*n3 + dil3 - nInBlock + 1,
+						cublas_param_mom_sum, QUDA_CUDA_FIELD_LOCATION);
 	  //getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);	  
 	  nInBlock = 0;
 	}
@@ -413,6 +416,20 @@ int main(int argc, char *argv[]) {
   inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
   
   double _Complex retGPU[ n1*n2*n3*nmom ] = {} ;
+  alamode( n1, n2, n3,
+	   nmom,
+	   coeffs1 ,
+	   coeffs2 ,
+	   coeffs3 ,
+	   host_mom ,
+	   Nev ,
+	   evList.data(),
+	   inv_param,
+	   retGPU,
+	   blockSizeMomProj,
+	   X ) ;
+
+	  /*
   laphBaryonKernel( n1, n2, n3,
 		    nmom,
 		    coeffs1 ,
@@ -425,9 +442,23 @@ int main(int argc, char *argv[]) {
 		    retGPU,
 		    blockSizeMomProj,
 		    X ) ;
+	  */
   StopWatch GPU ;
   GPU.start() ;
   memset( retGPU , 0.0 , n1*n2*n3*sizeof(double _Complex)) ;
+    alamode( n1, n2, n3,
+	   nmom,
+	   coeffs1 ,
+	   coeffs2 ,
+	   coeffs3 ,
+	   host_mom ,
+	   Nev ,
+	   evList.data(),
+	   inv_param,
+	   retGPU,
+	   blockSizeMomProj,
+	   X ) ;
+    /*
   laphBaryonKernel( n1, n2, n3,
 		    nmom,
 		    coeffs1 ,
@@ -440,6 +471,7 @@ int main(int argc, char *argv[]) {
 		    retGPU,
 		    blockSizeMomProj,
 		    X ) ;
+    */
   GPU.stop() ;
   const double GPUtime = GPU.getTimeInSeconds() ;
   printLaph(make_strf("\nGPU baryonkernel in = %g seconds\n", GPUtime )) ;

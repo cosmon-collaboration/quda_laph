@@ -148,7 +148,12 @@ static void alamode( const int n1,
   cublas_param_mom_sum.ldb = n_spatial_sites ; // #of rows of B == L^3
 
   cublas_param_mom_sum.ldc = X[3] ;
-  cublas_param_mom_sum.batch_count = 1 ;
+  
+  cublas_param_mom_sum.a_stride = 0 ; // mom matrix stays the same
+  cublas_param_mom_sum.b_stride = n_spatial_sites*X[3] ;
+  cublas_param_mom_sum.c_stride = X[3]*n_mom ;
+
+  cublas_param_mom_sum.batch_count = block_size_mom_proj ;
   cublas_param_mom_sum.alpha = (__complex__ double)alpha;  
   cublas_param_mom_sum.beta  = (__complex__ double)beta;
   cublas_param_mom_sum.data_order = QUDA_BLAS_DATAORDER_ROW;
@@ -183,13 +188,15 @@ static void alamode( const int n1,
       //getProfileCurrentKernel().TPSTOP(QUDA_PROFILE_COMPUTE);
 
       ///getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);
-      blas_lapack::native::stridedBatchGEMM( d_mom, d_tmp,
-					     (std::complex<double>*)d_ret+(dil2+n2*dil1)*X[3]*n_mom,
-					     cublas_param_mom_sum,
-					     QUDA_CUDA_FIELD_LOCATION);
-      //getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);
-      idx_last += block_size_mom_proj ;
-      n_in_block = 0 ;
+      if( n_in_block == block_size_mom_proj ) {
+	blas_lapack::native::stridedBatchGEMM( d_mom, d_tmp,
+					       (std::complex<double>*)d_ret+(idx_last)*X[3]*n_mom,
+					       cublas_param_mom_sum,
+					       QUDA_CUDA_FIELD_LOCATION);
+	//getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);
+	idx_last += block_size_mom_proj ;
+	n_in_block = 0 ;
+      }
     }
   }
 
@@ -263,7 +270,7 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 2 , blockSizeMomProj = 4 , n1 = 2 , n2 = 2 ;
+  const int nmom = 8 , blockSizeMomProj = 4 , n1 = 2 , n2 = 2 ;
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],

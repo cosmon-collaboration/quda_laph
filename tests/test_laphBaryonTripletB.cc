@@ -202,7 +202,10 @@ alamode( const int n1,
   cublas_param_2.lda = nEv;
   cublas_param_2.ldb = n3;
   cublas_param_2.ldc = n3;
-  cublas_param_2.batch_count = 1 ;
+  cublas_param_2.a_stride = 0 ;
+  cublas_param_2.b_stride = n3*nEv ;
+  cublas_param_2.c_stride = n2*n3 ;
+  cublas_param_2.batch_count = nSubEv ;
   cublas_param_2.alpha = 1.0 ; cublas_param_2.beta = 0.0 ;
   cublas_param_2.data_order = QUDA_BLAS_DATAORDER_ROW;
   cublas_param_2.data_type = QUDA_BLAS_DATATYPE_Z;
@@ -214,8 +217,8 @@ alamode( const int n1,
   cublas_param_3.k = nSubEv;
   cublas_param_3.lda = nEv;
   cublas_param_3.ldb = n2*n3;
-  cublas_param_3.ldc = n2*n3;
-  cublas_param_3.batch_count = 1;
+  cublas_param_3.ldc = n2*n3;    
+  cublas_param_3.batch_count = 1 ;
   cublas_param_3.alpha = 1.0 ; cublas_param_3.beta = 0.0 ;
   cublas_param_3.data_order = QUDA_BLAS_DATAORDER_ROW;
   cublas_param_3.data_type = QUDA_BLAS_DATATYPE_Z;
@@ -236,18 +239,17 @@ alamode( const int n1,
 
     blas_lapack::native::stridedBatchGEMM( d_tmp, d_coeffs3, d_q3, cublas_param_1,
 					   QUDA_CUDA_FIELD_LOCATION ) ;
-    
-    // this can be batched by Ev but I don't follow the interface
-    for( int j = 0 ; j < nSubEv ; j++ ) {
-      blas_lapack::native::stridedBatchGEMM( d_coeffs2,
-					     (double _Complex*)d_q3 + j*n3*nEv,
-					     (double _Complex*)d_tmp + j*n2*n3,
-					     cublas_param_2, QUDA_CUDA_FIELD_LOCATION);
-    }
-    cublas_param_3.a_offset = iRank*nSubEv;
-    cublas_param_3.c_offset = p*n1*n2*n3;
-    blas_lapack::native::stridedBatchGEMM(d_coeffs1, d_tmp, d_ret,
-					  cublas_param_3, QUDA_CUDA_FIELD_LOCATION);
+
+    // batched GEMM that actually does this in batches
+    blas_lapack::native::stridedBatchGEMM( d_coeffs2, d_q3, d_tmp,
+					   cublas_param_2, QUDA_CUDA_FIELD_LOCATION);
+
+    //cublas_param_3.a_offset = iRank*nSubEv;
+    //cublas_param_3.c_offset = p*n1*n2*n3;
+    blas_lapack::native::stridedBatchGEMM( (double _Complex*)d_coeffs1 + iRank*nSubEv,
+					   d_tmp,
+					   (double _Complex*)d_ret + p*n1*n2*n3 ,
+					   cublas_param_3, QUDA_CUDA_FIELD_LOCATION);
   }
   //getProfileBaryonKernelModeTripletsB().TPSTOP(QUDA_PROFILE_COMPUTE);
    
@@ -307,6 +309,16 @@ int main(int argc, char *argv[]) {
   }
 
   double _Complex host_ret_arr[ nmom*n1*n2*n3 ] = {} ;
+  alamode( n1, n2, n3,
+	   nmom,
+	   Nev ,
+	   host_coeffs1 ,
+	   host_coeffs2 ,
+	   host_coeffs3 ,
+	   host_mode_trip_buf ,
+	   host_ret_arr ) ;
+
+  /*
   laphBaryonKernelComputeModeTripletB( n1, n2, n3,
 				       nmom,
 				       Nev ,
@@ -315,10 +327,19 @@ int main(int argc, char *argv[]) {
 				       host_coeffs3 ,
 				       host_mode_trip_buf ,
 				       host_ret_arr ) ;
-
+  */
   memset( host_ret_arr, 0.0 , nmom*n1*n2*n3*sizeof( double _Complex) ) ;
   StopWatch gpu;
   gpu.start() ;
+    alamode( n1, n2, n3,
+	   nmom,
+	   Nev ,
+	   host_coeffs1 ,
+	   host_coeffs2 ,
+	   host_coeffs3 ,
+	   host_mode_trip_buf ,
+	   host_ret_arr ) ;
+    /*
   laphBaryonKernelComputeModeTripletB( n1, n2, n3,
 				       nmom,
 				       Nev ,
@@ -327,6 +348,7 @@ int main(int argc, char *argv[]) {
 				       host_coeffs3 ,
 				       host_mode_trip_buf ,
 				       host_ret_arr ) ;
+    */
   gpu.stop() ;
   const double GPUtime = gpu.getTimeInSeconds() ;
   printLaph(make_strf("\nGPU modetripletB in = %g seconds\n", GPUtime )) ;
