@@ -1,6 +1,6 @@
 <QudaLaph>
    <LatticeLayoutInfo>
-      <XYZTExtents>64 64 64 192</XYZTExtents>
+      <XYZTExtents>96 96 96 192</XYZTExtents>
    </LatticeLayoutInfo>
    <QudaInfo>
       <CPUPrecision>double</CPUPrecision>
@@ -12,12 +12,12 @@
    <Task>
       <Name>SMEAR_GAUGE_FIELD</Name>
       <GaugeConfigurationInfo>
-         <EnsembleName>CLS_J250</EnsembleName>
+         <EnsembleName>CLS_E250</EnsembleName>
          <ConfigType>WilsonImproved</ConfigType>
          <FileFormat>CERN</FileFormat>
-         <MarkovChainNumber>0</MarkovChainNumber>
+         <MarkovChainNumber>1</MarkovChainNumber>
          <ConfigNumber>244</ConfigNumber>
-         <FileName>/lustre/orion/nph165/proj-shared/cls21_J250_r000/cfgs/J250r000n244</FileName>
+         <FileName>/lustre/orion/nph165/proj-shared/cls21_E250_r001/cfgs/E250r001n244</FileName>
       </GaugeConfigurationInfo>
       <GluonStoutSmearingInfo>
          <LinkIterations>48</LinkIterations>
@@ -27,28 +27,28 @@
    <Task>
       <Name>SMEAR_QUARK_FIELD</Name>
       <GaugeConfigurationInfo>
-         <EnsembleName>CLS_J250</EnsembleName>
+         <EnsembleName>CLS_E250</EnsembleName>
          <ConfigType>WilsonImproved</ConfigType>
          <FileFormat>CERN</FileFormat>
-         <MarkovChainNumber>0</MarkovChainNumber>
+         <MarkovChainNumber>1</MarkovChainNumber>
          <ConfigNumber>244</ConfigNumber>
-         <FileName>/lustre/orion/nph165/proj-shared/cls21_J250_r000/cfgs/J250r000n244</FileName>
+         <FileName>/lustre/orion/nph165/proj-shared/cls21_E250_r001/cfgs/E250r001n244</FileName>
       </GaugeConfigurationInfo>
       <GluonStoutSmearingInfo>
          <LinkIterations>48</LinkIterations>
          <LinkStapleWeight>0.1</LinkStapleWeight>
       </GluonStoutSmearingInfo>
       <QuarkLaphSmearingInfo>
-         <LaphSigmaCutoff>0.295</LaphSigmaCutoff>
-         <NumberLaphEigvecs>288</NumberLaphEigvecs>
+         <LaphSigmaCutoff>0.077</LaphSigmaCutoff>
+         <NumberLaphEigvecs>768</NumberLaphEigvecs>
       </QuarkLaphSmearingInfo>
       <LaphEigenSolverInfo>
          <ResidualTolerance>1.0e-12</ResidualTolerance>
          <MaxIterations>200</MaxIterations>
-         <KrylovDimension>348</KrylovDimension>
-         <ChebyshevOrder>28</ChebyshevOrder>
-         <MaxEigenvalue>12.5</MaxEigenvalue>
-         <CutoffEigenvalue>0.1</CutoffEigenvalue>
+         <KrylovDimension>1024</KrylovDimension>
+         <ChebyshevOrder>32</ChebyshevOrder>
+         <MaxEigenvalue>12.01</MaxEigenvalue>
+         <CutoffEigenvalue>0.085</CutoffEigenvalue>
          <StartingVectorType>equal_components</StartingVectorType>
       </LaphEigenSolverInfo>
    </Task>
@@ -56,30 +56,30 @@
       <Name>LAPH_QUARK_PERAMBULATORS</Name>
       <QuarkPerambulatorInfo>
          <GaugeConfigurationInfo>
-            <EnsembleName>CLS_J250</EnsembleName>
+            <EnsembleName>CLS_E250</EnsembleName>
             <ConfigType>WilsonImproved</ConfigType>
             <FileFormat>CERN</FileFormat>
-            <MarkovChainNumber>0</MarkovChainNumber>
+            <MarkovChainNumber>1</MarkovChainNumber>
             <ConfigNumber>244</ConfigNumber>
-            <FileName>/lustre/orion/nph165/proj-shared/cls21_J250_r000/cfgs/J250r000n244</FileName>
+            <FileName>/lustre/orion/nph165/proj-shared/cls21_E250_r001/cfgs/E250r001n244</FileName>
          </GaugeConfigurationInfo>
          <GluonStoutSmearingInfo>
             <LinkIterations>48</LinkIterations>
             <LinkStapleWeight>0.1</LinkStapleWeight>
          </GluonStoutSmearingInfo>
          <QuarkLaphSmearingInfo>
-            <LaphSigmaCutoff>0.295</LaphSigmaCutoff>
-            <NumberLaphEigvecs>288</NumberLaphEigvecs>
+            <LaphSigmaCutoff>0.077</LaphSigmaCutoff>
+            <NumberLaphEigvecs>768</NumberLaphEigvecs>
          </QuarkLaphSmearingInfo>
          <QuarkActionInfo>
             <Name>WILSON_CLOVER</Name>
             <Flavor>ud</Flavor>
-            <Kappa>0.1372067</Kappa>
+            <Kappa>0.137232867</Kappa>
             <clovCoeff>1.8248654</clovCoeff>
             <TimeBC>antiperiodic</TimeBC>
          </QuarkActionInfo>
          <FileListInfo>
-            <FileNameStub>/lustre/orion/nph165/proj-shared/cls21_J250_r000/quark_perambulators/244/mpirun39/quark_perambs_ud_244</FileNameStub>
+            <FileNameStub>/lustre/orion/nph165/proj-shared/cls21_E250_r001/quark_perambulators/244/mpirun39/quark_perambs_ud_244</FileNameStub>
             <MinFileNumber>624</MinFileNumber>
             <MaxFileNumber>639</MaxFileNumber>
          </FileListInfo>
@@ -125,22 +125,22 @@
          <Computation>
             <SourceTime>156</SourceTime>
             <SourceLaphEigvecIndexMin>0</SourceLaphEigvecIndexMin>
-            <SourceLaphEigvecIndexMax>287</SourceLaphEigvecIndexMax>
+            <SourceLaphEigvecIndexMax>767</SourceLaphEigvecIndexMax>
          </Computation>
          <Computation>
             <SourceTime>157</SourceTime>
             <SourceLaphEigvecIndexMin>0</SourceLaphEigvecIndexMin>
-            <SourceLaphEigvecIndexMax>287</SourceLaphEigvecIndexMax>
+            <SourceLaphEigvecIndexMax>767</SourceLaphEigvecIndexMax>
          </Computation>
          <Computation>
             <SourceTime>158</SourceTime>
             <SourceLaphEigvecIndexMin>0</SourceLaphEigvecIndexMin>
-            <SourceLaphEigvecIndexMax>287</SourceLaphEigvecIndexMax>
+            <SourceLaphEigvecIndexMax>767</SourceLaphEigvecIndexMax>
          </Computation>
          <Computation>
             <SourceTime>159</SourceTime>
             <SourceLaphEigvecIndexMin>0</SourceLaphEigvecIndexMin>
-            <SourceLaphEigvecIndexMax>287</SourceLaphEigvecIndexMax>
+            <SourceLaphEigvecIndexMax>767</SourceLaphEigvecIndexMax>
          </Computation>
       </ComputationSet>
    </Task>
@@ -148,30 +148,30 @@
       <Name>LAPH_QUARK_PERAMBULATORS</Name>
       <QuarkPerambulatorInfo>
          <GaugeConfigurationInfo>
-            <EnsembleName>CLS_J250</EnsembleName>
+            <EnsembleName>CLS_E250</EnsembleName>
             <ConfigType>WilsonImproved</ConfigType>
             <FileFormat>CERN</FileFormat>
-            <MarkovChainNumber>0</MarkovChainNumber>
+            <MarkovChainNumber>1</MarkovChainNumber>
             <ConfigNumber>244</ConfigNumber>
-            <FileName>/lustre/orion/nph165/proj-shared/cls21_J250_r000/cfgs/J250r000n244</FileName>
+            <FileName>/lustre/orion/nph165/proj-shared/cls21_E250_r001/cfgs/E250r001n244</FileName>
          </GaugeConfigurationInfo>
          <GluonStoutSmearingInfo>
             <LinkIterations>48</LinkIterations>
             <LinkStapleWeight>0.1</LinkStapleWeight>
          </GluonStoutSmearingInfo>
          <QuarkLaphSmearingInfo>
-            <LaphSigmaCutoff>0.295</LaphSigmaCutoff>
-            <NumberLaphEigvecs>288</NumberLaphEigvecs>
+            <LaphSigmaCutoff>0.077</LaphSigmaCutoff>
+            <NumberLaphEigvecs>768</NumberLaphEigvecs>
          </QuarkLaphSmearingInfo>
          <QuarkActionInfo>
             <Name>WILSON_CLOVER</Name>
             <Flavor>s</Flavor>
-            <Kappa>0.136546844</Kappa>
+            <Kappa>0.136536633</Kappa>
             <clovCoeff>1.8248654</clovCoeff>
             <TimeBC>antiperiodic</TimeBC>
          </QuarkActionInfo>
          <FileListInfo>
-            <FileNameStub>/lustre/orion/nph165/proj-shared/cls21_J250_r000/quark_perambulators/244/mpirun39/quark_perambs_s_244</FileNameStub>
+            <FileNameStub>/lustre/orion/nph165/proj-shared/cls21_E250_r001/quark_perambulators/244/mpirun39/quark_perambs_s_244</FileNameStub>
             <MinFileNumber>624</MinFileNumber>
             <MaxFileNumber>639</MaxFileNumber>
          </FileListInfo>
@@ -217,22 +217,22 @@
          <Computation>
             <SourceTime>156</SourceTime>
             <SourceLaphEigvecIndexMin>0</SourceLaphEigvecIndexMin>
-            <SourceLaphEigvecIndexMax>287</SourceLaphEigvecIndexMax>
+            <SourceLaphEigvecIndexMax>767</SourceLaphEigvecIndexMax>
          </Computation>
          <Computation>
             <SourceTime>157</SourceTime>
             <SourceLaphEigvecIndexMin>0</SourceLaphEigvecIndexMin>
-            <SourceLaphEigvecIndexMax>287</SourceLaphEigvecIndexMax>
+            <SourceLaphEigvecIndexMax>767</SourceLaphEigvecIndexMax>
          </Computation>
          <Computation>
             <SourceTime>158</SourceTime>
             <SourceLaphEigvecIndexMin>0</SourceLaphEigvecIndexMin>
-            <SourceLaphEigvecIndexMax>287</SourceLaphEigvecIndexMax>
+            <SourceLaphEigvecIndexMax>767</SourceLaphEigvecIndexMax>
          </Computation>
          <Computation>
             <SourceTime>159</SourceTime>
             <SourceLaphEigvecIndexMin>0</SourceLaphEigvecIndexMin>
-            <SourceLaphEigvecIndexMax>287</SourceLaphEigvecIndexMax>
+            <SourceLaphEigvecIndexMax>767</SourceLaphEigvecIndexMax>
          </Computation>
       </ComputationSet>
    </Task>
