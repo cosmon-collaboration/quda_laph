@@ -16,8 +16,8 @@ InverterInfo::InverterInfo(const XMLHandler& xml_in)
  XMLHandler xmlr(xml_in, "InverterInfo");
  string name;
  xmlread(xmlr,"Name",name,"InverterInfo");
- if (name=="CG"){
-    set_info_cg(xmlr);}
+ if (name=="CGNE"){
+    set_info_cgne(xmlr);}
  else if (name=="BICGSTAB"){
     set_info_bicgstab(xmlr);}
  else if (name=="GCR"){
@@ -77,8 +77,8 @@ string InverterInfo::output(int indent) const
 
 void InverterInfo::output(XMLHandler& xmlout) const
 {
- if (svalues[0]=="CG"){
-    output_cg(xmlout);}
+ if (svalues[0]=="CGNE"){
+    output_cgne(xmlout);}
  else if (svalues[0]=="BICGSTAB"){
     output_bicgstab(xmlout);}
  else if (svalues[0]=="GCR"){
@@ -95,8 +95,8 @@ void InverterInfo::setQudaInvertParam(QudaInvertParam& invParam,
  qactioninfo.setQudaInvertParam(invParam);
  invParam.input_location = QUDA_CPU_FIELD_LOCATION;
  invParam.output_location = QUDA_CPU_FIELD_LOCATION;
- if (svalues[0]=="CG"){
-    setQudaInvertParam_cg(invParam);}
+ if (svalues[0]=="CGNE"){
+    setQudaInvertParam_cgne(invParam);}
  else if (svalues[0]=="BICGSTAB"){
     setQudaInvertParam_bicgstab(invParam);}
  else if (svalues[0]=="GCR"){
@@ -172,7 +172,7 @@ void InverterInfo::setQudaInvertParam(QudaInvertParam& invParam,
 // *      (all tags except <Name> optional; default values shown)       *
 // *                                                                    *
 // *   <InvertInfo>                                                     *
-// *     <Name>CG</Name>                                                *
+// *     <Name>CGNE</Name>                                                *
 // *     <Tolerance>1.0e-10</Tolerance>                                 *
 // *     <MaxIterations>10000</MaxIterations>                           *
 // *     <ReliableDelta>0.01</ReliableDelta>                            *
@@ -184,12 +184,12 @@ void InverterInfo::setQudaInvertParam(QudaInvertParam& invParam,
 // *                                                                    *
 // **********************************************************************
 
-void InverterInfo::set_info_cg(XMLHandler& xmlr)
+void InverterInfo::set_info_cgne(XMLHandler& xmlr)
 {
  svalues.resize(1);
  rvalues.resize(2);
  ivalues.resize(1);
- svalues[0]="CG";
+ svalues[0]="CGNE";
  int rvalindex=0;
  int ivalindex=0;
  xmlsetQLReal(xmlr,"Tolerance",rvalues,rvalindex,true,1e-10);
@@ -198,10 +198,10 @@ void InverterInfo::set_info_cg(XMLHandler& xmlr)
 }
 
 
-void InverterInfo::output_cg(XMLHandler& xmlout) const
+void InverterInfo::output_cgne(XMLHandler& xmlout) const
 {
  xmlout.set_root("InverterInfo");
- xmlout.put_child("Name","CG");
+ xmlout.put_child("Name","CGNE");
  int ivalindex=0;
  int rvalindex=0;
  xmlout.put_child(xmloutputQLReal("Tolerance",rvalues,rvalindex));
@@ -210,17 +210,18 @@ void InverterInfo::output_cg(XMLHandler& xmlout) const
 }
  
 
-void InverterInfo::setQudaInvertParam_cg(QudaInvertParam& invParam) const
+void InverterInfo::setQudaInvertParam_cgne(QudaInvertParam& invParam) const
 {
  invParam.cpu_prec = QudaInfo::get_cpu_prec();
  invParam.cuda_prec = QudaInfo::get_cuda_prec();
  invParam.solution_type = QUDA_MAT_SOLUTION;
- invParam.solve_type = QUDA_NORMERR_PC_SOLVE;
+// invParam.solve_type = QUDA_NORMERR_PC_SOLVE;
+ invParam.solve_type = QUDA_DIRECT_PC_SOLVE;
  invParam.matpc_type = QUDA_MATPC_EVEN_EVEN;      //  how to use checkerboard Dirac op
- invParam.inv_type = QUDA_CG_INVERTER;
+ invParam.inv_type = QUDA_CGNE_INVERTER;
  int ivalindex=0;
  int rvalindex=0;
- invParam.tol = xmlputQLReal("Tolerance",rvalues,rvalindex);
+ invParam.tol = xmlputQLReal("Tolerance",rvalues,rvalindex);    
  invParam.reliable_delta = xmlputQLReal("ReliableDelta",rvalues,rvalindex); //  mixed precision parameter (how often
  invParam.maxiter = xmlputQLInt("MaxIterations",ivalues,ivalindex);         // compute high precision residual)
  invParam.pipeline = 0;
