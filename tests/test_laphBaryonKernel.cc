@@ -362,7 +362,7 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 3 , blockSizeMomProj = 4 , n1 = 2 , n2 = 2 , n3 = 2 ;
+  const int nmom = 16 , blockSizeMomProj = 16 , n1 = 4 , n2 = 4 , n3 = 4 ;
   const int X[4] = {
     LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],

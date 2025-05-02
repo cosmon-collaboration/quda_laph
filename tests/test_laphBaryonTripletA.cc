@@ -311,9 +311,9 @@ void alamode( const int nMom,
 	nInBlock++;
 	// eh todo this can be cleaned up
 	if (nInBlock == blockSizeMomProj) {
-	  cublas_param_mom_sum.c_offset = blockStart;
 	  //getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);  
-	  blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp, d_ret,
+	  blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp,
+						(std::complex<double>*)d_ret+blockStart,
 						cublas_param_mom_sum,
 						QUDA_CUDA_FIELD_LOCATION);
 	  //getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);
@@ -403,8 +403,8 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 3 ;
-  const int blockSizeMomProj = 4 ;
+  const int nmom = 8 ;
+  const int blockSizeMomProj = 8 ;
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
