@@ -811,15 +811,17 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& s
        printLaph(make_strf("Inversions done:  number of iterations = %d",quda_inv_param.iter));
        printLaph(make_str(" Time for ",nSinks," inversions was ",addinvtime," seconds"));
        if (report_gflops) printLaph(make_strf("Multi-source inversion speed was %g gflops",quda_inv_param.gflops));
+       bool somefail=false;
 
        if (!((quda_inv_param.iter>0)&&(quda_inv_param.iter<int(invertPtr->getMaxIterations())))){
           printLaph("\n\nSome inversions in this batch FAILED to converge before max iteration reached");
+          somefail=true;
           printLaph("Some solution NOT WRITTEN to file\n\n");}
 
        int iSinkDone=0;
        for (int iSink=0;iSink<nSinks;++iSink){
           printLaph(make_strf(" Residual for src %d = %g",iSink,quda_inv_param.true_res[iSink]));
-          if (quda_inv_param.true_res[iSink]>quda_inv_param.tol){
+          if ((somefail)&&(quda_inv_param.true_res[iSink]>quda_inv_param.tol)){
              printLaph("    This inversion failed to reach required tolerance");}
           else{
 
@@ -977,6 +979,7 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
     if (report_gflops) printLaph(make_strf("Inversion speed was %g gflops",quda_inv_param.gflops));
     //printLaph(make_str("  Inverter used was ",invertPtr->getName()));
 
+    bool success=((quda_inv_param.iter>0)&&(quda_inv_param.iter<int(invertPtr->getMaxIterations())));
     if (quda_inv_param.true_res[0]>quda_inv_param.tol){ 
        printLaph("Inverter failed to reach required tolerance");}
 
@@ -988,8 +991,7 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
        void *sol_checkptr=sol_check.getDataPtr();
        MatQuda(sol_checkptr,spinor_snk,&quda_inv_param);
        LaphEnv::compare_latt_fields(sol_check,ferm_src);} 
-
-    if ((quda_inv_param.iter>0)&&(quda_inv_param.iter<int(invertPtr->getMaxIterations()))){
+    if (success){
        sinkBatchInds[iSinkBatch] = srcev_ind;
        iSinkBatch++;}
     else{
