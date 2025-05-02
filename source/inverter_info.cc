@@ -9,15 +9,15 @@ using namespace std;
 
 namespace LaphEnv {
 
-//   NOTE:  in multigrid,  CGNR or GCR   ---  give a choice???
+
 
 InverterInfo::InverterInfo(const XMLHandler& xml_in)
 { 
  XMLHandler xmlr(xml_in, "InverterInfo");
  string name;
  xmlread(xmlr,"Name",name,"InverterInfo");
- if (name=="CGNR"){
-    set_info_cgnr(xmlr);}
+ if (name=="CG"){
+    set_info_cg(xmlr);}
  else if (name=="BICGSTAB"){
     set_info_bicgstab(xmlr);}
  else if (name=="GCR"){
@@ -77,8 +77,8 @@ string InverterInfo::output(int indent) const
 
 void InverterInfo::output(XMLHandler& xmlout) const
 {
- if (svalues[0]=="CGNR"){
-    output_cgnr(xmlout);}
+ if (svalues[0]=="CG"){
+    output_cg(xmlout);}
  else if (svalues[0]=="BICGSTAB"){
     output_bicgstab(xmlout);}
  else if (svalues[0]=="GCR"){
@@ -95,8 +95,8 @@ void InverterInfo::setQudaInvertParam(QudaInvertParam& invParam,
  qactioninfo.setQudaInvertParam(invParam);
  invParam.input_location = QUDA_CPU_FIELD_LOCATION;
  invParam.output_location = QUDA_CPU_FIELD_LOCATION;
- if (svalues[0]=="CGNR"){
-    setQudaInvertParam_cgnr(invParam);}
+ if (svalues[0]=="CG"){
+    setQudaInvertParam_cg(invParam);}
  else if (svalues[0]=="BICGSTAB"){
     setQudaInvertParam_bicgstab(invParam);}
  else if (svalues[0]=="GCR"){
@@ -105,14 +105,74 @@ void InverterInfo::setQudaInvertParam(QudaInvertParam& invParam,
     setQudaInvertParam_gcr_multigrid(invParam,qactioninfo);}
 }
 
+//  Comments about setting the following field in QudaInvertParam:
+//
+//    QudaSolutionType solution_type;  /**< Type of system to solve */
+//    QudaSolveType solve_type;        /**< How to solve it */
+//    QudaMatPCType matpc_type;        /**< The preconditioned matrix type */
+//    QudaDagType dagger;              /**< Whether we are using the Hermitian conjugate system or not */
+
+//  We have the following four cases (plus preconditioned variants):
+//
+//   solution_type    solve_type    Effect
+//   -------------    ----------    ------
+//   MAT              DIRECT        Solve Ax=b
+//   MATDAG_MAT       DIRECT        Solve A^dag y = b, followed by Ax=y
+//   MAT              NORMOP        Solve (A^dag A) x = (A^dag b)
+//   MATDAG_MAT       NORMOP        Solve (A^dag A) x = b
+//   MAT              NORMERR       Solve (A A^dag) y = b, then x = A^dag y
+//
+//  We generally require that the solution_type and solve_type
+//  preconditioning match.  As an exception, the unpreconditioned MAT
+//  solution_type may be used with any solve_type, including
+//  DIRECT_PC and NORMOP_PC.  In these cases, preparation of the
+//  preconditioned source and reconstruction of the full solution are
+//  taken care of by Dirac::prepare() and Dirac::reconstruct(),
+//  respectively.
+//
+//  The above mentioned enum are defined by
+//
+//  typedef enum QudaSolutionType_s {
+//    QUDA_MAT_SOLUTION,
+//    QUDA_MATDAG_MAT_SOLUTION,
+//    QUDA_MATPC_SOLUTION,
+//    QUDA_MATPC_DAG_SOLUTION,
+//    QUDA_MATPCDAG_MATPC_SOLUTION,
+//    QUDA_MATPCDAG_MATPC_SHIFT_SOLUTION,
+//    QUDA_INVALID_SOLUTION = QUDA_INVALID_ENUM
+//  } QudaSolutionType;
+//  
+//  typedef enum QudaSolveType_s {
+//    QUDA_DIRECT_SOLVE,
+//    QUDA_NORMOP_SOLVE,
+//    QUDA_DIRECT_PC_SOLVE,
+//    QUDA_NORMOP_PC_SOLVE,
+//    QUDA_NORMERR_SOLVE,
+//    QUDA_NORMERR_PC_SOLVE,
+//    QUDA_NORMEQ_SOLVE = QUDA_NORMOP_SOLVE,       // deprecated
+//    QUDA_NORMEQ_PC_SOLVE = QUDA_NORMOP_PC_SOLVE, // deprecated
+//    QUDA_INVALID_SOLVE = QUDA_INVALID_ENUM
+//  } QudaSolveType;
+//  
+//  typedef enum QudaMatPCType_s {
+//    QUDA_MATPC_EVEN_EVEN,
+//    QUDA_MATPC_ODD_ODD,
+//    QUDA_MATPC_EVEN_EVEN_ASYMMETRIC,
+//    QUDA_MATPC_ODD_ODD_ASYMMETRIC,
+//    QUDA_MATPC_INVALID = QUDA_INVALID_ENUM
+//  } QudaMatPCType;
+//  
+//  typedef enum QudaDagType_s { QUDA_DAG_NO, QUDA_DAG_YES, QUDA_DAG_INVALID = QUDA_INVALID_ENUM } QudaDagType;
+//  
+//  
 
 // **********************************************************************
 // *                                                                    *
-// *    Conjugate-Gradient on Normal Equations:                         *
+// *    Conjugate-Gradient:  solves M*M^dag*u=y then x=M^dag*u          *
 // *      (all tags except <Name> optional; default values shown)       *
 // *                                                                    *
 // *   <InvertInfo>                                                     *
-// *     <Name>CGNR</Name>                                              *
+// *     <Name>CG</Name>                                                *
 // *     <Tolerance>1.0e-10</Tolerance>                                 *
 // *     <MaxIterations>10000</MaxIterations>                           *
 // *     <ReliableDelta>0.01</ReliableDelta>                            *
@@ -124,12 +184,12 @@ void InverterInfo::setQudaInvertParam(QudaInvertParam& invParam,
 // *                                                                    *
 // **********************************************************************
 
-void InverterInfo::set_info_cgnr(XMLHandler& xmlr)
+void InverterInfo::set_info_cg(XMLHandler& xmlr)
 {
  svalues.resize(1);
  rvalues.resize(2);
  ivalues.resize(1);
- svalues[0]="CGNR";
+ svalues[0]="CG";
  int rvalindex=0;
  int ivalindex=0;
  xmlsetQLReal(xmlr,"Tolerance",rvalues,rvalindex,true,1e-10);
@@ -138,10 +198,10 @@ void InverterInfo::set_info_cgnr(XMLHandler& xmlr)
 }
 
 
-void InverterInfo::output_cgnr(XMLHandler& xmlout) const
+void InverterInfo::output_cg(XMLHandler& xmlout) const
 {
  xmlout.set_root("InverterInfo");
- xmlout.put_child("Name","CGNR");
+ xmlout.put_child("Name","CG");
  int ivalindex=0;
  int rvalindex=0;
  xmlout.put_child(xmloutputQLReal("Tolerance",rvalues,rvalindex));
@@ -150,15 +210,14 @@ void InverterInfo::output_cgnr(XMLHandler& xmlout) const
 }
  
 
-void InverterInfo::setQudaInvertParam_cgnr(QudaInvertParam& invParam) const
+void InverterInfo::setQudaInvertParam_cg(QudaInvertParam& invParam) const
 {
  invParam.cpu_prec = QudaInfo::get_cpu_prec();
  invParam.cuda_prec = QudaInfo::get_cuda_prec();
  invParam.solution_type = QUDA_MAT_SOLUTION;
- invParam.solve_type = QUDA_DIRECT_PC_SOLVE;
- invParam.matpc_type = QUDA_MATPC_EVEN_EVEN;
-// invParam.tune = QUDA_TUNE_YES;     deprecated
- invParam.inv_type = QUDA_CGNR_INVERTER;
+ invParam.solve_type = QUDA_NORMERR_PC_SOLVE;
+ invParam.matpc_type = QUDA_MATPC_EVEN_EVEN;      //  how to use checkerboard Dirac op
+ invParam.inv_type = QUDA_CG_INVERTER;
  int ivalindex=0;
  int rvalindex=0;
  invParam.tol = xmlputQLReal("Tolerance",rvalues,rvalindex);

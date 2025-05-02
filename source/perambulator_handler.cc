@@ -9,11 +9,6 @@
 #include "cblas.h"
 #endif
 
-#ifdef TESTING
-#include "task_tests.h"
-using namespace QLTestEnv;
-#endif
-
 //#define EXTRA_LAPH_CHECKS
 
     // STILL TO DO:  single asynchronous thread for output so can continue next computations
@@ -765,43 +760,6 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& s
  double evprojtime=0.0;
  int ninv=src_evindices.size();
 
-
-
-
-
-
-#ifdef TESTING
-#ifdef EXTRA_LAPH_CHECKS
- {printLaph("Testing Dirac Clover matrix on arbitrary source vector");
- LattField field1(FieldSiteType::ColorSpinVector);
- //setConstantField(field1, complex<double>(0.7342, -0.6532));
- setVariablePhaseField(field1, {0.65321, -2.15327, 0.91235, -1.21193}, 1.502812);
- LattField field2(FieldSiteType::ColorSpinVector);
- applyCloverDirac(field2,field1,gaugeHandler->getData(),*uPtr,*qactionPtr);
- LattField field2check(FieldSiteType::ColorSpinVector);
- void *checkptr1=field1.getDataPtr();
- void *checkptr2=field2check.getDataPtr();
-// setVariablePhaseField(field1, {3.65321, -1.15327, -0.91235, 1.21193}, 1.26);
- MatQuda(checkptr2,checkptr1,&quda_inv_param);  // leaves answer,initial on device?
-
- printLaph("Comparing MatQuda result with quda_laph host result");
- compare_fields(field2check,field2);
- printLaph("Comparison DONE");}
-#endif
-#endif
-
-
-
-
-
-
-
-
-
-
-
-
-
      // loop over source laph eigvec indices and source spin
 
  for (int srcspin=1;srcspin<=int(Nspin);++srcspin){
@@ -877,15 +835,6 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& s
                 void *sol_checkptr=sol_check.getDataPtr();
                 MatQuda(sol_checkptr,sinkList[iSink],&quda_inv_param);
                 LaphEnv::compare_latt_fields(sol_check,srcBatchData[iSink]);}
-
-#ifdef TESTING
-#ifdef EXTRA_LAPH_CHECKS
-             printLaph("Performing additional check on solution using quda_laph applyCloverDirac");
-             LattField sol_check(FieldSiteType::ColorSpinVector);
-             applyCloverDirac(sol_check,sinkBatchData[iSink],gaugeHandler->getData(),*uPtr,*qactionPtr);
-             compare_fields(sol_check,srcBatchData[iSink]);
-#endif
-#endif
              }}
        nSinks=iSinkDone;
 
@@ -976,44 +925,6 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
  double evprojtime=0.0;
  int ninv=src_evindices.size();
 
-
-
-
-
-
-
-#ifdef TESTING
-#ifdef EXTRA_LAPH_CHECKS
- {printLaph("Testing Dirac Clover matrix on arbitrary source vector");
- LattField field1(FieldSiteType::ColorSpinVector);
- //setConstantField(field1, complex<double>(0.7342, -0.6532));
- setVariablePhaseField(field1, {0.65321, -2.15327, 0.91235, -1.21193}, 1.502812);
- LattField field2(FieldSiteType::ColorSpinVector);
- applyCloverDirac(field2,field1,gaugeHandler->getData(),*uPtr,*qactionPtr);
- LattField field2check(FieldSiteType::ColorSpinVector);
- void *checkptr1=field1.getDataPtr();
- void *checkptr2=field2check.getDataPtr();
-// setVariablePhaseField(field1, {3.65321, -1.15327, -0.91235, 1.21193}, 1.26);
- MatQuda(checkptr2,checkptr1,&quda_inv_param);  // leaves answer,initial on device?
-
- printLaph("Comparing MatQuda result with quda_laph host result");
- compare_fields(field2check,field2);
- printLaph("Comparison DONE");}
-#endif
-#endif
-
-
-
-
-
-
-
-
-
-
-
-
-
      // loop over source laph eigvec indices and source spin
  
  for (int srcspin=1;srcspin<=int(Nspin);++srcspin){
@@ -1077,15 +988,6 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
        void *sol_checkptr=sol_check.getDataPtr();
        MatQuda(sol_checkptr,spinor_snk,&quda_inv_param);
        LaphEnv::compare_latt_fields(sol_check,ferm_src);} 
-
-#ifdef TESTING
-#ifdef EXTRA_LAPH_CHECKS
-    printLaph("Performing additional check on solution using quda_laph applyCloverDirac");
-    LattField sol_check(FieldSiteType::ColorSpinVector);
-    applyCloverDirac(sol_check,sinkBatchData[iSinkBatch],gaugeHandler->getData(),*uPtr,*qactionPtr);
-    compare_fields(sol_check,ferm_src); 
-#endif
-#endif
 
     if ((quda_inv_param.iter>0)&&(quda_inv_param.iter<int(invertPtr->getMaxIterations()))){
        sinkBatchInds[iSinkBatch] = srcev_ind;

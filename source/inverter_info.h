@@ -38,10 +38,10 @@ namespace LaphEnv {
 // *  Sample XML inputs are given below. All tags except <Name> are     *
 // *  optional, and the default values are given.                       *
 // *                                                                    *
-// *    Conjugate-Gradient on the Normal Equations:                     *
+// *    Conjugate-Gradient: solves M*M^dag*u=y then x=M^dag*u           *
 // *                                                                    *
 // *   <InverterInfo>                                                   *
-// *     <Name>CGNR</Name>                                              *
+// *     <Name>CG</Name>                                                *
 // *     <Tolerance>1.0e-10</Tolerance>                                 *
 // *     <MaxIterations>10000</MaxIterations>                           *
 // *     <ReliableDelta>0.01</ReliableDelta>                            *
@@ -305,11 +305,11 @@ class InverterInfo
 
   private:
 
-    void set_info_cgnr(XMLHandler& xmlr);
+    void set_info_cg(XMLHandler& xmlr);
 
-    void output_cgnr(XMLHandler& xmlout) const;
+    void output_cg(XMLHandler& xmlout) const;
  
-    void setQudaInvertParam_cgnr(QudaInvertParam& invParam) const;
+    void setQudaInvertParam_cg(QudaInvertParam& invParam) const;
 
     void set_info_bicgstab(XMLHandler& xmlr);
 
