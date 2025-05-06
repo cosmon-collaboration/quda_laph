@@ -89,6 +89,56 @@ cpu_code( const double _Complex *A , const int M , const int lda , const int str
   }
 }
 
+QudaBLASParam
+getQBLAS( const int m , const int lda , const int stride_a ,
+	  const int n , const int ldb , const int stride_b ,
+	  const int k , const int ldc , const int stride_c ,
+	  const int batch_count , const bool is_col_major )
+{
+  // do a zgemm
+  const __complex__ double alpha = 1.0, beta = 0.0;
+  QudaBLASParam cublas_param = newQudaBLASParam();
+  cublas_param.blas_type = QUDA_BLAS_GEMM ;
+  cublas_param.inv_mat_size = 0 ;
+  cublas_param.trans_a = QUDA_BLAS_OP_N;
+  cublas_param.trans_b = QUDA_BLAS_OP_N;
+  cublas_param.m = m;
+  cublas_param.n = n;
+  cublas_param.k = k;
+  cublas_param.lda = lda;
+  cublas_param.ldb = ldb;
+  cublas_param.ldc = ldc;
+  cublas_param.a_stride = stride_a ;
+  cublas_param.b_stride = stride_b ;
+  cublas_param.c_stride = stride_c ;
+  cublas_param.batch_count = batch_count;
+  cublas_param.alpha = (__complex__ double)alpha;  
+  cublas_param.beta  = (__complex__ double)beta;
+  if( is_col_major ) {
+    cublas_param.data_order = QUDA_BLAS_DATAORDER_COL;
+  } else {
+    cublas_param.data_order = QUDA_BLAS_DATAORDER_ROW;
+  }
+  cublas_param.data_type = QUDA_BLAS_DATATYPE_Z;
+  return cublas_param ;
+}
+
+void
+eigen_code( const double _Complex *A , const int m , const int lda , const int stride_a ,
+	    const double _Complex *B , const int n , const int ldb , const int stride_b ,
+	    double _Complex *C       , const int k , const int ldc , const int stride_c ,
+	    const int batch_count ,
+	    const bool is_col_major )
+{
+  QudaBLASParam cublas_param = getQBLAS( m , lda , stride_a ,
+					 n , ldb , stride_b ,
+					 k , ldc , stride_c ,
+					 batch_count , is_col_major ) ;
+
+  blas_lapack::generic::stridedBatchGEMM( (double _Complex*)A, (double _Complex*)B, C, cublas_param, QUDA_CPU_FIELD_LOCATION);
+}
+
+	  
 void
 gpu_code( const double _Complex *A , const int m , const int lda , const int stride_a ,
 	  const double _Complex *B , const int n , const int ldb , const int stride_b ,
@@ -120,30 +170,11 @@ gpu_code( const double _Complex *A , const int m , const int lda , const int str
   qudaMemcpy( d_A , A , a_bytes , qudaMemcpyHostToDevice ) ;
   qudaMemcpy( d_B , B , b_bytes , qudaMemcpyHostToDevice ) ;
 
-  // do a zgemm
-  const __complex__ double alpha = 1.0, beta = 0.0;
-  QudaBLASParam cublas_param = newQudaBLASParam();
-  cublas_param.trans_a = QUDA_BLAS_OP_N;
-  cublas_param.trans_b = QUDA_BLAS_OP_N;
-  cublas_param.m = m;
-  cublas_param.n = n;
-  cublas_param.k = k;
-  cublas_param.lda = lda;
-  cublas_param.ldb = ldb;
-  cublas_param.ldc = ldc;
-  cublas_param.a_stride = stride_a ;
-  cublas_param.b_stride = stride_b ;
-  cublas_param.c_stride = stride_c ;
-  cublas_param.batch_count = batch_count;
-  cublas_param.alpha = (__complex__ double)alpha;  
-  cublas_param.beta  = (__complex__ double)beta;
-  if( is_col_major ) {
-    cublas_param.data_order = QUDA_BLAS_DATAORDER_COL;
-  } else {
-    cublas_param.data_order = QUDA_BLAS_DATAORDER_ROW;
-  }
-  cublas_param.data_type = QUDA_BLAS_DATATYPE_Z;
-
+  QudaBLASParam cublas_param = getQBLAS( m , lda , stride_a ,
+					 n , ldb , stride_b ,
+					 k , ldc , stride_c ,
+					 batch_count , is_col_major ) ;
+ 
   blas_lapack::native::stridedBatchGEMM(d_A, d_B, d_C, cublas_param, QUDA_CUDA_FIELD_LOCATION);
 
   qudaMemcpy( C , d_C , c_bytes , qudaMemcpyDeviceToHost ) ;
@@ -183,7 +214,7 @@ print_matrix( const double _Complex *A , const int M , const int lda , const int
 static void
 run_test( const double _Complex *A , const int m , const int lda , const int stride_a ,
 	  const double _Complex *B , const int n , const int ldb , const int stride_b ,
-	  const int k , const int ldc , const int stride_c ,
+                                     const int k , const int ldc , const int stride_c ,
 	  const int batch_count ,
 	  const bool is_col_major )
 {
@@ -191,7 +222,8 @@ run_test( const double _Complex *A , const int m , const int lda , const int str
   print_matrix( A , m , k , stride_a , batch_count , is_col_major ) ;
   printf( "\n***** B matrix *****\n" ) ;
   print_matrix( B , k , n , stride_b , batch_count , is_col_major ) ;
-  double _Complex Ccpu[ n*m*batch_count ] , Cgpu[ n*m*batch_count ] ;
+  
+  double _Complex Ccpu[ n*m*batch_count ] , Cgpu[ n*m*batch_count ] , Ceig[ n*m*batch_count ] , Cint[ n*m*batch_count ] ;
   cpu_code( A , m , lda , stride_a ,
 	    B , n , ldb , stride_b ,
 	    Ccpu , k , ldc , stride_c ,
@@ -206,14 +238,39 @@ run_test( const double _Complex *A , const int m , const int lda , const int str
 	    Cgpu , k , ldc , stride_c ,
 	    batch_count , is_col_major ) ;
   printf( "\n***** C matrix (gpu) *****\n" ) ;
-  //print_matrix( Cgpu , m , n , stride_c , batch_count , is_col_major ) ;
   print_matrix( Cgpu , 2 , 4, 1, 1, false ) ;
+  
+  eigen_code( A , m , lda , stride_a ,
+	      B , n , ldb , stride_b ,
+	      Ceig , k , ldc , stride_c ,
+	      batch_count , is_col_major ) ;
+  printf( "\n***** C matrix (eig lapack) *****\n" ) ;
+  print_matrix( Ceig , 2 , 4, 1, 1, false ) ;
+  //print_matrix( Cgpu , m , n , stride_c , batch_count , is_col_major ) ;
 
+  QudaBLASParam cublas_param = getQBLAS( m , lda , stride_a ,
+					 n , ldb , stride_b ,
+					 k , ldc , stride_c ,
+					 batch_count , is_col_major ) ;
+  blasGEMMQuda( (void*)A , (void*)B , Cint , QUDA_BOOLEAN_FALSE , cublas_param ) ;
+  printf( "\n***** C matrix (interface lapack) *****\n" ) ;
+  print_matrix( Cint , 2 , 4, 1, 1, false ) ;
+  
   double diff = 0. ;
   for( int i = 0 ; i < n*m*batch_count ; i++ ) {
     diff += cabs( Ccpu[i] - Cgpu[i] ) ;
   }
   printf( "\n->Summed diff GPU-CPU %e<-\n\n" , diff ) ;
+  diff = 0. ;
+  for( int i = 0 ; i < n*m*batch_count ; i++ ) {
+    diff += cabs( Ccpu[i] - Ceig[i] ) ;
+  }
+  printf( "\n->Summed diff Interface-CPU %e<-\n\n" , diff ) ;
+  diff = 0. ;
+  for( int i = 0 ; i < n*m*batch_count ; i++ ) {
+    diff += cabs( Ccpu[i] - Cint[i] ) ;
+  }
+  printf( "\n->Summed diff Eigen-CPU %e<-\n\n" , diff ) ;
 }
 
 int main(int argc, char *argv[]) {
@@ -355,6 +412,7 @@ int main(int argc, char *argv[]) {
 	      2 , false ) ; 
   }
 #endif
+  
   
   finalize();
 
