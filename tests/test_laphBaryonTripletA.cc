@@ -45,15 +45,15 @@ static void
 cpuColorContract( void *A , void *B , void *result , const int X[4] )
 {
   const int Nsites = X[0]*X[1]*X[2]*X[3] ;
-  std::complex<double> *ptA = (std::complex<double>*)A ;
-  std::complex<double> *ptB = (std::complex<double>*)B ;
+  const std::complex<double> *ptA = (const std::complex<double>*)A ;
+  const std::complex<double> *ptB = (const std::complex<double>*)B ;
   std::complex<double> *ptC = (std::complex<double>*)result ;
   #pragma omp parallel for
   for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
     // simple inner product over color A_{c}B_{c}
     ptC[i]  = ptA[0+3*i]*(ptB[0+3*i]) ;
     ptC[i] += ptA[1+3*i]*(ptB[1+3*i]) ;
-    ptC[i] += ptA[2+3*i]*(ptB[2+3*i]) ;    
+    ptC[i] += ptA[2+3*i]*(ptB[2+3*i]) ;
   }
 }
 

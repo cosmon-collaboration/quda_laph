@@ -21,7 +21,7 @@
 using namespace LaphEnv ;
 using namespace quda ;
 
-#define VERY_VERBOSE
+//#define VERY_VERBOSE
 
 // ok so what is this doing?
 void
