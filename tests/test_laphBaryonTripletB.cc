@@ -21,7 +21,7 @@
 using namespace LaphEnv ;
 using namespace quda ;
 
-//#define VERY_VERBOSE
+#define VERY_VERBOSE
 
 // ok so what is this doing?
 void
@@ -122,9 +122,9 @@ alamode( const int n1,
   //getProfileBaryonKernelModeTripletsB().TPSTART(QUDA_PROFILE_INIT);
    
   // number of EV indices (in first position) that this rank deals with
-  const int nRanks = 1 ; //comm_size();  
+  const int nRanks = quda::comm_size();  
   const int nSubEv = nEv / nRanks;
-  const int iRank  = 0 ; //comm_rank();
+  const int iRank  = quda::comm_rank();
 
   // check we are safe to cast into a Complex (= std::complex<double>)
   //if (sizeof(Complex) != sizeof(double _Complex)) {
@@ -134,7 +134,7 @@ alamode( const int n1,
   const size_t OneGB = 1024*1024*1024;
   const size_t data_coeffs1_bytes = n1*nEv*2*QUDA_DOUBLE_PRECISION;
   const size_t data_coeffs2_bytes = n2*nEv*2*QUDA_DOUBLE_PRECISION;
-  const size_t data_coeffs3_bytes = std::max(n3,2)*nEv*2*QUDA_DOUBLE_PRECISION;  
+  const size_t data_coeffs3_bytes = n3*nEv*2*QUDA_DOUBLE_PRECISION;  
   const size_t data_q3_bytes      = nSubEv*nEv*n3*2*QUDA_DOUBLE_PRECISION;
 
   // only create one temp
@@ -142,11 +142,20 @@ alamode( const int n1,
   const size_t data_ret_bytes = nMom*n1*n2*n3*2*QUDA_DOUBLE_PRECISION;
 
   // Allocate required memory
-  size_t total_bytes = data_tmp_bytes + data_q3_bytes + data_coeffs3_bytes ;
-  void *d_tmp = pool_device_malloc(data_tmp_bytes);
-  void *d_q3  = pool_device_malloc(data_q3_bytes);
+  const size_t total_bytes = data_tmp_bytes + data_q3_bytes + data_coeffs3_bytes
+    +data_coeffs1_bytes+data_coeffs2_bytes+data_tmp_bytes+data_ret_bytes;
+  void *d_coeffs1 = pool_device_malloc(data_coeffs1_bytes);
+  void *d_coeffs2 = pool_device_malloc(data_coeffs2_bytes);
+  void *d_ret     = pool_device_malloc(data_ret_bytes);  
+  void *d_tmp     = pool_device_malloc(data_tmp_bytes);
+  void *d_q3      = pool_device_malloc(data_q3_bytes);
   void *d_coeffs3 = pool_device_malloc(data_coeffs3_bytes);
   if (getVerbosity() >= QUDA_VERBOSE) {
+    printfQuda("coeffs1 %gGB | coeffs2 %gGB | ret %gGB | total %gGB\n",
+	       (double)data_coeffs1_bytes/OneGB,
+	       (double)data_coeffs2_bytes/OneGB,
+	       (double)data_ret_bytes/OneGB,
+	       (double)total_bytes/OneGB);
     printfQuda("mtb %gGB | q3 %gGB | coeffs3 %gGB | total %gGB\n",
 	       (double)data_tmp_bytes/(OneGB),
 	       (double)data_q3_bytes/(OneGB),
@@ -154,6 +163,14 @@ alamode( const int n1,
 	       (double)total_bytes/(OneGB)); 
   }
   
+  //getProfileBaryonKernelModeTripletsB().TPSTOP(QUDA_PROFILE_INIT);
+
+  //getProfileBaryonKernelModeTripletsB().TPSTOP(QUDA_PROFILE_COMPUTE);
+     
+  // Allocate the rest of the arrays
+  //getProfileBaryonKernelModeTripletsB().TPSTART(QUDA_PROFILE_INIT);
+  //getProfileBaryonKernelModeTripletsB().TPSTOP(QUDA_PROFILE_INIT);
+
   QudaBLASParam cublas_param_1 = newQudaBLASParam();
   cublas_param_1.trans_a = QUDA_BLAS_OP_N;
   cublas_param_1.trans_b = QUDA_BLAS_OP_T;
@@ -167,30 +184,6 @@ alamode( const int n1,
   cublas_param_1.alpha = 1.0 ; cublas_param_1.beta = 0.0 ;
   cublas_param_1.data_order = QUDA_BLAS_DATAORDER_ROW;
   cublas_param_1.data_type = QUDA_BLAS_DATATYPE_Z;
-  //getProfileBaryonKernelModeTripletsB().TPSTOP(QUDA_PROFILE_INIT);
-
-  //getProfileBaryonKernelModeTripletsB().TPSTOP(QUDA_PROFILE_COMPUTE);
-     
-  // Allocate the rest of the arrays
-  //getProfileBaryonKernelModeTripletsB().TPSTART(QUDA_PROFILE_INIT);
-  total_bytes += data_coeffs1_bytes+data_coeffs2_bytes+data_tmp_bytes+data_ret_bytes;
-  void *d_coeffs1 = pool_device_malloc(data_coeffs1_bytes);
-  void *d_coeffs2 = pool_device_malloc(data_coeffs2_bytes);
-  void *d_ret = pool_device_malloc(data_ret_bytes);  
-  if (getVerbosity() >= QUDA_VERBOSE) {
-    printfQuda("coeffs1 %gGB | coeffs2 %gGB | ret %gGB | total %gGB\n",
-	       (double)data_coeffs1_bytes/OneGB,
-	       (double)data_coeffs2_bytes/OneGB,
-	       (double)data_ret_bytes/OneGB,
-	       (double)total_bytes/OneGB);
-  }
-  //getProfileBaryonKernelModeTripletsB().TPSTOP(QUDA_PROFILE_INIT);
-
-  // Copy host data to device
-  //getProfileBaryonKernelModeTripletsB().TPSTART(QUDA_PROFILE_H2D);  
-  qudaMemcpy(d_coeffs1, host_coeffs1, data_coeffs1_bytes, qudaMemcpyHostToDevice);  
-  qudaMemcpy(d_coeffs2, host_coeffs2, data_coeffs2_bytes, qudaMemcpyHostToDevice);  
-  //getProfileBaryonKernelModeTripletsB().TPSTOP(QUDA_PROFILE_H2D);
 
   // Initialise teh final ZGEMMs
   //getProfileBaryonKernelModeTripletsB().TPSTART(QUDA_PROFILE_INIT);
@@ -228,7 +221,10 @@ alamode( const int n1,
   qudaMemset( d_tmp , 0 , data_tmp_bytes ) ;
 
   //getProfileBaryonKernelModeTripletsB().TPSTART(QUDA_PROFILE_H2D);  
+  qudaMemcpy(d_coeffs1, host_coeffs1, data_coeffs1_bytes, qudaMemcpyHostToDevice);  
+  qudaMemcpy(d_coeffs2, host_coeffs2, data_coeffs2_bytes, qudaMemcpyHostToDevice);  
   qudaMemcpy(d_coeffs3, host_coeffs3, data_coeffs3_bytes, qudaMemcpyHostToDevice);  
+  //getProfileBaryonKernelModeTripletsB().TPSTOP(QUDA_PROFILE_H2D);
 
   // Compute ZGEMMs
   //getProfileBaryonKernelModeTripletsB().TPSTART(QUDA_PROFILE_COMPUTE);  
@@ -262,6 +258,7 @@ alamode( const int n1,
   //getProfileBaryonKernelModeTripletsB().TPSTART(QUDA_PROFILE_FREE);
   pool_device_free(d_coeffs1);
   pool_device_free(d_coeffs2);
+  pool_device_free(d_coeffs3);
   pool_device_free(d_tmp);
   pool_device_free(d_q3);
   pool_device_free(d_ret);  
@@ -284,9 +281,9 @@ int main(int argc, char *argv[]) {
 #endif
   assert( global == 1 ) ; // for now
 
-  const int Nev = 256 ;
+  const int Nev = 192 ;
   const int NsubEv = Nev/global ;
-  const int nmom = 8 , n1 = 2 , n2 = 3 , n3 = 4 ;
+  const int nmom = 24 , n1 = 2 , n2 = 3 , n3 = 4 ;
 
   static std::uniform_real_distribution<double> unif(0.0,1.0) ;
   std::mt19937 mt ;
@@ -309,17 +306,9 @@ int main(int argc, char *argv[]) {
   }
 
   double _Complex host_ret_arr[ nmom*n1*n2*n3 ] = {} ;
-  alamode( n1, n2, n3,
-	   nmom,
-	   Nev ,
-	   host_coeffs1 ,
-	   host_coeffs2 ,
-	   host_coeffs3 ,
-	   host_mode_trip_buf ,
-	   host_ret_arr ) ;
-
-  /*
-  laphBaryonKernelComputeModeTripletB( n1, n2, n3,
+  alamode
+    //laphBaryonKernelComputeModeTripletB
+    ( n1, n2, n3,
 				       nmom,
 				       Nev ,
 				       host_coeffs1 ,
@@ -327,20 +316,12 @@ int main(int argc, char *argv[]) {
 				       host_coeffs3 ,
 				       host_mode_trip_buf ,
 				       host_ret_arr ) ;
-  */
   memset( host_ret_arr, 0.0 , nmom*n1*n2*n3*sizeof( double _Complex) ) ;
   StopWatch gpu;
   gpu.start() ;
-    alamode( n1, n2, n3,
-	   nmom,
-	   Nev ,
-	   host_coeffs1 ,
-	   host_coeffs2 ,
-	   host_coeffs3 ,
-	   host_mode_trip_buf ,
-	   host_ret_arr ) ;
-    /*
-  laphBaryonKernelComputeModeTripletB( n1, n2, n3,
+  alamode
+    //laphBaryonKernelComputeModeTripletB
+      ( n1, n2, n3,
 				       nmom,
 				       Nev ,
 				       host_coeffs1 ,
@@ -348,7 +329,6 @@ int main(int argc, char *argv[]) {
 				       host_coeffs3 ,
 				       host_mode_trip_buf ,
 				       host_ret_arr ) ;
-    */
   gpu.stop() ;
   const double GPUtime = gpu.getTimeInSeconds() ;
   printLaph(make_strf("\nGPU modetripletB in = %g seconds\n", GPUtime )) ;

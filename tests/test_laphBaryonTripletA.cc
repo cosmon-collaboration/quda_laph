@@ -446,27 +446,16 @@ int main(int argc, char *argv[]) {
 
   const size_t nEvChoose3 = Nev*(Nev-1)*(Nev-2)/6;
   double _Complex *retGPU = (double _Complex*)calloc( nmom*nEvChoose3 , sizeof( double _Complex  ) );
-
-  alamode( nmom, Nev,
-				       blockSizeMomProj,
-				       evList.data() ,
-				       host_mom ,
-				       inv_param,
-				       retGPU, X ) ;
-
-	  /*
   laphBaryonKernelComputeModeTripletA( nmom, Nev,
 				       blockSizeMomProj,
 				       evList.data() ,
 				       host_mom ,
 				       inv_param,
 				       retGPU, X ) ;
-	  */
   memset( retGPU , 0.0 , nmom*nEvChoose3*sizeof( double _Complex )) ;
 
   StopWatch gpu ;
   gpu.start() ;
-  /*
   laphBaryonKernelComputeModeTripletA( nmom,
 				       Nev,
 				       blockSizeMomProj,
@@ -475,16 +464,6 @@ int main(int argc, char *argv[]) {
 				       inv_param,
 				       retGPU,
 				       X ) ;
-  */
-  alamode( nmom,
-	   Nev,
-	   blockSizeMomProj,
-	   evList.data() ,
-	   host_mom ,
-	   inv_param,
-	   retGPU,
-	   X ) ;
-
   gpu.stop() ;
   const double GPUtime = gpu.getTimeInSeconds() ;
   printLaph(make_strf("\nGPU modetripletA in = %g seconds\n", GPUtime )) ;

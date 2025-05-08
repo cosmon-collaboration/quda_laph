@@ -416,20 +416,6 @@ int main(int argc, char *argv[]) {
   inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
   
   double _Complex retGPU[ n1*n2*n3*nmom ] = {} ;
-  alamode( n1, n2, n3,
-	   nmom,
-	   coeffs1 ,
-	   coeffs2 ,
-	   coeffs3 ,
-	   host_mom ,
-	   Nev ,
-	   evList.data(),
-	   inv_param,
-	   retGPU,
-	   blockSizeMomProj,
-	   X ) ;
-
-	  /*
   laphBaryonKernel( n1, n2, n3,
 		    nmom,
 		    coeffs1 ,
@@ -442,23 +428,10 @@ int main(int argc, char *argv[]) {
 		    retGPU,
 		    blockSizeMomProj,
 		    X ) ;
-	  */
+  
   StopWatch GPU ;
   GPU.start() ;
-  memset( retGPU , 0.0 , n1*n2*n3*sizeof(double _Complex)) ;
-    alamode( n1, n2, n3,
-	   nmom,
-	   coeffs1 ,
-	   coeffs2 ,
-	   coeffs3 ,
-	   host_mom ,
-	   Nev ,
-	   evList.data(),
-	   inv_param,
-	   retGPU,
-	   blockSizeMomProj,
-	   X ) ;
-    /*
+  memset( retGPU , 0.0 , nmom*n1*n2*n3*sizeof(double _Complex)) ;
   laphBaryonKernel( n1, n2, n3,
 		    nmom,
 		    coeffs1 ,
@@ -471,7 +444,6 @@ int main(int argc, char *argv[]) {
 		    retGPU,
 		    blockSizeMomProj,
 		    X ) ;
-    */
   GPU.stop() ;
   const double GPUtime = GPU.getTimeInSeconds() ;
   printLaph(make_strf("\nGPU baryonkernel in = %g seconds\n", GPUtime )) ;

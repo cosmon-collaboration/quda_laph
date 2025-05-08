@@ -270,7 +270,7 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 8 , blockSizeMomProj = 4 , n1 = 2 , n2 = 2 ;
+  const int nmom = 32 , blockSizeMomProj = 4 , n1 = 4 , n2 = 4 ;
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
@@ -311,29 +311,29 @@ int main(int argc, char *argv[]) {
   inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
   inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
 
-  alamode( n1, n2,
-	   nmom,
-	   blockSizeMomProj,
-	   evList.data() , 
-	   evList.data() ,
-	   host_mom ,
-	   inv_param ,
-	   GPU_ret ,
-	   X ) ;  
+  laphCurrentKernel( n1, n2,
+		     nmom,
+		     blockSizeMomProj,
+		     evList.data() , 
+		     evList.data() ,
+		     host_mom ,
+		     inv_param ,
+		     GPU_ret ,
+		     X ) ;  
 
   // GPU version
   StopWatch gpu ;
   gpu.start() ;
   memset( GPU_ret , 0.0 , n1*n2*nmom*X[3]*sizeof(double _Complex));
-  alamode( n1, n2,
-	   nmom,
-	   blockSizeMomProj,
-	   evList.data() , 
-	   evList.data() ,
-	   host_mom ,
-	   inv_param ,
-	   GPU_ret ,
-	   X ) ;
+  laphCurrentKernel( n1, n2,
+		     nmom,
+		     blockSizeMomProj,
+		     evList.data() , 
+		     evList.data() ,
+		     host_mom ,
+		     inv_param ,
+		     GPU_ret ,
+		     X ) ;
   gpu.stop();
   const double GPUtime = gpu.getTimeInSeconds();
   printLaph(make_strf("\nGPU current kernel in = %g seconds\n", GPUtime)) ;
