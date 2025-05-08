@@ -278,14 +278,13 @@ void run_tasks(XMLHandler &xml_in, const int ntasks) {
 void finalize(void) {
 #ifdef ARCH_PARALLEL
   comm_barrier();
-#endif
+#endif  
   QudaInfo::clearDevice();
   rolex.stop();
   printLaph(make_strf("\n\nQUDA_LAPH: total time = %g secs",
                       rolex.getTimeInSeconds()));
   printLaph("QUDA_LAPH: completion");
   output_datetime();
-
   endQuda();
 #ifdef ARCH_PARALLEL
   quda::comm_finalize();

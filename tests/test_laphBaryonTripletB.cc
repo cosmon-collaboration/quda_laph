@@ -174,13 +174,16 @@ alamode( const int n1,
   QudaBLASParam cublas_param_1 = newQudaBLASParam();
   cublas_param_1.trans_a = QUDA_BLAS_OP_N;
   cublas_param_1.trans_b = QUDA_BLAS_OP_T;
-  cublas_param_1.m = nSubEv*nEv;
+  cublas_param_1.m = nEv;
   cublas_param_1.n = n3;
   cublas_param_1.k = nEv;
   cublas_param_1.lda = nEv;
   cublas_param_1.ldb = nEv;
   cublas_param_1.ldc = n3;
-  cublas_param_1.batch_count = 1;
+  cublas_param_1.a_stride = nEv*nEv ;
+  cublas_param_1.b_stride = 0 ;
+  cublas_param_1.c_stride = n3*nEv ;
+  cublas_param_1.batch_count = nSubEv;
   cublas_param_1.alpha = 1.0 ; cublas_param_1.beta = 0.0 ;
   cublas_param_1.data_order = QUDA_BLAS_DATAORDER_ROW;
   cublas_param_1.data_type = QUDA_BLAS_DATATYPE_Z;
@@ -206,12 +209,18 @@ alamode( const int n1,
   QudaBLASParam cublas_param_3 = newQudaBLASParam();
   cublas_param_3.trans_a = cublas_param_3.trans_b = QUDA_BLAS_OP_N;
   cublas_param_3.m = n1;
-  cublas_param_3.n = n2*n3;
+  //cublas_param_3.n = n2*n3;
+  cublas_param_3.n = n3;
   cublas_param_3.k = nSubEv;
   cublas_param_3.lda = nEv;
   cublas_param_3.ldb = n2*n3;
-  cublas_param_3.ldc = n2*n3;    
-  cublas_param_3.batch_count = 1 ;
+  cublas_param_3.ldc = n2*n3;
+
+  cublas_param_3.a_stride = 0 ;
+  cublas_param_3.b_stride = n3 ;
+  cublas_param_3.c_stride = n3 ;
+  
+  cublas_param_3.batch_count = n2 ;
   cublas_param_3.alpha = 1.0 ; cublas_param_3.beta = 0.0 ;
   cublas_param_3.data_order = QUDA_BLAS_DATAORDER_ROW;
   cublas_param_3.data_type = QUDA_BLAS_DATATYPE_Z;
@@ -274,6 +283,7 @@ int main(int argc, char *argv[]) {
   if( init_quda_laph(argc, argv, xml_in) != 0 ) {
     exit(1) ;
   }
+  setVerbosityQuda(QUDA_SUMMARIZE, "#" , stdout ) ;
 
   int global = 1 ;
 #ifdef ARCH_PARALLEL
@@ -281,9 +291,9 @@ int main(int argc, char *argv[]) {
 #endif
   assert( global == 1 ) ; // for now
 
-  const int Nev = 192 ;
+  const int Nev = 64 ;
   const int NsubEv = Nev/global ;
-  const int nmom = 24 , n1 = 2 , n2 = 3 , n3 = 4 ;
+  const int nmom = 40 , n1 = 4 , n2 = 4 , n3 = 4 ;
 
   static std::uniform_real_distribution<double> unif(0.0,1.0) ;
   std::mt19937 mt ;
@@ -306,29 +316,29 @@ int main(int argc, char *argv[]) {
   }
 
   double _Complex host_ret_arr[ nmom*n1*n2*n3 ] = {} ;
-  alamode
-    //laphBaryonKernelComputeModeTripletB
+  //alamode
+  laphBaryonKernelComputeModeTripletB
     ( n1, n2, n3,
-				       nmom,
-				       Nev ,
-				       host_coeffs1 ,
-				       host_coeffs2 ,
-				       host_coeffs3 ,
-				       host_mode_trip_buf ,
-				       host_ret_arr ) ;
+      nmom,
+      Nev ,
+      host_coeffs1 ,
+      host_coeffs2 ,
+      host_coeffs3 ,
+      host_mode_trip_buf ,
+      host_ret_arr ) ;
   memset( host_ret_arr, 0.0 , nmom*n1*n2*n3*sizeof( double _Complex) ) ;
   StopWatch gpu;
   gpu.start() ;
-  alamode
-    //laphBaryonKernelComputeModeTripletB
+  //alamode
+  laphBaryonKernelComputeModeTripletB
       ( n1, n2, n3,
-				       nmom,
-				       Nev ,
-				       host_coeffs1 ,
-				       host_coeffs2 ,
-				       host_coeffs3 ,
-				       host_mode_trip_buf ,
-				       host_ret_arr ) ;
+	nmom,
+	Nev ,
+	host_coeffs1 ,
+	host_coeffs2 ,
+	host_coeffs3 ,
+	host_mode_trip_buf ,
+	host_ret_arr ) ;
   gpu.stop() ;
   const double GPUtime = gpu.getTimeInSeconds() ;
   printLaph(make_strf("\nGPU modetripletB in = %g seconds\n", GPUtime )) ;
