@@ -1358,7 +1358,7 @@ void PerambulatorHandler::doACheck(const PerambComputation& pcomp, int src_spin,
                 flag=false;}}}}}}}
 
  if (flag){
-    fout << "     Checks OK"<<endl;;}
+    fout << "     Checks OK"<<endl;}
  else{
     fout << "     Some checks FAILED"<<endl;}
  fout.close();
