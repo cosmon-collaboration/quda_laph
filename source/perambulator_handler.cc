@@ -9,11 +9,6 @@
 #include "cblas.h"
 #endif
 
-//#define EXTRA_LAPH_CHECKS
-
-    // STILL TO DO:  single asynchronous thread for output so can continue next computations
-    //                   while output occurs
-
 using namespace std;
 
 typedef std::complex<double> dcmplx;
@@ -180,6 +175,9 @@ void PerambulatorHandler::clear()
     delete gSmearPtr;
     delete qSmearPtr;
     delete qactionPtr;
+    if (QudaInfo::clover_on_device){
+       freeCloverQuda();
+       QudaInfo::clover_on_device=false;}  // delete clover in case next task uses different kappa
     delete fPtr;
     delete invertPtr;
     if (preconditioner){
@@ -607,38 +605,6 @@ void PerambulatorHandler::computePerambulators(bool extra_soln_check, bool print
        printLaph(make_str(" Time to set up clover term was ",clovertime," seconds"));
        QudaInfo::clover_on_device=true;}}
 
-
-
-
-/*
-printLaph("CLOVER FIELD");
-const double* tmp=reinterpret_cast<const double*>(h1);
-const double* tmp1=reinterpret_cast<const double*>(h1);
-for (int i=0;i<72;++i,++tmp){
-   printLaph(make_strf("clover[%d] = %18.12f",i,*tmp/(*tmp1)));}
-tmp=reinterpret_cast<const double*>(h2);
-tmp1=reinterpret_cast<const double*>(h2);
-for (int i=0;i<72;++i,++tmp){
-   printLaph(make_strf("clover-inverse[%d] = %18.12f",i,*tmp/(*tmp1)));}
-*/
-
-
-//  double z;
-//  void* fmunu=quda::gaugePrecise;
-//  for (int k=0;k<24;++k){
-//     cudaMemcpy(fmunu, &z, sizeof(double), cudaMemcpyDeviceToHost);
-//     logQuda(QUDA_VERBOSE,"Fmunu double number %d is %f\n",k,z);}
-
-
-
-
-
-
-
-
-
-
-
      // load the LapH eigenvectors onto host, store pointers
  rolex.reset(); rolex.start();
  int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
@@ -991,6 +957,7 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
        void *sol_checkptr=sol_check.getDataPtr();
        MatQuda(sol_checkptr,spinor_snk,&quda_inv_param);
        LaphEnv::compare_latt_fields(sol_check,ferm_src);} 
+
     if (success){
        sinkBatchInds[iSinkBatch] = srcev_ind;
        iSinkBatch++;}
