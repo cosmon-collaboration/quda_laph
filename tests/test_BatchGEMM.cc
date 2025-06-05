@@ -157,9 +157,9 @@ gpu_code( const double _Complex *A , const int m , const int lda , const int str
     Csize = (stride_c==0)? m*n   : m*n*batch_count ;
   }
   
-  printf( "Asize %zu != %zu\n" , Asize , 2*6 ) ;
-  printf( "Bsize %zu != %zu\n" , Bsize , 4*6 ) ;
-  printf( "Csize %zu != %zu\n" , Csize , 2*4 ) ;
+  printf( "Asize %zu != %d\n" , Asize , 2*6 ) ;
+  printf( "Bsize %zu != %d\n" , Bsize , 4*6 ) ;
+  printf( "Csize %zu != %d\n" , Csize , 2*4 ) ;
   
   const size_t a_bytes = Asize*sizeof(double _Complex) ;
   const size_t b_bytes = Bsize*sizeof(double _Complex) ;
