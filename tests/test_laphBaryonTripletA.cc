@@ -16,6 +16,8 @@
 
 #include <random>
 
+#include <omp.h>
+
 using namespace LaphEnv ;
 using namespace quda ;
 
@@ -140,7 +142,6 @@ cpu_codev2( const int nMom,
 		ptA[0+3*idx]*(ptB[0+3*idx]) +\
 		ptA[1+3*idx]*(ptB[1+3*idx]) +\
 		ptA[2+3*idx]*(ptB[2+3*idx]) ;
-              #pragma unroll(nMom)
 	      for( int p = 0 ; p < nMom ; p++ ) {
 		sum[T+X[3]*p] += p2[i+p*nSp]*Con ;
 	      }
@@ -193,7 +194,6 @@ cpu_codev3( const int nMom,
 	    const double _Complex *p2 = (const double _Complex*)host_mom+i ;
 	    // color contraction
 	    const double _Complex Con = Diq[0]*(pt[cEv][0])+Diq[1]*(pt[cEv][1])+Diq[2]*(pt[cEv][2]) ;
-            #pragma unroll
 	    for( int p = 0 ; p < nMom ; p++ ) {
 	      return_arr[T+X[3]*(idx+nEvC3*p)] += p2[p*nSp]*Con ;
 	    }
@@ -217,7 +217,6 @@ void alamode( const int nMom,
 {
   //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_TOTAL);
   
-  // important that this only works on spatial nSites
   const size_t nSp    = X[0]*X[1]*X[2];
   const size_t nSites = nSp*X[3] ;
   const size_t nEvChoose3 = nEv*(nEv-1)/2*(nEv-2)/3;
@@ -389,10 +388,10 @@ int main(int argc, char *argv[]) {
   setVerbosityQuda(QUDA_VERBOSE, "#" , stdout ) ;
   
   // call rephase here
-  const int Nev = 4 ;
+  const int Nev = 48 ;
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
 
-  std::cout<<"Constant Eigvecs"<<std::endl ;
+  std::cout<<"Constant Eigvecs :: "<< Nev <<std::endl ;
   set_constant( laphEigvecs ) ;
 
   std::vector<void*> evList( Nev ) ;
@@ -400,8 +399,7 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 4 ;
-  const int blockSizeMomProj = 4 ;
+  const int nmom = 40 ;
   const int X[4] = {
     LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
@@ -409,7 +407,6 @@ int main(int argc, char *argv[]) {
     LayoutInfo::getRankLattExtents()[3] } ;
   const int nspat  = X[0]*X[1]*X[2] ;
 
-  std::cout<<"nmom "<<nmom<<" | block "<<blockSizeMomProj<<std::endl ;
   
   double _Complex *host_mom = (double _Complex*)calloc( nmom*nspat , sizeof( double _Complex ) ) ;
 
@@ -441,41 +438,46 @@ int main(int argc, char *argv[]) {
   inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
   inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
 
-
   const size_t nEvChoose3 = Nev*(Nev-1)*(Nev-2)/6;
   double _Complex *retGPU = (double _Complex*)calloc( X[3]*nmom*nEvChoose3 , sizeof( double _Complex  ) );
-  alamode(
-  //laphBaryonKernelComputeModeTripletA(
-				      nmom, Nev,
-				       blockSizeMomProj,
-				       evList.data() ,
-				       host_mom ,
-				       inv_param,
-				       retGPU, X ) ;
-  memset( retGPU , 0.0 , X[3]*nmom*nEvChoose3*sizeof( double _Complex )) ;
 
-  StopWatch gpu ;
-  gpu.start() ;
-  alamode(
-  //laphBaryonKernelComputeModeTripletA(
-				      nmom,
-				       Nev,
-				       blockSizeMomProj,
-				       evList.data() ,
-				       host_mom ,
-				       inv_param,
-				       retGPU,
-				       X ) ;
-  gpu.stop() ;
-  const double GPUtime = gpu.getTimeInSeconds() ;
-  printLaph(make_strf("\nGPU modetripletA in = %g seconds\n", GPUtime )) ;
+  for( int blockSizeMomProj = 8 ; blockSizeMomProj < 2048 ; blockSizeMomProj += 8 ) {
+    if( nEvChoose3%blockSizeMomProj != 0 ) continue ;
+    std::cout<<"nmom "<<nmom<<" | block "<<blockSizeMomProj<<std::endl ;
+    //alamode(
+    laphBaryonKernelComputeModeTripletA(
+					nmom, Nev,
+					blockSizeMomProj,
+					evList.data() ,
+					host_mom ,
+					inv_param,
+					retGPU, X ) ;
+    memset( retGPU , 0.0 , X[3]*nmom*nEvChoose3*sizeof( double _Complex )) ;
+
+    StopWatch gpu ;
+    gpu.start() ;
+    //  alamode(
+    laphBaryonKernelComputeModeTripletA(
+					nmom,
+					Nev,
+					blockSizeMomProj,
+					evList.data() ,
+					host_mom ,
+					inv_param,
+					retGPU,
+					X ) ;
+    gpu.stop() ;
+    const double GPUtime = gpu.getTimeInSeconds() ;
+    printLaph(make_strf("\nGPU modetripletA in = %g seconds\n", GPUtime )) ;
+  }
 
   double _Complex *retCPU = (double _Complex*)calloc( X[3]*nmom*nEvChoose3 , sizeof( double _Complex  ) );
+  /*
   StopWatch cpu ;
   cpu.start() ;
   //cpu_code( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
-  cpu_codev2( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
-  //cpu_codev3( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
+  //cpu_codev2( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
+  cpu_codev3( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
   cpu.stop() ;
   const double CPUtime = cpu.getTimeInSeconds() ;
   printLaph(make_strf("\nCPUv3 modetripletA in = %g seconds\n", CPUtime ));
@@ -483,6 +485,7 @@ int main(int argc, char *argv[]) {
   printf( "\n*************************************\n" ) ;
   printf( "-----> GPU speedup factor %gx\n" , CPUtime/GPUtime ) ;
   printf( "*************************************\n\n" ) ;
+  */
   
   // test outputs
   printf( "CPU == GPU\n" ) ;

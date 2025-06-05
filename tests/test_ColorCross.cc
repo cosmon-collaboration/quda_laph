@@ -211,7 +211,8 @@ int main(int argc, char *argv[]) {
 #ifdef ARCH_PARALLEL
   MPI_Comm_size( MPI_COMM_WORLD , &global ) ;
 #endif
-
+  setVerbosityQuda(QUDA_VERBOSE, "#" , stdout ) ;
+  
   const int Nev = 16 ;
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
   set_constant( laphEigvecs ) ;

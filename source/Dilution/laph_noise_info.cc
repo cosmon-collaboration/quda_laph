@@ -1,6 +1,6 @@
+#include <cstdint>
 #include "laph_noise_info.h"
 #include "laph_stdio.h"
-#include <cstdint>
 
 namespace LaphEnv {
 

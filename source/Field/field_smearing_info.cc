@@ -34,7 +34,7 @@ GluonSmearingInfo &GluonSmearingInfo::operator=(const GluonSmearingInfo &in) {
 
 void GluonSmearingInfo::checkEqual(const GluonSmearingInfo &in) const {
   if ((linkIterations != in.linkIterations) ||
-      (abs(linkStapleWeight - in.linkStapleWeight) > 1e-12)) {
+      (std::abs(linkStapleWeight - in.linkStapleWeight) > 1e-12)) {
     std::cerr << "GluonSmearingInfo checkEqual failed" << std::endl;
     std::cerr << "LHS:" << std::endl
               << output() << std::endl
@@ -46,7 +46,7 @@ void GluonSmearingInfo::checkEqual(const GluonSmearingInfo &in) const {
 
 bool GluonSmearingInfo::operator==(const GluonSmearingInfo &in) const {
   return ((linkIterations == in.linkIterations) &&
-          (abs(linkStapleWeight - in.linkStapleWeight) < 1e-12));
+          (std::abs(linkStapleWeight - in.linkStapleWeight) < 1e-12));
 }
 
 std::string GluonSmearingInfo::output(const int indent) const {
@@ -107,7 +107,7 @@ void QuarkSmearingInfo::increaseUpdate(const QuarkSmearingInfo &in) {
 }
 
 void QuarkSmearingInfo::checkEqual(const QuarkSmearingInfo &in) const {
-  if ((abs(laphSigma - in.laphSigma) > 1e-12) ||
+  if ((std::abs(laphSigma - in.laphSigma) > 1e-12) ||
       (laphNumEigvecs != in.laphNumEigvecs)) {
     std::cerr << "QuarkSmearingInfo checkEqual failed" << std::endl;
     std::cerr << "LHS:" << std::endl
@@ -119,7 +119,7 @@ void QuarkSmearingInfo::checkEqual(const QuarkSmearingInfo &in) const {
 }
 
 bool QuarkSmearingInfo::operator==(const QuarkSmearingInfo &in) const {
-  return ((abs(laphSigma - in.laphSigma) < 1e-12) &&
+  return ((std::abs(laphSigma - in.laphSigma) < 1e-12) &&
           (laphNumEigvecs == in.laphNumEigvecs));
 }
 

@@ -26,6 +26,7 @@ endif()
 
 ## Need to set these here
 include_directories(${BLAS_INC})
+link_directories(${BLAS_LIB})
 if(HOSTCBLAS STREQUAL "GSLCBLAS")
   add_compile_definitions(USE_GSL_CBLAS)
 elseif(HOSTCBLAS STREQUAL "OPENBLAS")

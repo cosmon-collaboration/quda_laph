@@ -261,7 +261,7 @@ int main(int argc, char *argv[]) {
   assert( global == 1 ) ;
   
   // call rephase here
-  const int Nev = 8 ;
+  const int Nev = 288 ;
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
   set_constant( laphEigvecs ) ;
 
@@ -270,15 +270,12 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 32 , blockSizeMomProj = 4 , n1 = 4 , n2 = 4 ;
+  const int nmom = 40 , n1 = 64 , n2 = 64 ;
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
     LayoutInfo::getRankLattExtents()[3] } ;
   const int nspat  = X[0]*X[1]*X[2] ;
-
-  std::cout<<"n1,n2 "<< n1 << "," << n2 << " | nmom" << nmom <<
-    " | block " << blockSizeMomProj << std::endl ;
   
   // host_mom should be complex
   double _Complex *host_mom = (double _Complex*)calloc( nmom*nspat , sizeof(double _Complex) ) ;
@@ -311,37 +308,41 @@ int main(int argc, char *argv[]) {
   inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
   inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
 
-  laphCurrentKernel( n1, n2,
-		     nmom,
-		     blockSizeMomProj,
-		     evList.data() , 
-		     evList.data() ,
-		     host_mom ,
-		     inv_param ,
-		     GPU_ret ,
-		     X ) ;  
+  for( int blockSizeMomProj = 1 ; blockSizeMomProj < 4096 ; blockSizeMomProj *= 2 ) {
+    std::cout<<"n1,n2 "<< n1 << "," << n2 << " | nmom" << nmom <<
+      " | block " << blockSizeMomProj << std::endl ;
+    laphCurrentKernel( n1, n2,
+		       nmom,
+		       blockSizeMomProj,
+		       evList.data() , 
+		       evList.data() ,
+		       host_mom ,
+		       inv_param ,
+		       GPU_ret ,
+		       X ) ;  
+    // GPU version
+    StopWatch gpu ;
+    gpu.start() ;
+    memset( GPU_ret , 0.0 , n1*n2*nmom*X[3]*sizeof(double _Complex));
+    laphCurrentKernel( n1, n2,
+		       nmom,
+		       blockSizeMomProj,
+		       evList.data() , 
+		       evList.data() ,
+		       host_mom ,
+		       inv_param ,
+		       GPU_ret ,
+		       X ) ;
+    gpu.stop();
+    const double GPUtime = gpu.getTimeInSeconds();
+    printLaph(make_strf("\nGPU current kernel in = %g seconds\n", GPUtime)) ;
+  }
 
-  // GPU version
-  StopWatch gpu ;
-  gpu.start() ;
-  memset( GPU_ret , 0.0 , n1*n2*nmom*X[3]*sizeof(double _Complex));
-  laphCurrentKernel( n1, n2,
-		     nmom,
-		     blockSizeMomProj,
-		     evList.data() , 
-		     evList.data() ,
-		     host_mom ,
-		     inv_param ,
-		     GPU_ret ,
-		     X ) ;
-  gpu.stop();
-  const double GPUtime = gpu.getTimeInSeconds();
-  printLaph(make_strf("\nGPU current kernel in = %g seconds\n", GPUtime)) ;
-
+  double _Complex *CPU_ret = (double _Complex*)calloc(n1*n2*nmom*X[3],sizeof(double _Complex)) ;
+  /*
   // CPU version
   StopWatch cpu ;
   cpu.start() ;
-  double _Complex *CPU_ret = (double _Complex*)calloc(n1*n2*nmom*X[3],sizeof(double _Complex)) ;
   cpu_code( n1, n2,
 	    nmom,
 	    blockSizeMomProj,
@@ -357,6 +358,7 @@ int main(int argc, char *argv[]) {
   printf( "\n*************************************\n" ) ;
   printf( "-----> GPU speedup factor %gx\n" , CPUtime/GPUtime ) ;
   printf( "*************************************\n\n" ) ;
+  */
   
   for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
     for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {

@@ -25,7 +25,7 @@ set(HOSTCBLAS "OPENBLAS" CACHE STRING "Choose the host BLAS library ${VALID_BLAS
 set_property(CACHE HOSTCBLAS PROPERTY STRINGS ${VALID_BLAS_LIBS})
 
 set(BLAS_INC "/usr/include/openblas/" CACHE STRING "Include directory for BLAS library")
-set(BLAS_LIB "/usr/lib/openblas/" CACHE STRING "Lib directory for blas library")
+set(BLAS_LIB "/usr/lib/openblas/" CACHE STRING "Lib directory for BLAS library")
 set(GPUTOOLKIT_DIR "/usr/local/cuda-12.4/" CACHE STRING "Specify where GPU toolkit is")
 set(QUDA_DIR "" CACHE STRING "Tell us where the Quda install is")
 
@@ -63,44 +63,46 @@ else()
   add_compile_definitions(ARCH_SERIAL)
 endif()
 
+# Quda includes
 set(QUDA_LIBDIR ${QUDA_DIR}/lib)
 set(QUDA_INCDIR ${QUDA_DIR}/include)
+include_directories(${QUDA_INCDIR})
+link_directories(${QUDA_LIBDIR})
 
 #  Include the GPUTOOLKIT library
 set(GPUTOOLKIT_INCDIR ${GPUTOOLKIT_DIR}/include)
-set(GPUTOOLKIT_LIBDIR ${GPUTOOLKIT_DIR}/lib64)
+set(GPUTOOLKIT_LIBDIR ${GPUTOOLKIT_DIR}/lib)
 add_library(gputoolkitlib INTERFACE IMPORTED )
-set_target_properties( gputoolkitlib PROPERTIES IMPORTED_LOCATION ${GPUTOOLKIT_LIBDIR} )
-
-include_directories(${QUDA_INCDIR})
+set_target_properties(gputoolkitlib PROPERTIES IMPORTED_LOCATION ${GPUTOOLKIT_LIBDIR} )
+message(STATUS "${QUDA_INCDIR} ${GPUTOOLKIT_INCDIR} ${GPU_TOOLKIT_LIBDIR}")
 include_directories(${GPUTOOLKIT_INCDIR})
-link_directories(${QUDA_LIBDIR})
 link_directories(${GPUTOOLKIT_LIBDIR})
 
 include_directories(include)
 add_subdirectory(source)
 
-add_executable(quda_laph quda_laph.cc)
-
 ## link openmp gomp library
 if(OPENMP)
-  string(APPEND LiveLaphLibs "-lgomp")
-endif()
+  string(APPEND LiveLaphLibs "-lomp -latomic ")
+endif() 
 
-## BLAS studd can go down here
+## BLAS stuff can go down here
 include_directories(${BLAS_INC})
 link_directories(${BLAS_LIB})
+message(STATUS "BLAS :: ${BLAS_INC} ${BLAS_LIB}")
 if(HOSTCBLAS STREQUAL "GSLCBLAS")
    message(STATUS "using GSL cblas on hosts")
    add_compile_definitions(USE_GSL_CBLAS)
-   string(APPEND LiveLaphLibs " -lcblas -lgsl -lgslcblas")
+   string(APPEND LiveLaphLibs "-lcblas -lgsl -lgslcblas")
 elseif(HOSTCBLAS STREQUAL "OPENBLAS")
-   message(STATUS "using OPENblas on hosts")
+   message(STATUS "using OPENBLAS on hosts")
    add_compile_definitions(USE_OPENBLAS)
-   string(APPEND LiveLaphLibs " -lopenblas")
+   string(APPEND LiveLaphLibs "-lopenblas")
 else()
    message( FATAL_ERROR "Must define HOSTCBLAS to be ${VALID_BLAS_LIBS}")
 endif()
+
+add_executable(quda_laph quda_laph.cc)
 
 ## compile and link
 target_link_libraries(quda_laph PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)

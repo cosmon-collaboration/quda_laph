@@ -33,7 +33,7 @@ evprod( const double _Complex *coeffs ,
 {
 #pragma omp for
   for( size_t i = 0 ; i < nsites ; i++ ) {
-    double _Complex *pt2[nEv] ;
+    const double _Complex *pt2[nEv] ;
     for( size_t ev = 0 ; ev < nEv ; ev++ ) {
       pt2[ev] = (double _Complex*)host_evec[ev]+3*i ; 
     }
@@ -41,7 +41,6 @@ evprod( const double _Complex *coeffs ,
     for( size_t dil = 0 ; dil < n ; dil++ ) {      
       for( size_t c = 0 ; c < 3 ; c++ ) {
 	double _Complex sum = 0.0 ;
-	#pragma unroll
 	for( size_t ev = 0 ; ev < nEv ; ev++ ) {	  
 	  sum += (*(pt2[ev]+c) ) * coeffs[ev+dil*nEv] ;
 	}
@@ -157,7 +156,7 @@ alamode( const int n1, const int n2, const int n3, const int nMom,
   std::vector<ColorSpinorField*> quda_q1 ;
   for(int i=0; i<n1; i++) {
     quda_q1.push_back(ColorSpinorField::Create(cuda_q1_param));
-    for( int j = 0 ; j < nEv ; j++ ) coeffs1[j*n1+i] = host_coeffs1[j+i*nEv] ;
+    for( int j = 0 ; j < nEv ; j++ ) coeffs1[j*n1+i] = (std::complex<double>)host_coeffs1[j+i*nEv] ;
   }
   // Create q2
   ColorSpinorParam cuda_q2_param(cuda_evec_param,inv_param,QUDA_CUDA_FIELD_LOCATION);
@@ -166,7 +165,7 @@ alamode( const int n1, const int n2, const int n3, const int nMom,
   std::vector<ColorSpinorField*> quda_q2 ;
   for(int i=0; i<n2; i++) {
     quda_q2.push_back(ColorSpinorField::Create(cuda_q2_param));
-    for( int j = 0 ; j < nEv ; j++ ) coeffs2[j*n2+i] = host_coeffs2[j+i*nEv] ;
+    for( int j = 0 ; j < nEv ; j++ ) coeffs2[j*n2+i] = (std::complex<double>)host_coeffs2[j+i*nEv] ;
   }
   // create q3
   ColorSpinorParam cuda_q3_param(cuda_evec_param,inv_param,QUDA_CUDA_FIELD_LOCATION);
@@ -175,7 +174,7 @@ alamode( const int n1, const int n2, const int n3, const int nMom,
   std::vector<ColorSpinorField*> quda_q3 ;
   for(int i=0; i<n3; i++) {
     quda_q3.push_back(ColorSpinorField::Create(cuda_q3_param));
-    for( int j = 0 ; j < nEv ; j++ ) coeffs3[j*n3+i] = host_coeffs3[j+i*nEv] ;
+    for( int j = 0 ; j < nEv ; j++ ) coeffs3[j*n3+i] = (std::complex<double>)host_coeffs3[j+i*nEv] ;
   }
 
   // device temporaries, momentum and return buffers
@@ -332,7 +331,7 @@ alamode2( const int n1, const int n2, const int n3, const int nMom,
   std::vector<ColorSpinorField> quda_q1(n1) ;
   for(int i=0; i<n1; i++) {
     quda_q1[i] = ColorSpinorField(cuda_q1_param) ;
-    for( int j = 0 ; j < nEv ; j++ ) coeffs1[j*n1+i] = host_coeffs1[j+i*nEv] ;
+    for( int j = 0 ; j < nEv ; j++ ) coeffs1[j*n1+i] = (std::complex<double>)host_coeffs1[j+i*nEv] ;
   }
   // Create q2
   ColorSpinorParam cuda_q2_param(cuda_evec_param,inv_param,QUDA_CUDA_FIELD_LOCATION);
@@ -341,7 +340,7 @@ alamode2( const int n1, const int n2, const int n3, const int nMom,
   std::vector<ColorSpinorField> quda_q2(n2) ;
   for(int i=0; i<n2; i++) {
     quda_q2[i] = ColorSpinorField(cuda_q2_param) ;
-    for( int j = 0 ; j < nEv ; j++ ) coeffs2[j*n2+i] = host_coeffs2[j+i*nEv] ;
+    for( int j = 0 ; j < nEv ; j++ ) coeffs2[j*n2+i] = (std::complex<double>)host_coeffs2[j+i*nEv] ;
   }
   // create q3
   ColorSpinorParam cuda_q3_param(cuda_evec_param,inv_param,QUDA_CUDA_FIELD_LOCATION);
@@ -350,7 +349,7 @@ alamode2( const int n1, const int n2, const int n3, const int nMom,
   std::vector<ColorSpinorField> quda_q3(n3) ;
   for(int i=0; i<n3; i++) {
     quda_q3[i] = ColorSpinorField(cuda_q2_param) ;
-    for( int j = 0 ; j < nEv ; j++ ) coeffs3[j*n3+i] = host_coeffs3[j+i*nEv] ;
+    for( int j = 0 ; j < nEv ; j++ ) coeffs3[j*n3+i] = (std::complex<double>)host_coeffs3[j+i*nEv] ;
   }
 
   // device temporaries, momentum and return buffers
@@ -522,15 +521,14 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 40 , blockSizeMomProj = 8 , n1 = 4 , n2 = 4 , n3 = 4 ;
+  const int nmom = 40 , n1 = 16 , n2 = 16 , n3 = 16 ;
   const int X[4] = {
     LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
     LayoutInfo::getRankLattExtents()[3] } ;
   const int nsp    = X[0]*X[1]*X[2] ;
-  const int nsites = nsp*X[3] ;
-  //assert( X[3] == 1 ) ;
+  const int nsites = nsp*X[3] ;  
   
   double _Complex coeffs1[ Nev*n1 ] = {} ;
   double _Complex coeffs2[ Nev*n2 ] = {} ;
@@ -547,7 +545,6 @@ int main(int argc, char *argv[]) {
     coeffs3[i] = unif(mt) + I*unif(mt) ;
   }  
   
-  // what is this? exponentiated mom? Which index runs fastest? Fuck knows
   double _Complex *host_mom = (double _Complex*)calloc(nsp*nmom,sizeof(double _Complex) ) ;
     // host_mom should be complex
   for( size_t p = 0 ; p < nmom ; p++ ) {
@@ -575,47 +572,52 @@ int main(int argc, char *argv[]) {
   inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
   inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
   inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
-  
-  double _Complex retGPU[ X[3]*n1*n2*n3*nmom ] = {} ;
-  alamode2( 
-	  //laphBaryonKernel(
-		   n1, n2, n3,
-		    nmom,
-		    coeffs1 ,
-		    coeffs2 ,
-		    coeffs3 ,
-		    host_mom ,
-		    Nev ,
-		    evList.data(),
-		    inv_param,
-		    retGPU,
-		    blockSizeMomProj,
-		    X ) ;
-  
-  StopWatch GPU ;
-  GPU.start() ;
-  memset( retGPU , 0.0 , X[3]*nmom*n1*n2*n3*sizeof(double _Complex)) ;
-  alamode2( 
-	  //laphBaryonKernel(
-	  n1, n2, n3,
-	  nmom,
-	  coeffs1 ,
-	  coeffs2 ,
-	  coeffs3 ,
-	  host_mom ,
-	  Nev ,
-	  evList.data(),
-	  inv_param ,
-	  retGPU,
-	  blockSizeMomProj,
-	  X ) ;
-  GPU.stop() ;
-  const double GPUtime = GPU.getTimeInSeconds() ;
-  printLaph(make_strf("\nGPU baryonkernel in = %g seconds\n", GPUtime )) ;
 
+  double _Complex *retGPU = (double _Complex*)calloc( X[3]*n1*n2*n3*nmom , sizeof( double _Complex) ) ;
+  
+  for( int blockSizeMomProj = 1 ; blockSizeMomProj < 1024 ; blockSizeMomProj *= 2 ) {
+    printf( "Nmom %d | blockSizeMomProj %d | (n1,n2,n3) %d,%d,%d\n" , nmom , blockSizeMomProj , n1 , n2 , n3 ) ;
+    memset( retGPU , 0.0 , X[3]*nmom*n1*n2*n3*sizeof(double _Complex)) ;
+    //alamode2( 
+    laphBaryonKernel(
+		     n1, n2, n3,
+		     nmom,
+		     coeffs1 ,
+		     coeffs2 ,
+		     coeffs3 ,
+		     host_mom ,
+		     Nev ,
+		     evList.data(),
+		     inv_param,
+		     retGPU,
+		     blockSizeMomProj,
+		     X ) ;
+    memset( retGPU , 0.0 , X[3]*nmom*n1*n2*n3*sizeof(double _Complex)) ;
+    StopWatch GPU ;
+    GPU.start() ;
+    //alamode2( 
+    laphBaryonKernel(
+		     n1, n2, n3,
+		     nmom,
+		     coeffs1 ,
+		     coeffs2 ,
+		     coeffs3 ,
+		     host_mom ,
+		     Nev ,
+		     evList.data(),
+		     inv_param ,
+		     retGPU,
+		     blockSizeMomProj,
+		     X ) ;
+    GPU.stop() ;
+    const double GPUtime = GPU.getTimeInSeconds() ;
+    printLaph(make_strf("\nGPU baryonkernel in = %g seconds\n", GPUtime )) ;
+  }
+
+  double _Complex *retCPU = (double _Complex*)calloc( X[3]*n1*n2*n3*nmom , sizeof( double _Complex) ) ;
+  /*
   StopWatch CPU ;
   CPU.start() ;
-  double _Complex retCPU[ X[3]*n1*n2*n3*nmom ] = {} ;
   cpu_code( n1 , n2 , n3 ,
 	    nmom,
 	    coeffs1, 
@@ -634,7 +636,7 @@ int main(int argc, char *argv[]) {
   printf( "\n*************************************\n" ) ;
   printf( "-----> GPU speedup factor %gx\n" , CPUtime/GPUtime ) ;
   printf( "*************************************\n\n" ) ;
-  
+  */
   // test outputs
   printf( "CPU == GPU\n" ) ;
   for( size_t p = 0 ; p < nmom ; p++ ) {
@@ -654,6 +656,8 @@ int main(int argc, char *argv[]) {
   }
 
   free(host_mom);
+  free( retGPU ) ;
+  free( retCPU ) ;
   finalize();
 
   return 0;

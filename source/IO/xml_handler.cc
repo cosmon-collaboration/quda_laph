@@ -1562,7 +1562,7 @@ int XMLContentComparer::token_content_cmp(const char *a,
     } else
       return -1;
   } else if (is_float_token(a, na, fa) && is_float_token(b, nb, fb)) {
-    float favg = 0.5 * abs(fa + fb);
+    float favg = 0.5 * std::abs(fa + fb);
     if ((fa - fb) > (favg * m_float_rel_tol))
       return 1;
     else if ((fa - fb) < -(favg * m_float_rel_tol))

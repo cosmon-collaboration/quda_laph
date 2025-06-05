@@ -303,7 +303,7 @@ template <class T> static void communicate_phase(std::vector<T> &rephase) {
   std::vector<int> comm_coords = {
       0, 0, 0, LayoutInfo::getMyCommCoords()[LayoutInfo::Ndim - 1]};
   const int orig_sender_rank = LayoutInfo::getRankFromCommCoords(comm_coords);
-  int sender_rank = 0, count;
+  int sender_rank = 0, count = 0 ;
   std::vector<int> broadcast_ranks;
   for (comm_coords[0] = 0;
        comm_coords[0] < LayoutInfo::getCommNumPartitions()[0];

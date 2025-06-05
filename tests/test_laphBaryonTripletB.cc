@@ -36,12 +36,7 @@ cpu_code( const int n1,
 	  const double _Complex *host_mode_trip_buf,
 	  double _Complex *host_ret_arr )
 {
-  int global = 1 ;
-#ifdef ARCH_PARALLEL
-  MPI_Comm_size( MPI_COMM_WORLD , &global ) ;
-#endif
-  assert( global == 1 ) ;
-  const int nSubEv = nEv/global ;
+  const int nSubEv = nEv ;
 
   // zgemm d_mtb*d_coeffs = d_q3 
   const double _Complex *mtb = host_mode_trip_buf ;
@@ -75,7 +70,7 @@ cpu_code( const int n1,
   int p ;
 #pragma omp parallel for private(p)
   for( p = 0 ; p < nMom ; p++ ) {
-    double _Complex tmp[ nSubEv*n2*n3 ] = {} ;
+    double _Complex *tmp = (double _Complex*)calloc( nSubEv*n2*n3 , sizeof( double _Complex ) ) ;
     for( int nsub = 0 ; nsub < nSubEv ; nsub++ ) {
       for( int nout = 0 ; nout < n2 ; nout++ ) {
 	for( int nin = 0 ; nin < n3 ; nin++ ) { 
@@ -86,6 +81,7 @@ cpu_code( const int n1,
 	  tmp[ nin + n3*( nout + n2*nsub ) ] = sum ;
 	}
       }
+      free( tmp ) ;
     }
 
     // host_coeffs1*d_tmp -> d_ret
@@ -122,9 +118,7 @@ alamode( const int n1,
   //getProfileBaryonKernelModeTripletsB().TPSTART(QUDA_PROFILE_INIT);
    
   // number of EV indices (in first position) that this rank deals with
-  const int nRanks = quda::comm_size();  
-  const int nSubEv = nEv / nRanks;
-  const int iRank  = quda::comm_rank();
+  const int nSubEv = nEv ;
 
   // check we are safe to cast into a Complex (= std::complex<double>)
   //if (sizeof(Complex) != sizeof(double _Complex)) {
@@ -249,9 +243,7 @@ alamode( const int n1,
     blas_lapack::native::stridedBatchGEMM( d_coeffs2, d_q3, d_tmp,
 					   cublas_param_2, QUDA_CUDA_FIELD_LOCATION);
 
-    //cublas_param_3.a_offset = iRank*nSubEv;
-    //cublas_param_3.c_offset = p*n1*n2*n3;
-    blas_lapack::native::stridedBatchGEMM( (double _Complex*)d_coeffs1 + iRank*nSubEv,
+    blas_lapack::native::stridedBatchGEMM( (double _Complex*)d_coeffs1,
 					   d_tmp,
 					   (double _Complex*)d_ret + p*n1*n2*n3 ,
 					   cublas_param_3, QUDA_CUDA_FIELD_LOCATION);
