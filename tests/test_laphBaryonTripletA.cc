@@ -23,8 +23,8 @@ using namespace quda ;
 
 // will give zero for these otherwise default to uniform random numbers
 //#define PSEUDOCONSTANT
-
 //#define VERBOSE_COMPARISON
+#define GPU_STRESS
 
 // cpu color cross
 static void
@@ -225,9 +225,10 @@ void alamode( const int nMom,
   //if (sizeof(Complex) != sizeof(double _Complex)) {
   //  errorQuda("Irreconcilable difference between interface and internal complex number conventions");
   //}
-  if( nEvChoose3%blockSizeMomProj != 0 ) {
-    errorQuda("Block size mom proj needs to divide %zu %d", nEvChoose3 , blockSizeMomProj);
-  }
+  //if( nEvChoose3%blockSizeMomProj != 0 ) {
+  //  errorQuda("Block size mom proj needs to divide %zu %d", nEvChoose3 , blockSizeMomProj);
+  //}
+  if( (size_t)blockSizeMomProj > nEvChoose3 ) { errorQuda("blockSizeMomProj too big %d > %zu" , blockSizeMomProj , nEvChoose3 ) ; }
   
   //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_INIT);
 
@@ -319,6 +320,14 @@ void alamode( const int nMom,
       }
     }
   }
+  // overspill, code is more efficient if you avoid this
+  if( nInBlock > 0 ) {
+    cublas_param_mom_sum.batch_count = nInBlock;
+    blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp,
+					  (std::complex<double>*)d_ret+X[3]*blockStart,
+					  cublas_param_mom_sum,
+					  QUDA_CUDA_FIELD_LOCATION);
+  }
 
   // Copy return array back to host
   //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_TOTAL); 
@@ -388,7 +397,7 @@ int main(int argc, char *argv[]) {
   setVerbosityQuda(QUDA_VERBOSE, "#" , stdout ) ;
   
   // call rephase here
-  const int Nev = 48 ;
+  const int Nev = 64 ;
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
 
   std::cout<<"Constant Eigvecs :: "<< Nev <<std::endl ;
@@ -441,23 +450,17 @@ int main(int argc, char *argv[]) {
   const size_t nEvChoose3 = Nev*(Nev-1)*(Nev-2)/6;
   double _Complex *retGPU = (double _Complex*)calloc( X[3]*nmom*nEvChoose3 , sizeof( double _Complex  ) );
 
-  for( int blockSizeMomProj = 8 ; blockSizeMomProj < 2048 ; blockSizeMomProj += 8 ) {
-    if( nEvChoose3%blockSizeMomProj != 0 ) continue ;
+#ifdef GPU_STRESS
+  for( int blockSizeMomProj = 1 ; blockSizeMomProj < nEvChoose3 ; blockSizeMomProj *= 2 ) {
     std::cout<<"nmom "<<nmom<<" | block "<<blockSizeMomProj<<std::endl ;
-    //alamode(
-    laphBaryonKernelComputeModeTripletA(
-					nmom, Nev,
-					blockSizeMomProj,
-					evList.data() ,
-					host_mom ,
-					inv_param,
-					retGPU, X ) ;
     memset( retGPU , 0.0 , X[3]*nmom*nEvChoose3*sizeof( double _Complex )) ;
-
+#else
+    const int blockSizeMomProj = 64 ;
+#endif
     StopWatch gpu ;
     gpu.start() ;
-    //  alamode(
-    laphBaryonKernelComputeModeTripletA(
+    alamode(
+	    //laphBaryonKernelComputeModeTripletA(
 					nmom,
 					Nev,
 					blockSizeMomProj,
@@ -469,15 +472,15 @@ int main(int argc, char *argv[]) {
     gpu.stop() ;
     const double GPUtime = gpu.getTimeInSeconds() ;
     printLaph(make_strf("\nGPU modetripletA in = %g seconds\n", GPUtime )) ;
+#ifdef GPU_STRESS
   }
-
+#else
   double _Complex *retCPU = (double _Complex*)calloc( X[3]*nmom*nEvChoose3 , sizeof( double _Complex  ) );
-  /*
   StopWatch cpu ;
   cpu.start() ;
   //cpu_code( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
-  //cpu_codev2( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
-  cpu_codev3( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
+  cpu_codev2( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
+  //cpu_codev3( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
   cpu.stop() ;
   const double CPUtime = cpu.getTimeInSeconds() ;
   printLaph(make_strf("\nCPUv3 modetripletA in = %g seconds\n", CPUtime ));
@@ -485,7 +488,6 @@ int main(int argc, char *argv[]) {
   printf( "\n*************************************\n" ) ;
   printf( "-----> GPU speedup factor %gx\n" , CPUtime/GPUtime ) ;
   printf( "*************************************\n\n" ) ;
-  */
   
   // test outputs
   printf( "CPU == GPU\n" ) ;
@@ -504,9 +506,9 @@ int main(int argc, char *argv[]) {
     }
     std::cout<<"Summed diff p="<<p<<" "<<sum<<std::endl ;
   }
-
-  free( retGPU ) ;
   free( retCPU ) ;
+#endif
+  free( retGPU ) ;
   
   finalize();
 

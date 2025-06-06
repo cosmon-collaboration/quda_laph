@@ -47,8 +47,7 @@ set(CMAKE_INSTALL_PREFIX "." )
 add_compile_options(-march=native -Wall)
 
 if(OPENMP)
-  add_compile_options(-fopenmp)
-  add_compile_definitions(OPENMP)
+  find_Package(OpenMP)
 endif()
 
 if(PARALLEL_BUILD)
@@ -72,7 +71,7 @@ link_directories(${QUDA_LIBDIR})
 #  Include the GPUTOOLKIT library
 set(GPUTOOLKIT_INCDIR ${GPUTOOLKIT_DIR}/include)
 set(GPUTOOLKIT_LIBDIR ${GPUTOOLKIT_DIR}/lib)
-add_library(gputoolkitlib INTERFACE IMPORTED )
+add_library(gputoolkitlib INTERFACE IMPORTED)
 set_target_properties(gputoolkitlib PROPERTIES IMPORTED_LOCATION ${GPUTOOLKIT_LIBDIR} )
 message(STATUS "${QUDA_INCDIR} ${GPUTOOLKIT_INCDIR} ${GPU_TOOLKIT_LIBDIR}")
 include_directories(${GPUTOOLKIT_INCDIR})
@@ -80,11 +79,6 @@ link_directories(${GPUTOOLKIT_LIBDIR})
 
 include_directories(include)
 add_subdirectory(source)
-
-## link openmp gomp library
-if(OPENMP)
-  string(APPEND LiveLaphLibs "-lomp -latomic ")
-endif() 
 
 ## BLAS stuff can go down here
 include_directories(${BLAS_INC})
@@ -100,12 +94,16 @@ elseif(HOSTCBLAS STREQUAL "OPENBLAS")
    string(APPEND LiveLaphLibs "-lopenblas")
 else()
    message( FATAL_ERROR "Must define HOSTCBLAS to be ${VALID_BLAS_LIBS}")
-endif()
-
+ endif()
+ 
 add_executable(quda_laph quda_laph.cc)
 
 ## compile and link
-target_link_libraries(quda_laph PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
+if(OPENMP)
+  target_link_libraries(quda_laph PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph OpenMP::OpenMP_CXX)
+else()
+  target_link_libraries(quda_laph PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
+endif()
 
 ## option for building the tests
 option(BUILD_TESTS "Build the test binaries" ON )

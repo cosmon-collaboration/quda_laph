@@ -22,6 +22,7 @@ using namespace LaphEnv ;
 using namespace quda ;
 
 //#define VERBOSE_COMPARISON
+#define GPU_STRESS
 
 static inline void
 evprod( const double _Complex *coeffs ,
@@ -37,7 +38,6 @@ evprod( const double _Complex *coeffs ,
     for( size_t ev = 0 ; ev < nEv ; ev++ ) {
       pt2[ev] = (double _Complex*)host_evec[ev]+3*i ; 
     }
-
     for( size_t dil = 0 ; dil < n ; dil++ ) {      
       for( size_t c = 0 ; c < 3 ; c++ ) {
 	double _Complex sum = 0.0 ;
@@ -83,7 +83,7 @@ void cpu_code( const int n1, const int n2, const int n3, const int nMom,
     evprod( host_coeffs3 , host_evec , n3 , nEv , nsites , q3 ) ;
     // ok and then it is just the baryon triplet contraction with q1,q2,q3
     #pragma omp for collapse(4) reduction(+:return_array[:n1*n2*n3*nMom*X[3]])
-    for( size_t T = 0 ; T < X[3] ; T++ ) {
+    for( size_t T = 0 ; T < (size_t)X[3] ; T++ ) {
       for( size_t i = 0 ; i < nsp ; i++ ) {
 	for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
 	  for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
@@ -129,8 +129,8 @@ alamode( const int n1, const int n2, const int n3, const int nMom,
   //if (sizeof(Complex) != sizeof(double _Complex)) {
   //  errorQuda("Irreconcilable difference between interface and internal complex number conventions");
   // }
-  if( (n1*n2*n3)%blockSizeMomProj != 0 ) {
-    errorQuda( "Block size mom proj needs to divide %d %d\n" , n1*n2*n3 , blockSizeMomProj ) ;
+  if( blockSizeMomProj > n1*n2*n3 ) {
+    errorQuda( "Block size mom proj %d larger than %d\n" , blockSizeMomProj , n1*n2*n3 ) ;
   }
   // Allocate device memory for evecs. This is done to ensure a contiguous
   // this is a double store of evecs, which is bad  
@@ -238,7 +238,7 @@ alamode( const int n1, const int n2, const int n3, const int nMom,
   cublas_param_mom_sum.data_type = QUDA_BLAS_DATATYPE_Z;
   cublas_param_mom_sum.blas_type = QUDA_BLAS_GEMM ;
   
-  int nInBlock = 0;
+  int nInBlock = 0 , blockStart = 0 ;
   for( int dil1=0; dil1<n1; dil1++ ) {
     for( int dil2=0; dil2<n2; dil2++ ) {
 
@@ -253,18 +253,23 @@ alamode( const int n1, const int n2, const int n3, const int nMom,
 	//getProfileColorContract().TPSTOP(QUDA_PROFILE_COMPUTE);
 	nInBlock++;
 
-	if (nInBlock == blockSizeMomProj ) {
-	  // To gauge how to block the calls to remove launch latency.
-	  printfQuda("dil1 = %d, dil2 = %d, dil3 = %d, nInBlock = %d\n", dil1, dil2, dil3, nInBlock);
-	  //getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);	  
+	if( nInBlock == blockSizeMomProj ) {
+	  //getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);
+	  if( blockStart != ((dil1*n2 + dil2)*n3 + dil3 - nInBlock + 1) ) {
+	    printf( "Here %d == %d\n" , blockStart , (dil1*n2 + dil2)*n3 + dil3 - nInBlock + 1 ) ;
+	    exit(1) ;
+	  }
 	  blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp,
 						(std::complex<double>*)d_ret + X[3]*((dil1*n2 + dil2)*n3 + dil3 - nInBlock + 1),
 						cublas_param_mom_sum, QUDA_CUDA_FIELD_LOCATION);
+	  blockStart = (dil1*n2 + dil2)*n3 + dil3 + 1 ;
 	  //getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);	  
 	  nInBlock = 0;
 	}
       }
     }
+  }
+  if( nInBlock > 0 ) {
   }
 
   // Copy return array back to host
@@ -304,8 +309,8 @@ alamode2( const int n1, const int n2, const int n3, const int nMom,
   //if (sizeof(Complex) != sizeof(double _Complex)) {
   //  errorQuda("Irreconcilable difference between interface and internal complex number conventions");
   // }
-  if( (n1*n2*n3)%blockSizeMomProj != 0 ) {
-    errorQuda( "Block size mom proj needs to divide %d %d\n" , n1*n2*n3 , blockSizeMomProj ) ;
+  if( blockSizeMomProj > (n1*n2*n3) ) {
+    errorQuda( "Block size mom proj needs %d > %d \n" , blockSizeMomProj , n1*n2*n3 ) ;
   }
   // Allocate device memory for evecs. This is done to ensure a contiguous
   // this is a double store of evecs, which is bad  
@@ -419,7 +424,7 @@ alamode2( const int n1, const int n2, const int n3, const int nMom,
   cublas_param_mom_sum.data_type = QUDA_BLAS_DATATYPE_Z;
   cublas_param_mom_sum.blas_type = QUDA_BLAS_GEMM ;
   
-  int nInBlock = 0;
+  int nInBlock = 0 , blockStart = 0 ;
   for( int dil1=0; dil1<n1; dil1++ ) {
     for( int dil2=0; dil2<n2; dil2++ ) {
 
@@ -435,17 +440,18 @@ alamode2( const int n1, const int n2, const int n3, const int nMom,
 	nInBlock++;
 
 	if (nInBlock == blockSizeMomProj ) {
-	  // To gauge how to block the calls to remove launch latency.
-	  printfQuda("dil1 = %d, dil2 = %d, dil3 = %d, nInBlock = %d\n", dil1, dil2, dil3, nInBlock);
-	  //getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);	  
-	  blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp,
-						(std::complex<double>*)d_ret + X[3]*((dil1*n2 + dil2)*n3 + dil3 - nInBlock + 1),
+	  blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp, (std::complex<double>*)d_ret + X[3]*blockStart,
 						cublas_param_mom_sum, QUDA_CUDA_FIELD_LOCATION);
-	  //getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);	  
+	  blockStart = (dil1*n2 + dil2)*n3 + dil3 + 1 ;
 	  nInBlock = 0;
 	}
       }
     }
+  }
+  if( nInBlock > 0 ) {
+    cublas_param_mom_sum.batch_count = nInBlock;
+    blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp, (std::complex<double>*)d_ret + X[3]*blockStart,
+					  cublas_param_mom_sum, QUDA_CUDA_FIELD_LOCATION);
   }
 
   // Copy return array back to host
@@ -511,7 +517,7 @@ int main(int argc, char *argv[]) {
   setVerbosityQuda(QUDA_VERBOSE, "#" , stdout ) ;
   
   // call rephase here
-  const int Nev = 288 ;
+  const int Nev = 128 ;
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
 
   std::cout<<"Constant Eigvecs"<<std::endl ;
@@ -521,14 +527,13 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 40 , n1 = 16 , n2 = 16 , n3 = 16 ;
+  const int nmom = 40 , n1 = 32 , n2 = 32 , n3 = 32 ;
   const int X[4] = {
     LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
     LayoutInfo::getRankLattExtents()[3] } ;
   const int nsp    = X[0]*X[1]*X[2] ;
-  const int nsites = nsp*X[3] ;  
   
   double _Complex coeffs1[ Nev*n1 ] = {} ;
   double _Complex coeffs2[ Nev*n2 ] = {} ;
@@ -574,29 +579,17 @@ int main(int argc, char *argv[]) {
   inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
 
   double _Complex *retGPU = (double _Complex*)calloc( X[3]*n1*n2*n3*nmom , sizeof( double _Complex) ) ;
-  
-  for( int blockSizeMomProj = 1 ; blockSizeMomProj < 1024 ; blockSizeMomProj *= 2 ) {
+#ifdef GPU_STRESS  
+  for( int blockSizeMomProj = 1 ; blockSizeMomProj < (n1*n2*n3) ; blockSizeMomProj *= 2 ) {
     printf( "Nmom %d | blockSizeMomProj %d | (n1,n2,n3) %d,%d,%d\n" , nmom , blockSizeMomProj , n1 , n2 , n3 ) ;
     memset( retGPU , 0.0 , X[3]*nmom*n1*n2*n3*sizeof(double _Complex)) ;
-    //alamode2( 
-    laphBaryonKernel(
-		     n1, n2, n3,
-		     nmom,
-		     coeffs1 ,
-		     coeffs2 ,
-		     coeffs3 ,
-		     host_mom ,
-		     Nev ,
-		     evList.data(),
-		     inv_param,
-		     retGPU,
-		     blockSizeMomProj,
-		     X ) ;
-    memset( retGPU , 0.0 , X[3]*nmom*n1*n2*n3*sizeof(double _Complex)) ;
+#else
+    const int blockSizeMomProj = 13 ;
+#endif
     StopWatch GPU ;
     GPU.start() ;
-    //alamode2( 
-    laphBaryonKernel(
+    alamode2( 
+	     //laphBaryonKernel(
 		     n1, n2, n3,
 		     nmom,
 		     coeffs1 ,
@@ -612,10 +605,10 @@ int main(int argc, char *argv[]) {
     GPU.stop() ;
     const double GPUtime = GPU.getTimeInSeconds() ;
     printLaph(make_strf("\nGPU baryonkernel in = %g seconds\n", GPUtime )) ;
+#ifdef GPU_STRESS
   }
-
+#else
   double _Complex *retCPU = (double _Complex*)calloc( X[3]*n1*n2*n3*nmom , sizeof( double _Complex) ) ;
-  /*
   StopWatch CPU ;
   CPU.start() ;
   cpu_code( n1 , n2 , n3 ,
@@ -636,12 +629,12 @@ int main(int argc, char *argv[]) {
   printf( "\n*************************************\n" ) ;
   printf( "-----> GPU speedup factor %gx\n" , CPUtime/GPUtime ) ;
   printf( "*************************************\n\n" ) ;
-  */
+
   // test outputs
   printf( "CPU == GPU\n" ) ;
   for( size_t p = 0 ; p < nmom ; p++ ) {
     double sum = 0 ;
-    for( size_t T = 0 ; T < X[3] ; T++ ) {
+    for( size_t T = 0 ; T < (size_t)X[3] ; T++ ) {
       for( size_t i = 0 ; i < n1*n2*n3 ; i++ ) {
 	const size_t idx = T + X[3]*(i + (n1*n2*n3)*p) ;
 	sum += cabs( retCPU[idx] - retGPU[idx] ) ;
@@ -654,10 +647,10 @@ int main(int argc, char *argv[]) {
     }
     std::cout<<"Summed diff p="<<p<<" "<<sum<<std::endl ;
   }
-
+  free( retCPU ) ;
+#endif
   free(host_mom);
   free( retGPU ) ;
-  free( retCPU ) ;
   finalize();
 
   return 0;
