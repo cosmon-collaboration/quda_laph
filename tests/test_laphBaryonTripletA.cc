@@ -24,7 +24,7 @@ using namespace quda ;
 // will give zero for these otherwise default to uniform random numbers
 //#define PSEUDOCONSTANT
 //#define VERBOSE_COMPARISON
-//#define GPU_STRESS
+#define GPU_STRESS
 
 // cpu color cross
 static void
@@ -397,7 +397,7 @@ int main(int argc, char *argv[]) {
   setVerbosityQuda(QUDA_VERBOSE, "#" , stdout ) ;
   
 #ifdef GPU_STRESS
-  const int Nev = 128 ;
+  const int Nev = 96 ;
 #else
   const int Nev = 64 ;
 #endif
@@ -454,7 +454,7 @@ int main(int argc, char *argv[]) {
   double _Complex *retGPU = (double _Complex*)calloc( X[3]*nmom*nEvChoose3 , sizeof( double _Complex  ) );
 
 #ifdef GPU_STRESS
-  for( int blockSizeMomProj = 1 ; blockSizeMomProj < nEvChoose3 ; blockSizeMomProj *= 2 ) {
+  for( int blockSizeMomProj = 2 ; blockSizeMomProj < 8192 ; blockSizeMomProj *= 2 ) {
     std::cout<<"nmom "<<nmom<<" | block "<<blockSizeMomProj<<std::endl ;
     memset( retGPU , 0.0 , X[3]*nmom*nEvChoose3*sizeof( double _Complex )) ;
 #else

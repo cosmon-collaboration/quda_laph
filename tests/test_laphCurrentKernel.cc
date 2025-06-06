@@ -19,7 +19,7 @@ using namespace quda ;
 using namespace LaphEnv ;
 
 //#define VERBOSE_COMPARISON
-//#define GPU_STRESS
+#define GPU_STRESS
 
 static void cpu_code( const int n1,
 		      const int n2,
@@ -263,7 +263,7 @@ int main(int argc, char *argv[]) {
   
   // call rephase here
 #ifdef GPU_STRESS
-  const int Nev = 256 , n1 = 64 , n2 = 64 ;
+  const int Nev = 512 , n1 = 288 , n2 = 288 ;
 #else
   const int Nev = 64 , n1 = 16 , n2 = 16 ;
 #endif
@@ -315,7 +315,7 @@ int main(int argc, char *argv[]) {
   inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
 
 #ifdef GPU_STRESS
-  for( int blockSizeMomProj = 1 ; blockSizeMomProj < 4096 ; blockSizeMomProj *= 2 ) {
+  for( int blockSizeMomProj = 2 ; blockSizeMomProj < 8192 ; blockSizeMomProj *= 2 ) {
     std::cout<< "block " << blockSizeMomProj << std::endl ;
     memset( GPU_ret , 0.0 , n1*n2*nmom*X[3]*sizeof(double _Complex));
 #else
