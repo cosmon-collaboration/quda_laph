@@ -24,7 +24,7 @@ using namespace quda ;
 // will give zero for these otherwise default to uniform random numbers
 //#define PSEUDOCONSTANT
 //#define VERBOSE_COMPARISON
-#define GPU_STRESS
+//#define GPU_STRESS
 
 // cpu color cross
 static void
@@ -396,8 +396,11 @@ int main(int argc, char *argv[]) {
 #endif
   setVerbosityQuda(QUDA_VERBOSE, "#" , stdout ) ;
   
-  // call rephase here
+#ifdef GPU_STRESS
+  const int Nev = 128 ;
+#else
   const int Nev = 64 ;
+#endif
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
 
   std::cout<<"Constant Eigvecs :: "<< Nev <<std::endl ;
@@ -415,7 +418,7 @@ int main(int argc, char *argv[]) {
     LayoutInfo::getRankLattExtents()[2],
     LayoutInfo::getRankLattExtents()[3] } ;
   const int nspat  = X[0]*X[1]*X[2] ;
-
+  std::cout<<"nmom "<<nmom<<" | nEv "<<Nev<<std::endl ;
   
   double _Complex *host_mom = (double _Complex*)calloc( nmom*nspat , sizeof( double _Complex ) ) ;
 
@@ -459,8 +462,8 @@ int main(int argc, char *argv[]) {
 #endif
     StopWatch gpu ;
     gpu.start() ;
-    alamode(
-	    //laphBaryonKernelComputeModeTripletA(
+    //alamode(
+    laphBaryonKernelComputeModeTripletA(
 					nmom,
 					Nev,
 					blockSizeMomProj,

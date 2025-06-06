@@ -22,7 +22,7 @@ using namespace LaphEnv ;
 using namespace quda ;
 
 //#define VERBOSE_COMPARISON
-#define GPU_STRESS
+//#define GPU_STRESS
 
 static inline void
 evprod( const double _Complex *coeffs ,
@@ -516,10 +516,13 @@ int main(int argc, char *argv[]) {
 #endif
   setVerbosityQuda(QUDA_VERBOSE, "#" , stdout ) ;
   
-  // call rephase here
-  const int Nev = 128 ;
+  // init Evs
+#ifdef GPU_STRESS
+  const int Nev = 128 , n1 = 64 , n2 = 64 , n3 = 64 ;
+#else
+  const int Nev = 32 , n1 = 8 , n2 = 8 , n3 = 8 ;
+#endif
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
-
   std::cout<<"Constant Eigvecs"<<std::endl ;
   set_constant( laphEigvecs ) ;
   std::vector<void*> evList( Nev ) ;
@@ -527,13 +530,14 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 40 , n1 = 32 , n2 = 32 , n3 = 32 ;
+  const int nmom = 40 ;
   const int X[4] = {
     LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
     LayoutInfo::getRankLattExtents()[3] } ;
-  const int nsp    = X[0]*X[1]*X[2] ;
+  const int nsp = X[0]*X[1]*X[2] ;
+  printf( "Nmom %d | (n1,n2,n3) %d,%d,%d\n" , nmom , n1 , n2 , n3 ) ;
   
   double _Complex coeffs1[ Nev*n1 ] = {} ;
   double _Complex coeffs2[ Nev*n2 ] = {} ;
@@ -581,15 +585,15 @@ int main(int argc, char *argv[]) {
   double _Complex *retGPU = (double _Complex*)calloc( X[3]*n1*n2*n3*nmom , sizeof( double _Complex) ) ;
 #ifdef GPU_STRESS  
   for( int blockSizeMomProj = 1 ; blockSizeMomProj < (n1*n2*n3) ; blockSizeMomProj *= 2 ) {
-    printf( "Nmom %d | blockSizeMomProj %d | (n1,n2,n3) %d,%d,%d\n" , nmom , blockSizeMomProj , n1 , n2 , n3 ) ;
     memset( retGPU , 0.0 , X[3]*nmom*n1*n2*n3*sizeof(double _Complex)) ;
 #else
     const int blockSizeMomProj = 13 ;
 #endif
+    printf( "blockSizeMomProj %d\n" , blockSizeMomProj ) ;
     StopWatch GPU ;
     GPU.start() ;
-    alamode2( 
-	     //laphBaryonKernel(
+    //alamode2( 
+    laphBaryonKernel(
 		     n1, n2, n3,
 		     nmom,
 		     coeffs1 ,

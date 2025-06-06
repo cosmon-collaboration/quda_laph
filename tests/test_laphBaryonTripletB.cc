@@ -81,7 +81,6 @@ cpu_code( const int n1,
 	  tmp[ nin + n3*( nout + n2*nsub ) ] = sum ;
 	}
       }
-      free( tmp ) ;
     }
 
     // host_coeffs1*d_tmp -> d_ret
@@ -98,6 +97,7 @@ cpu_code( const int n1,
 	}
       }
     }
+    free( tmp ) ;
   }
   free( q3 ) ;
 }
@@ -283,9 +283,9 @@ int main(int argc, char *argv[]) {
 #endif
   assert( global == 1 ) ; // for now
 
-  const int Nev = 64 ;
-  const int NsubEv = Nev/global ;
-  const int nmom = 40 , n1 = 4 , n2 = 4 , n3 = 4 ;
+  const int Nev = 128 ;
+  const int NsubEv = Nev ;
+  const int nmom = 40 , n1 = 16 , n2 = 16 , n3 = 16 ;
 
   static std::uniform_real_distribution<double> unif(0.0,1.0) ;
   std::mt19937 mt ;
@@ -308,17 +308,6 @@ int main(int argc, char *argv[]) {
   }
 
   double _Complex host_ret_arr[ nmom*n1*n2*n3 ] = {} ;
-  //alamode
-  laphBaryonKernelComputeModeTripletB
-    ( n1, n2, n3,
-      nmom,
-      Nev ,
-      host_coeffs1 ,
-      host_coeffs2 ,
-      host_coeffs3 ,
-      host_mode_trip_buf ,
-      host_ret_arr ) ;
-  memset( host_ret_arr, 0.0 , nmom*n1*n2*n3*sizeof( double _Complex) ) ;
   StopWatch gpu;
   gpu.start() ;
   //alamode

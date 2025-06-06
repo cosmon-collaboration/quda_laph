@@ -19,6 +19,7 @@ using namespace quda ;
 using namespace LaphEnv ;
 
 //#define VERBOSE_COMPARISON
+//#define GPU_STRESS
 
 static void cpu_code( const int n1,
 		      const int n2,
@@ -261,7 +262,11 @@ int main(int argc, char *argv[]) {
   assert( global == 1 ) ;
   
   // call rephase here
-  const int Nev = 288 ;
+#ifdef GPU_STRESS
+  const int Nev = 256 , n1 = 64 , n2 = 64 ;
+#else
+  const int Nev = 64 , n1 = 16 , n2 = 16 ;
+#endif
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
   set_constant( laphEigvecs ) ;
 
@@ -270,12 +275,13 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 40 , n1 = 64 , n2 = 64 ;
+  const int nmom = 40 ;
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
     LayoutInfo::getRankLattExtents()[3] } ;
   const int nspat  = X[0]*X[1]*X[2] ;
+  std::cout<<"n1,n2 "<< n1 << "," << n2 << " | nmom" << nmom << std::endl ;
   
   // host_mom should be complex
   double _Complex *host_mom = (double _Complex*)calloc( nmom*nspat , sizeof(double _Complex) ) ;
@@ -308,22 +314,16 @@ int main(int argc, char *argv[]) {
   inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
   inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
 
+#ifdef GPU_STRESS
   for( int blockSizeMomProj = 1 ; blockSizeMomProj < 4096 ; blockSizeMomProj *= 2 ) {
-    std::cout<<"n1,n2 "<< n1 << "," << n2 << " | nmom" << nmom <<
-      " | block " << blockSizeMomProj << std::endl ;
-    laphCurrentKernel( n1, n2,
-		       nmom,
-		       blockSizeMomProj,
-		       evList.data() , 
-		       evList.data() ,
-		       host_mom ,
-		       inv_param ,
-		       GPU_ret ,
-		       X ) ;  
+    std::cout<< "block " << blockSizeMomProj << std::endl ;
+    memset( GPU_ret , 0.0 , n1*n2*nmom*X[3]*sizeof(double _Complex));
+#else
+    const int blockSizeMomProj = 32 ;
+#endif
     // GPU version
     StopWatch gpu ;
     gpu.start() ;
-    memset( GPU_ret , 0.0 , n1*n2*nmom*X[3]*sizeof(double _Complex));
     laphCurrentKernel( n1, n2,
 		       nmom,
 		       blockSizeMomProj,
@@ -336,10 +336,10 @@ int main(int argc, char *argv[]) {
     gpu.stop();
     const double GPUtime = gpu.getTimeInSeconds();
     printLaph(make_strf("\nGPU current kernel in = %g seconds\n", GPUtime)) ;
+#ifdef GPU_STRESS
   }
-
+#else
   double _Complex *CPU_ret = (double _Complex*)calloc(n1*n2*nmom*X[3],sizeof(double _Complex)) ;
-  /*
   // CPU version
   StopWatch cpu ;
   cpu.start() ;
@@ -354,16 +354,13 @@ int main(int argc, char *argv[]) {
   cpu.stop() ;
   const double CPUtime = cpu.getTimeInSeconds() ;
   printLaph(make_strf("\nCPU current kernel in = %g seconds\n", CPUtime));
-
   printf( "\n*************************************\n" ) ;
   printf( "-----> GPU speedup factor %gx\n" , CPUtime/GPUtime ) ;
   printf( "*************************************\n\n" ) ;
-  */
-  
-  for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
-    for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
-      for( int p = 0 ; p < nmom ; p++ ) {
-	double sum = 0.0 ;
+  for( int p = 0 ; p < nmom ; p++ ) {
+    double sum = 0.0 ;
+    for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
+      for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
 	#ifdef VERBOSE_COMPARISON
 	printf( "(di1,dil2,p) %d,%d,%d\n" , dil1, dil2, p) ;
 	#endif
@@ -378,16 +375,14 @@ int main(int argc, char *argv[]) {
 	  #endif
 	  sum += cabs( CPU_ret[t+X[3]*(p+nmom*(dil2+n2*dil1) )] - GPU_ret[t+X[3]*(p+nmom*(dil2+n2*dil1) )] ) ; 
 	}
-	printf( "diff %e\n" , sum ) ;
       }
     }
+    printf( "diff %e\n" , sum ) ;
   }
-
-  free( host_mom ) ;
   free( CPU_ret ) ;
+#endif
+  free( host_mom ) ;
   free( GPU_ret ) ;
-  
-  finalize();
-
+  finalize( ) ;
   return 0;
 }
