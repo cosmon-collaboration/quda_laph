@@ -22,7 +22,7 @@ using namespace LaphEnv ;
 using namespace quda ;
 
 //#define VERBOSE_COMPARISON
-#define GPU_STRESS
+//#define GPU_STRESS
 
 static inline void
 evprod( const double _Complex *coeffs ,
@@ -630,17 +630,17 @@ int main(int argc, char *argv[]) {
   memset( retCPU , 0 , X[3]*n1*n2*n3*nmom*sizeof(double _Complex) ) ;
   StopWatch CPU ;
   CPU.start() ;
-  cpu_code_v2( n1 , n2 , n3 ,
-	       nmom,
-	       coeffs1, 
-	       coeffs2, 
-	       coeffs3,
-	       host_mom, 
-	       Nev,
-	       evList.data(),
-	       retCPU,
-	       blockSizeMomProj,
-	       X ) ;
+  cpu_code( n1 , n2 , n3 ,
+	    nmom,
+	    coeffs1, 
+	    coeffs2, 
+	    coeffs3,
+	    host_mom, 
+	    Nev,
+	    evList.data(),
+	    retCPU,
+	    blockSizeMomProj,
+	    X ) ;
   CPU.stop() ;
   const double CPUtime = CPU.getTimeInSeconds() ;
   printLaph(make_strf("\nCPU baryonkernel in = %g seconds\n", CPUtime)) ;
