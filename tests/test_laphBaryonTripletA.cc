@@ -24,7 +24,7 @@ using namespace quda ;
 // will give zero for these otherwise default to uniform random numbers
 //#define PSEUDOCONSTANT
 //#define VERBOSE_COMPARISON
-#define GPU_STRESS
+//#define GPU_STRESS
 
 // cpu color cross
 static void
@@ -56,6 +56,29 @@ cpuColorContract( void *A , void *B , void *result , const int X[4] )
     ptC[i]  = ptA[0+3*i]*(ptB[0+3*i]) ;
     ptC[i] += ptA[1+3*i]*(ptB[1+3*i]) ;
     ptC[i] += ptA[2+3*i]*(ptB[2+3*i]) ;
+  }
+}
+
+// cpu color contract to be called within a parallel region
+static inline void
+cpuColorContractTh( void *A , void *B , void *result , const int X[4] )
+{
+  const int Nsites = X[0]*X[1]*X[2]*X[3] ;
+  const std::complex<double> *ptA = (const std::complex<double>*)A ;
+  const std::complex<double> *ptB = (const std::complex<double>*)B ;
+  std::complex<double> *ptC = (std::complex<double>*)result ;
+  #pragma omp for
+  for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
+    // simple inner product over color A_{c}B_{c}                                                                             
+    #ifdef USE_OPENBLAS
+    ptC[i] = cblas_zdotu( 3 , ptA+3*i , 1 , ptB+3*i , 1 ) ;
+    #elif (defined USE_GSL_CBLAS)
+    cblas_zdotu( 3 , ptA+3*i , 1 , ptB+3*i , 1 , ptC+i ) ;
+    #else
+    ptC[i]  = ptA[0+3*i]*(ptB[0+3*i]) ;
+    ptC[i] += ptA[1+3*i]*(ptB[1+3*i]) ;
+    ptC[i] += ptA[2+3*i]*(ptB[2+3*i]) ;
+    #endif
   }
 }
 
@@ -204,6 +227,58 @@ cpu_codev3( const int nMom,
     }
   }
 }
+
+// slow loopy version
+static void
+cpu_codev4( const int nMom,
+	    const int nEv,
+	    const int blockSizeMomProj,
+	    void **host_evec, 
+	    const double _Complex *host_mom,
+	    double _Complex *return_arr,
+	    const int X[4])
+{  
+  // spatial only
+  const size_t nSp    = X[0]*X[1]*X[2] ;  
+  const size_t nEvC3 = nEv*(nEv-1)*(nEv-2)/6 ;
+  memset( return_arr , 0.0 , X[3]*nEvC3*nMom*sizeof( double _Complex ) ) ;
+
+  LattField Diq( FieldSiteType::ColorVector);
+  LattField tmp( FieldSiteType::Complex);
+
+  size_t idx = 0 ;
+  for( int aEv = 0 ; aEv < nEv ; aEv++ ) {
+    for( int bEv = aEv+1 ; bEv < nEv ; bEv++ ) {
+      cpuColorCross( host_evec[aEv] , host_evec[bEv] , (void*)Diq.getDataPtr() , X ) ;
+      for( int cEv = bEv+1 ; cEv < nEv ; cEv++ ) {
+	#pragma omp parallel
+	{
+	  cpuColorContractTh( (void*)Diq.getDataPtr() , host_evec[cEv] , (void*)tmp.getDataPtr() , X ) ;
+          #pragma omp for collapse(2)
+          for( int p = 0 ; p < nMom ; p++ ) {
+            for( int T = 0 ; T < X[3] ; T++ ) {
+              const double _Complex *p2 = (const double _Complex*)host_mom+p*nSp ;
+              const double _Complex *con = (const double _Complex*)tmp.getDataPtr()+T*nSp ;
+              double _Complex psum = 0. ;
+              #ifdef USE_OPENBLAS
+              psum = cblas_zdotu( nSp , p2 , 1 , con , 1 ) ;
+              #elif (defined USE_GSL_CBLAS)
+              cblas_zdotu( nSp , p2 , 1 , con , 1 , &psum ) ;
+              #else
+              for( size_t i = 0 ; i < (size_t)nSp ; i++ ) {
+                psum += p2[i]*con[i] ;
+              }
+              #endif
+              return_arr[ T + X[3]*(idx + nEvC3*p) ] = psum ;
+            }
+          }
+	}
+	idx++ ;
+      }
+    }
+  }
+}
+
 
 // so I tied an onion to my belt, which was the style at the time
 void alamode( const int nMom,
@@ -399,7 +474,7 @@ int main(int argc, char *argv[]) {
 #ifdef GPU_STRESS
   const int Nev = 96 ;
 #else
-  const int Nev = 64 ;
+  const int Nev = 48 ;
 #endif
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
 
@@ -482,7 +557,7 @@ int main(int argc, char *argv[]) {
   StopWatch cpu ;
   cpu.start() ;
   //cpu_code( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
-  cpu_codev2( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
+  cpu_codev4( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
   //cpu_codev3( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
   cpu.stop() ;
   const double CPUtime = cpu.getTimeInSeconds() ;

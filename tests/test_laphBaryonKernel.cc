@@ -143,6 +143,29 @@ cpuColorContract( void *A , void *B , void *result , const int X[4] )
   }
 }
 
+// cpu color contract to be called within a parallel region
+static void
+cpuColorContractTh( void *A , void *B , void *result , const int X[4] )
+{
+  const int Nsites = X[0]*X[1]*X[2]*X[3] ;
+  const std::complex<double> *ptA = (const std::complex<double>*)A ;
+  const std::complex<double> *ptB = (const std::complex<double>*)B ;
+  std::complex<double> *ptC = (std::complex<double>*)result ;
+  #pragma omp for
+  for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
+    #ifdef USE_OPENBLAS
+    ptC[i] = cblas_zdotu( 3 , ptA+3*i , 1 , ptB+3*i , 1 ) ;
+    #elif (defined USE_GSL_CBLAS)
+    cblas_zdotu( 3 , ptA+3*i , 1 , ptB+3*i , 1 , ptC+i ) ;
+    #else
+    // simple inner product over color A_{c}B_{c}
+    ptC[i]  = ptA[0+3*i]*(ptB[0+3*i]) ;
+    ptC[i] += ptA[1+3*i]*(ptB[1+3*i]) ;
+    ptC[i] += ptA[2+3*i]*(ptB[2+3*i]) ;
+    #endif
+  }  
+}
+
 void cpu_code_v1( const int n1, const int n2, const int n3, const int nMom,
 		  const double _Complex *host_coeffs1, 
 		  const double _Complex *host_coeffs2, 
@@ -263,6 +286,70 @@ void cpu_code_v2( const int n1, const int n2, const int n3, const int nMom,
   free(q2) ;
   free(q3) ;
 }  
+
+void cpu_code_v3( const int n1, const int n2, const int n3, const int nMom,
+		  const double _Complex *host_coeffs1, 
+		  const double _Complex *host_coeffs2, 
+		  const double _Complex *host_coeffs3,
+		  const double _Complex *host_mom, 
+		  const int nEv,
+		  const void *const *host_evec, 
+		  double _Complex *return_array,
+		  const int blockSizeMomProj,
+		  const int X[4] )
+{
+  const size_t nSp = X[0]*X[1]*X[2] ;
+  const size_t nsites = nSp*X[3] ;
+  double _Complex *q1 = (double _Complex*)calloc( n1*nsites*3 , sizeof(double _Complex) ) ;
+  double _Complex *q2 = (double _Complex*)calloc( n2*nsites*3 , sizeof(double _Complex) ) ;
+  double _Complex *q3 = (double _Complex*)calloc( n3*nsites*3 , sizeof(double _Complex) ) ;
+#pragma omp parallel
+  {
+    evprod( host_coeffs1 , host_evec , n1 , nEv , nsites , q1 ) ;
+    evprod( host_coeffs2 , host_evec , n2 , nEv , nsites , q2 ) ;
+    evprod( host_coeffs3 , host_evec , n3 , nEv , nsites , q3 ) ;
+  }
+
+  LattField Diq( FieldSiteType::ColorVector);
+  LattField tmp( FieldSiteType::Complex);
+  
+  for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
+    for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
+      cpuColorCross( (void*)&q1[dil1*nsites*3] , (void*)&q2[dil2*nsites*3] , (void*)Diq.getDataPtr() , X ) ;
+
+      for( int dil3 = 0 ; dil3 < n3 ; dil3++ ) {
+	const size_t idx = dil3 + n3*(dil2 + n2*dil1) ;
+        #pragma omp parallel
+	{
+	  cpuColorContractTh( (void*)Diq.getDataPtr() , (void*)&q3[dil3*nsites*3] , (void*)tmp.getDataPtr() , X ) ;
+          #pragma omp for collapse(2)
+	  for( int p = 0 ; p < nMom ; p++ ) {
+	    for( int T = 0 ; T < X[3] ; T++ ) {
+	      const double _Complex *p2 = (const double _Complex*)host_mom+p*nSp ;
+	      const double _Complex *con = (const double _Complex*)tmp.getDataPtr()+T*nSp ; 
+	      double _Complex psum = 0. ;
+	      #ifdef USE_OPENBLAS
+	      psum = cblas_zdotu( nSp , p2 , 1 , con , 1 ) ;
+              #elif (defined USE_GSL_CBLAS)
+	      cblas_zdotu( nSp , p2 , 1 , con , 1 , &psum ) ;
+	      #else
+	      for( size_t i = 0 ; i < (size_t)nSp ; i++ ) {
+	      	psum += p2[i]*con[i] ;
+	      }
+	      #endif
+	      return_array[ T + X[3]*(idx + n1*n2*n3*p) ] = psum ;
+	    }
+	  }
+	}
+	// end parallel
+      }
+    }
+  }
+  free(q1) ;
+  free(q2) ;
+  free(q3) ;
+}  
+
 
 static void
 alamode2( const int n1, const int n2, const int n3, const int nMom,
@@ -494,7 +581,8 @@ int main(int argc, char *argv[]) {
 #ifdef GPU_STRESS
   const int Nev = 256 , n1 = 64 , n2 = 64 , n3 = 64 ;
 #else
-  const int Nev = 32 , n1 = 8 , n2 = 8 , n3 = 8 ;
+  //const int Nev = 32 , n1 = 8 , n2 = 8 , n3 = 8 ;
+  const int Nev = 64 , n1 = 32 , n2 = 32 , n3 = 32 ;
 #endif
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
   std::cout<<"Constant Eigvecs"<<std::endl ;
@@ -587,6 +675,8 @@ int main(int argc, char *argv[]) {
   }
 #else
   double _Complex *retCPU = (double _Complex*)calloc( X[3]*n1*n2*n3*nmom , sizeof( double _Complex) ) ;
+
+  #ifdef CPU_STRESS
   {
     memset( retCPU , 0 , X[3]*n1*n2*n3*nmom*sizeof(double _Complex) ) ;
     StopWatch CPU ;
@@ -606,7 +696,6 @@ int main(int argc, char *argv[]) {
     const double CPUtime = CPU.getTimeInSeconds() ;
     printLaph(make_strf("\nCPUv1 baryonkernel in = %g seconds\n", CPUtime)) ;
   }
-
   {
     memset( retCPU , 0 , X[3]*n1*n2*n3*nmom*sizeof(double _Complex) ) ;
     StopWatch CPU ;
@@ -626,11 +715,31 @@ int main(int argc, char *argv[]) {
     const double CPUtime = CPU.getTimeInSeconds() ;
     printLaph(make_strf("\nCPUv2 baryonkernel in = %g seconds\n", CPUtime)) ;
   }
-
+  {
+    memset( retCPU , 0 , X[3]*n1*n2*n3*nmom*sizeof(double _Complex) ) ;
+    StopWatch CPU ;
+    CPU.start() ;
+    cpu_code_v3( n1 , n2 , n3 ,
+		 nmom,
+		 coeffs1, 
+		 coeffs2, 
+		 coeffs3,
+		 host_mom, 
+		 Nev,
+		 evList.data(),
+		 retCPU,
+		 blockSizeMomProj,
+		 X ) ;
+    CPU.stop() ;
+    const double CPUtime = CPU.getTimeInSeconds() ;
+    printLaph(make_strf("\nCPUv3 baryonkernel in = %g seconds\n", CPUtime)) ;
+  }
+  #endif
+  
   memset( retCPU , 0 , X[3]*n1*n2*n3*nmom*sizeof(double _Complex) ) ;
   StopWatch CPU ;
   CPU.start() ;
-  cpu_code( n1 , n2 , n3 ,
+  cpu_code_v3( n1 , n2 , n3 ,
 	    nmom,
 	    coeffs1, 
 	    coeffs2, 
