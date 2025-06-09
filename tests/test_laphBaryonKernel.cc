@@ -22,7 +22,7 @@ using namespace LaphEnv ;
 using namespace quda ;
 
 //#define VERBOSE_COMPARISON
-//#define GPU_STRESS
+#define GPU_STRESS
 
 static inline void
 evprod( const double _Complex *coeffs ,
@@ -492,7 +492,7 @@ int main(int argc, char *argv[]) {
   
   // init Evs
 #ifdef GPU_STRESS
-  const int Nev = 128 , n1 = 64 , n2 = 64 , n3 = 64 ;
+  const int Nev = 256 , n1 = 64 , n2 = 64 , n3 = 64 ;
 #else
   const int Nev = 32 , n1 = 8 , n2 = 8 , n3 = 8 ;
 #endif
@@ -558,7 +558,7 @@ int main(int argc, char *argv[]) {
 
   double _Complex *retGPU = (double _Complex*)calloc( X[3]*n1*n2*n3*nmom , sizeof( double _Complex) ) ;
 #ifdef GPU_STRESS  
-  for( int blockSizeMomProj = 1 ; blockSizeMomProj < (n1*n2*n3) ; blockSizeMomProj *= 2 ) {
+  for( int blockSizeMomProj = 2 ; blockSizeMomProj < 8192 ; blockSizeMomProj *= 2 ) {
     memset( retGPU , 0.0 , X[3]*nmom*n1*n2*n3*sizeof(double _Complex)) ;
 #else
     const int blockSizeMomProj = 13 ;
