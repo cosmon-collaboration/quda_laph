@@ -5,6 +5,7 @@
 #include "gauge_configuration_info.h"
 #include "byte_handler.h"
 #include <cstring>
+#include <cstdint>
 
 
 namespace LaphEnv {
