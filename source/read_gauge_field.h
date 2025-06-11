@@ -3,6 +3,7 @@
 
 #include "latt_field.h"
 #include "gauge_configuration_info.h"
+#include "byte_handler.h"
 #include <cstring>
 
 
@@ -13,9 +14,11 @@ namespace LaphEnv {
 // *                                                                              *
 // *    An object of this class reads a 4-dimensional lattice SU3 gauge           *
 // *    configuration from file and puts the field into "U".                      *
+// *
+// *    Currently supported format:
+// *        CERN or CLS,   SCIDAC or SZINQIO
 // *                                                                              *
 // ********************************************************************************
-
 
 
 
@@ -78,9 +81,13 @@ class GaugeConfigReader
 class GaugeCERNConfigReader
 {
 
+   ByteHandler BH;
+   
+   bool endian_convert;
+
  public:
  
-   GaugeCERNConfigReader(){}
+   GaugeCERNConfigReader();
    
    GaugeCERNConfigReader(const GaugeCERNConfigReader& in) = delete;
    
@@ -122,6 +129,8 @@ class GaugeCERNConfigReader
                       std::vector<int>& lengths, int& start_parity);
 
 #endif
+
+   friend class GaugeSCIDACConfigReader;
 };
 
 
@@ -130,6 +139,81 @@ inline void GaugeCERNConfigReader::su3_copy(double *dest, const double *src, int
 {
  std::memcpy(dest,src,su3dble*sizeof(double));
 }
+
+
+
+// ********************************************************************************
+// *                                                                              *
+// *  An object of this class reads a 4-dimensional lattice SU3 gauge             *
+// *  configuration in SCIDAC/SZINQIO format from a file named "cfg_file"         *
+// *  and puts the field into "u".                                                *      
+// *                                                                              *
+// *  Details about SZINQIO/SCIDAC format:                                        *       
+// *     - big endian, ints are 4 bytes, floats are 4 bytes                       *
+// *     - a sequence of 7 lime records with the following labels:                *
+// *          scidac-private-file-xml                                             *
+// *          scidac-file-xml                                                     *
+// *          scidac-private-record-xml                                           *
+// *          scidac-record-xml                                                   *
+// *          ildg-format                                                         *
+// *          ildg-binary-data                                                    *
+// *          scidac-checksum                                                     *
+// *     - the gauge configuration data resides in the record                     *
+// *          labelled ildg-binary-data                                           *
+// *     - all of the other records contain metadata in XML format                *
+// *     - the record labelled ildg-format has the XML info                       *
+// *          below which can be used as a check                                  *
+// *            <ildgFormat>                                                      *
+// *               <version>1.0</version>                                         *
+// *               <field>su3gauge</field>                                        *
+// *               <precision>32</precision>                                      *
+// *               <lx>24</lx>                                                    *
+// *               <ly>24</ly>                                                    *
+// *               <lz>24</lz>                                                    *
+// *               <lt>128</lt>                                                   *
+// *            </ildgFormat>                                                     *
+// *     - the gauge configuration data is ordered as follows:                    *
+// *          (color_row, color_col, dir, x, y, z, t)                             *
+// *          leftmost indices varying most rapidly                               *
+// *     - a lime record has the following form:                                  *
+// *          - header 144 bytes (4 bytes magic number, 2 bytes version number,   *
+// *               8 bytes length of data record in bytes, 128 bytes              *
+// *               record label or lime type as string)                           *
+// *           - data record, whose length was given in the header, padded up     *
+// *               to a multiple of 8 bytes                                       *
+// *                                                                              *
+// ********************************************************************************
+
+
+class GaugeSCIDACConfigReader
+{
+
+   ByteHandler BH;
+   
+   bool endian_convert;
+
+ public:
+ 
+   GaugeSCIDACConfigReader();
+   
+   GaugeSCIDACConfigReader(const GaugeSCIDACConfigReader& in) = delete;
+   
+   GaugeSCIDACConfigReader& operator=(const GaugeSCIDACConfigReader& in) = delete;
+   
+   ~GaugeSCIDACConfigReader(){}
+   
+   bool read(std::vector<LattField>& u, const std::string& cfg_file);
+
+ private:
+
+   void get_lime_record_header(const std::vector<char>& lime_record_header, 
+                               uint32_t& lime_magic_number, uint16_t& lime_version, 
+                               uint64_t& lime_record_data_length, 
+                               std::string& lime_type);
+   void get_lime_record_xml(std::vector<char>& lime_record_info, 
+                            XMLHandler& record_xml);
+
+};
 
 
 // *************************************************************************

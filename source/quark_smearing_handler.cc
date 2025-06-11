@@ -11,9 +11,6 @@
 #endif
 
 
-    // STILL TO DO:  single asynchronous thread for output so can continue next computations
-    //                   while output occurs
-
 using namespace std;
 
 namespace LaphEnv {
@@ -335,7 +332,6 @@ void QuarkSmearingHandler::computeLaphEigenvectors(
  printLaph(make_strf("Time to write laph eigenvectors = %g seconds",iotimer.getTimeInSeconds()));
  iotime+=iotimer.getTimeInSeconds();
  gHandler.eraseDataOnDevice();
- 
  
    //   THIS IS A HACK:  QUDA LAPH EV SOLVER might be screwing things up so undo
  QudaInfo::clearDeviceGaugeConfiguration();

@@ -17,10 +17,10 @@ namespace LaphEnv {
 // *   execution, but after MPI and Quda communications have been    *
 // *   initialized. A 4 dimensional lattice is assumed (make the 4th *
 // *   dimension have size 1 to use a 3 dimensional lattice). QDP    *
-// *   lexicographic format is used. The lattice is divided up on    *
-// *   the MPI ranks in the same way on each rank.  The number of    *
-// *   lattice sites on each MPI rank is the same.  The lattice size *
-// *   in each direction must be divisible by the MPI partition      *
+// *   even/odd checkerboard format is used. The lattice is divided  *
+// *   up on the MPI ranks in the same way on each rank.  The number *
+// *   of lattice sites on each MPI rank is the same.  The lattice   *
+// *   size in each direction must be divisible by the MPI partition *
 // *   size in each direction.                                       *
 // *                                                                 *
 // *   The input XML should have the following form:                 *

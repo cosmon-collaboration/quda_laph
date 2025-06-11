@@ -26,10 +26,10 @@ namespace LaphEnv {
  // *                                                                               *
  // *   This class attempts to make serial/parallel input/output in local and       *
  // *   global mode easier to achieve.  This is a low-level class which has         *
- // *   the functionality of fstreams except it uses MPI-IO: this class is meant    *
- // *   to be used by IOMap. For example, this class maintains a checksum if        *
- // *   desired, but it does not write the checksums in the file.  Instead,         *
- // *   IOMap can be set to store checksums. The FM stands for "fstreams or mpi-io".*
+ // *   the functionality of fstreams except it uses MPI-IO in a parallel setting.  *
+ // *   The FM stands for "fstreams or mpi-io" since fstreams is used when          *
+ // *   compiled for serial runs and MPI-IO is used when compiled for parallel      *
+ // *   runs.                                                                       *
  // *                                                                               *
  // *   Some features of this class are as follows: (a) in a parallel architecture, *
  // *   it uses MPI-IO so that input/output is parallel and efficient; (b) it       *
@@ -39,6 +39,16 @@ namespace LaphEnv {
  // *   subsequently operate in either global or local mode.  Currently, only       *
  // *   blocking I/O operations are supported, but it would be simple to implement  *
  // *   some of MPI-IO's non-blocking operations.                                   *
+ // *                                                                               *
+
+ // *   NOTE: this is a utility class used by IOFMMap, which is the class meant     *
+ // *   for the end user.  This class uses primitive seek functions to read/write,  *
+ // *   just like fstreams.  IOFMMap acts like a C++ map but with storage in a      *
+ // *   file, and IOFMMap allows access to the data through a key such as in a C++  *
+ // *   map.  In this way, IOFMMap is meant to mimic the features of HDF5, except   *
+ // *   that the key need not be just a string.  IOFMHandler can maintain a         *
+ // *   checksum during I/O operations, but it does not write checksums into the    *
+ // *   files, whereas IOFMMap does.                                                *
  // *                                                                               *
  // *   An object of class IOFMHandler must be defined as global or local in the    *
  // *   constructor, and this property cannot be changed.  If global, then it is    *
@@ -426,36 +436,36 @@ class IOFMHandler
    explicit IOFMHandler(bool global=true);
 
    IOFMHandler(const std::string& filename, OpenMode mode=ReadOnly,
-               const std::string& filetype_id="", char endianness='N',
-               int striping_factor=1, int striping_unit=0,
-               bool turn_on_checksum=false, bool global=true);
+               const std::string& filetype_id="", bool global=true, 
+               char endianness='N', bool turn_on_checksum=false,
+               int striping_factor=1, int striping_unit=0);
 
    IOFMHandler(const std::string& filename, std::ios_base::openmode mode,
-               const std::string& filetype_id="", char endianness='N',
-               int striping_factor=1, int striping_unit=0,
-               bool turn_on_checksum=false, bool global=true);
+               const std::string& filetype_id="", bool global=true,
+               char endianness='N', bool turn_on_checksum=false,
+               int striping_factor=1, int striping_unit=0);
 
    void open(const std::string& filename, OpenMode mode=ReadOnly,
              const std::string& filetype_id="", char endianness='N',
-             int striping_factor=1, int striping_unit=0,
-             bool turn_on_checksum=false);
+             bool turn_on_checksum=false, int striping_factor=1,
+             int striping_unit=0);
 
    void open(const std::string& filename, std::ios_base::openmode mode,
              const std::string& filetype_id="", char endianness='N',
-             int striping_factor=1, int striping_unit=0,
-             bool turn_on_checksum=false);
+             bool turn_on_checksum=false, int striping_factor=1,
+             int striping_unit=0);
 
    void openReadOnly(const std::string& filename, const std::string& filetype_id="",
                      bool turn_on_checksum=false);
 
    void openNew(const std::string& filename, bool fail_if_exists=true,
                 const std::string& filetype_id="", char endianness='N',
-                int striping_factor=1, int striping_unit=0,
-                bool turn_on_checksum=false);
+                bool turn_on_checksum=false, int striping_factor=1,
+                int striping_unit=0);
 
    void openUpdate(const std::string& filename, const std::string& filetype_id="", 
-                   char endianness='N', int striping_factor=1, int striping_unit=0,
-                   bool turn_on_checksum=false);
+                   char endianness='N', bool turn_on_checksum=false,
+                   int striping_factor=1, int striping_unit=0);
 
    ~IOFMHandler();
 

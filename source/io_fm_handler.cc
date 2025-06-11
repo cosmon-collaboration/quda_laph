@@ -447,10 +447,10 @@ void IOFMHandler::compute_lattice_checksum(char* data, size_t bytes_per_site,
 
 
 IOFMHandler::IOFMHandler(bool global) : read_only(true), openflag(false), read_mode(true),
-                                    global_mode(global), endian_format('U'), 
-                                    endian_convert(false), checksum_on(false), 
-                                    is_new_file(false), checksum(0), lattinfo(1),
-                                    lattcmplxbytes(LattField::get_cpu_prec_bytes())
+                                        global_mode(global), endian_format('U'), 
+                                        endian_convert(false), checksum_on(false), 
+                                        is_new_file(false), checksum(0), lattinfo(1),
+                                        lattcmplxbytes(LattField::get_cpu_prec_bytes())
 {
 #ifdef ARCH_PARALLEL
  check_for_failure(MPI_Info_create(&finfo),"Failure during MPI_Info_create");
@@ -460,40 +460,39 @@ IOFMHandler::IOFMHandler(bool global) : read_only(true), openflag(false), read_m
 
 
 IOFMHandler::IOFMHandler(const std::string& filename, OpenMode mode,
-                         const std::string& filetype_id, char endianness,
-                         int striping_factor, int striping_unit,
-                         bool turn_on_checksum, bool global) : global_mode(global), lattinfo(1),
-                         lattcmplxbytes(LattField::get_cpu_prec_bytes())
+                         const std::string& filetype_id, bool global,
+                         char endianness, bool turn_on_checksum,
+                         int striping_factor, int striping_unit)
+            : global_mode(global), lattinfo(1),
+              lattcmplxbytes(LattField::get_cpu_prec_bytes())
 {
  static_assert(sizeof(int)==4,"sizeof(int) must be 4");
 #ifdef ARCH_PARALLEL
  check_for_failure(MPI_Info_create(&finfo),"Failure during MPI_Info_create");
 #endif
  openflag=false;
- open(filename,mode,filetype_id,endianness,striping_factor,striping_unit,
-      turn_on_checksum);
+ open(filename,mode,filetype_id,endianness,turn_on_checksum,striping_factor,striping_unit);
 }
 
 IOFMHandler::IOFMHandler(const std::string& filename, std::ios_base::openmode mode,
-                         const std::string& filetype_id, char endianness,
-                         int striping_factor, int striping_unit,
-                         bool turn_on_checksum, bool global) : global_mode(global), lattinfo(1),
-                         lattcmplxbytes(LattField::get_cpu_prec_bytes())
+                         const std::string& filetype_id, bool global,
+                         char endianness, bool turn_on_checksum,
+                         int striping_factor, int striping_unit)
+            : global_mode(global), lattinfo(1),
+              lattcmplxbytes(LattField::get_cpu_prec_bytes())
 {
  static_assert(sizeof(int)==4,"sizeof(int) must be 4");
 #ifdef ARCH_PARALLEL
  check_for_failure(MPI_Info_create(&finfo),"Failure during MPI_Info_create");
 #endif
  openflag=false;
- open(filename,mode,filetype_id,endianness,striping_factor,striping_unit,
-      turn_on_checksum);
+ open(filename,mode,filetype_id,endianness, turn_on_checksum,striping_factor,striping_unit);
 }
 
 
 void IOFMHandler::open(const std::string& filename, IOFMHandler::OpenMode mode,
                        const std::string& filetype_id, char endianness,
-                       int striping_factor, int striping_unit,
-                       bool turn_on_checksum)
+                       bool turn_on_checksum, int striping_factor, int striping_unit)
 {
  close();
  read_only=(mode==ReadOnly)?true:false;
@@ -529,16 +528,14 @@ void IOFMHandler::open(const std::string& filename, IOFMHandler::OpenMode mode,
 
 void IOFMHandler::open(const std::string& filename, std::ios_base::openmode mode,
                        const std::string& filetype_id, char endianness,
-                       int striping_factor, int striping_unit,
-                       bool turn_on_checksum)
+                       bool turn_on_checksum, int striping_factor, int striping_unit)
 {
  IOFMHandler::OpenMode iomode;
  if (!(mode & std::ios_base::out)) iomode=ReadOnly;
  else{
     if (mode & std::ios_base::trunc) iomode=ReadWriteEraseIfExists;
     else iomode=ReadWriteFailIfExists;}
- open(filename,iomode,filetype_id,endianness,striping_factor,striping_unit,
-      turn_on_checksum);
+ open(filename,iomode,filetype_id,endianness,turn_on_checksum,striping_factor,striping_unit);
 }
 
 
@@ -546,28 +543,25 @@ void IOFMHandler::openReadOnly(const std::string& filename,
                                const std::string& filetype_id,
                                bool turn_on_checksum)
 {
- open(filename,ReadOnly,filetype_id,'N',1,0,turn_on_checksum);
+ open(filename,ReadOnly,filetype_id,'N',turn_on_checksum,1,0);
 }
 
 
 void IOFMHandler::openNew(const std::string& filename, bool fail_if_exists,
                           const std::string& filetype_id, char endianness,
-                          int striping_factor, int striping_unit,
-                          bool turn_on_checksum)
+                          bool turn_on_checksum, int striping_factor, int striping_unit)
 {
  OpenMode iomode=(fail_if_exists) ? ReadWriteFailIfExists : ReadWriteEraseIfExists;
- open(filename,iomode,filetype_id,endianness,striping_factor,striping_unit,
-      turn_on_checksum);
+ open(filename,iomode,filetype_id,endianness,turn_on_checksum,striping_factor,striping_unit);
 }
 
 
-void IOFMHandler::openUpdate(const std::string& filename,
-                             const std::string& filetype_id, char endianness,
-                             int striping_factor, int striping_unit,
-                             bool turn_on_checksum)
+void IOFMHandler::openUpdate(const std::string& filename, const std::string& filetype_id,
+                             char endianness, bool turn_on_checksum, int striping_factor,
+                             int striping_unit)
 {
  open(filename,ReadWriteUpdateIfExists,filetype_id,endianness,
-      striping_factor,striping_unit,turn_on_checksum);
+      turn_on_checksum,striping_factor,striping_unit);
 }
 
 
@@ -606,8 +600,7 @@ void IOFMHandler::open_existing_file(const std::string& filetype_id,
 }
 
 
-void IOFMHandler::open_new_file(const std::string& filetype_id,
-                                char endianness,
+void IOFMHandler::open_new_file(const std::string& filetype_id, char endianness,
                                 int striping_factor, int striping_unit)
 {
  if (endianness=='N'){  // native 

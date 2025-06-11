@@ -1,5 +1,4 @@
 #include "read_gauge_field.h"
-#include "byte_handler.h"
 #include "laph_stdio.h"
 #include "stop_watch.h"
 
@@ -13,6 +12,7 @@ using namespace std;
 using namespace quda;
 
 namespace LaphEnv {
+
 
 // *************************************************************************
 
@@ -28,6 +28,13 @@ bool GaugeConfigReader::read(std::vector<LattField>& U,
     GaugeCERNConfigReader GCCR;
     GCCR.read(U,ginfo.getFileName());
     ginfo.output(gauge_xmlinfo);}
+ else if ((ginfo.file_format=="SCIDAC")||(ginfo.file_format=="SZINQIO")
+        ||(ginfo.file_format=="USQCD")){
+    GaugeSCIDACConfigReader GCSD;
+    GCSD.read(U,ginfo.getFileName());
+    ginfo.output(gauge_xmlinfo);}
+ else {
+    errorLaph("Unsupported gauge configuration file format");}
 
  return true;
 }
@@ -41,6 +48,14 @@ bool GaugeConfigReader::read(std::vector<LattField>& U,
 // *                                                          *
 // *                                                          *
 // ************************************************************
+
+
+GaugeCERNConfigReader::GaugeCERNConfigReader()
+{
+      //  CERN field always stored as little endian
+ endian_convert=(BH.big_endian())?true:false;
+}
+
 
 #ifdef ARCH_SERIAL
 
@@ -89,6 +104,7 @@ void GaugeCERNConfigReader::cern_to_qdp_lexico(const double* cern, double* xl, d
                 su3_copy(zl+(qindex+zshift)*su3dble,cptr,su3dble); cptr+=su3dble;}}}}}
 }
 
+             // serial version
 
 bool GaugeCERNConfigReader::read(vector<LattField>& u, const std::string& in_cfg_file)
 {
@@ -112,9 +128,6 @@ bool GaugeCERNConfigReader::read(vector<LattField>& u, const std::string& in_cfg
  StopWatch rtimer; rtimer.start(); 
  StopWatch iotimer;
 
-     //  CERN field always stored as little endian
- ByteHandler BH;
- bool endian_convert=(BH.big_endian())?true:false;
      // open file for reading
  iotimer.start();
  ifstream fin(cfg_file.c_str(), std::ios::binary | std::ios::in);
@@ -168,7 +181,7 @@ bool GaugeCERNConfigReader::read(vector<LattField>& u, const std::string& in_cfg
 
  rtimer.stop();
  printLaph(make_strf("      readCERN: plaq read: %16.12f\n",avgplaq));
- printLaph(make_strf("Read of CERN gauge field done in %g seconds\n",rtimer.getTimeInSeconds()));
+ printLaph(make_strf("Read of CERN gauge field done in %g seconds",rtimer.getTimeInSeconds()));
  printLaph(make_strf("Time of IO operations = %g seconds\n\n",iotimer.getTimeInSeconds()));
  return true;
 }
@@ -398,6 +411,7 @@ void GaugeCERNConfigReader::get_file_view(
   //  (x,y,z,t) with x fastest varying.  At each site is an SU3 matrix in row
   //  major format.
 
+             //  Parallel version
 
 bool GaugeCERNConfigReader::read(vector<LattField>& u, const std::string& in_cfg_file)
 {
@@ -422,10 +436,6 @@ bool GaugeCERNConfigReader::read(vector<LattField>& u, const std::string& in_cfg
  printLaph(make_strf("\nBeginning read of CERN gauge field (%d x %d x %d) x %d",NX,NY,NZ,NT));
  StopWatch rtimer; rtimer.start(); 
  StopWatch iotimer;
-
-     //  CERN field always stored as little endian
- ByteHandler BH;
- bool endian_convert=(BH.big_endian())?true:false;
 
      // open file for reading
  iotimer.start();
@@ -656,7 +666,7 @@ bool GaugeCERNConfigReader::read(vector<LattField>& u, const std::string& in_cfg
 
  rtimer.stop();
  printLaph(make_strf("      readCERN: plaq read: %16.12f\n",avgplaq));
- printLaph(make_strf("Read of CERN gauge field done in %g seconds\n",rtimer.getTimeInSeconds()));
+ printLaph(make_strf("Read of CERN gauge field done in %g seconds",rtimer.getTimeInSeconds()));
  printLaph(make_strf("Time of IO operations = %g seconds\n\n",iotimer.getTimeInSeconds()));
  return true;
 }
@@ -682,29 +692,468 @@ void GaugeCERNConfigReader::lexico_to_evenodd(vector<LattField>& u)
 // ************************************************************
 // *                                                          *
 // *                                                          *
-// *             SZIN, USQCD, LIME format read                *
+// *              SCIDAC or SZINQIO format read               *
 // *                                                          *
 // *                                                          *
 // ************************************************************
 
-    // this read a lime record
-//read_lime_record_header(
+
+//   An object of this class reads a 4-dimensional lattice SU3 gauge          
+//   configuration in SCIDAC/SZINQIO format from a file named "cfg_file"
+//   and puts the field into "u".                                                      
+//                                                                            
+//   Details about SZINQIO/SCIDAC format:                                               
+//      - big endian, ints are 4 bytes, floats are 4 bytes                 
+//      - a sequence of 7 lime records with the following labels:
+//           scidac-private-file-xml
+//           scidac-file-xml
+//           scidac-private-record-xml
+//           scidac-record-xml
+//           ildg-format
+//           ildg-binary-data
+//           scidac-checksum
+//      - the gauge configuration data resides in the record 
+//           labelled ildg-binary-data
+//      - all of the other records contain metadata in XML format
+//      - the record labelled ildg-format has the XML info
+//           below which can be used as a check
+//             <ildgFormat>
+//                <version>1.0</version>
+//                <field>su3gauge</field>
+//                <precision>32</precision>
+//                <lx>24</lx>
+//                <ly>24</ly>
+//                <lz>24</lz>
+//                <lt>128</lt>
+//             </ildgFormat>
+//      - the gauge configuration data is ordered as follows:
+//           (color_row, color_col, dir, x, y, z, t)
+//           leftmost indices varying most rapidly
+//      - a lime record has the following form:
+//           - header 144 bytes (32 bit magic number, 16 bit version number,
+//                64 bit length of data record in bytes, 128 bytes lime type as string)
+//            - data record, whose length was given in the header, padded up to a 
+//                multiple of 8 bytes
 
 
-
-
-
-// *************************************************************************************************
+GaugeSCIDACConfigReader::GaugeSCIDACConfigReader()
+{
+      //  SCIDAC field always stored as big endian
+ endian_convert=(BH.big_endian())?false:true;
 }
 
 
+#ifdef ARCH_SERIAL
+
+            // serial version
+
+bool GaugeSCIDACConfigReader::read(vector<LattField>& u, const std::string& in_cfg_file)
+{
+ string cfg_file=tidyString(in_cfg_file);
+ if (cfg_file.empty()){
+    errorLaph("Empty file name in GaugeSZINConfigReader::read");}
+ if ((sizeof(int)!=4)||(sizeof(float)!=4)){
+    errorLaph("We assume 4-byte ints, 4-byte floats");}
+ if (FieldNcolor!=3){
+    errorLaph("Only supports Nc=3");}
+ if (LayoutInfo::Ndim!=4){
+    errorLaph("Only supported for 4 space-time dimensions");}
+ int NT = LayoutInfo::getLattExtents()[3];
+ int NZ = LayoutInfo::getLattExtents()[2];   // these should all be even
+ int NY = LayoutInfo::getLattExtents()[1];
+ int NX = LayoutInfo::getLattExtents()[0];
+ if ((NT%2)||(NX%2)||(NY%2)||(NZ%2)){
+    errorLaph("Each lattice size in each direction must be even");}
+ printLaph(make_strf("\nBeginning read of SCIDAC gauge field (%d x %d x %d) x %d\n",NX,NY,NZ,NT));
+ StopWatch rtimer; rtimer.start(); 
+ StopWatch iotimer;
+ 
+     // open file for reading
+ iotimer.start();
+ ifstream fin(cfg_file.c_str(), std::ios::binary | std::ios::in);
+ iotimer.stop(); // printLaph(make_str("iotime so far = ",iotimer.getTimeInSeconds()));
+ if (!fin){
+    errorLaph(make_strf("Error open SCIDAC gauge configuration file %s\n",cfg_file));}
+
+     //  read the header of the first lime record
+ uint16_t lime_version;
+ uint32_t lime_magic_number;
+ uint64_t lime_record_data_length, padded_length, total_bytes;
+ string lime_type;
+ vector<char> lime_record_header(144);
+ XMLHandler record_xml; 
+ bool metadata_check=false;
+ uint precision=0;
+ total_bytes=0;
+ 
+    // read the first 5 lime records which should contain XML metadata
+ for (int irec=0;irec<5;++irec){
+    iotimer.start();
+    fin.read(reinterpret_cast<char *>(lime_record_header.data()),144);
+    iotimer.stop();
+    get_lime_record_header(lime_record_header,lime_magic_number,lime_version,
+                           lime_record_data_length,lime_type);
+    padded_length=lime_record_data_length+(7-((lime_record_data_length-1)%8));
+    total_bytes+=144+padded_length;
+    vector<char> record_info(padded_length);
+    iotimer.start();
+    fin.read(reinterpret_cast<char *>(record_info.data()),padded_length);
+    iotimer.stop();
+    get_lime_record_xml(record_info,record_xml);
+    if (lime_type=="ildg-format"){
+       string gcf;
+       int lx,ly,lz,lt;
+       xmlread(record_xml,"field",gcf,"ildg-format");
+       xmlread(record_xml,"lx",lx,"ildg-format");
+       xmlread(record_xml,"ly",ly,"ildg-format");
+       xmlread(record_xml,"lz",lz,"ildg-format");
+       xmlread(record_xml,"lt",lt,"ildg-format");
+       xmlread(record_xml,"precision",precision,"ildg-format");
+       if ((lx==NX)&&(ly==NY)&&(lz==NZ)&&(lt==NT)&&(gcf=="su3gauge")){
+          metadata_check=true;}}}
+ if (!metadata_check){
+    errorLaph(make_str("Metadata checks did NOT pass in SCIDAC gauge configuration read"));}
+
+     // Now get the gauge field data from the 6th lime record
+ iotimer.start();
+ fin.read(reinterpret_cast<char *>(lime_record_header.data()),144);
+ iotimer.stop();
+ get_lime_record_header(lime_record_header,lime_magic_number,lime_version,
+                        lime_record_data_length,lime_type);
+ if (lime_type!="ildg-binary-data"){
+    errorLaph(make_str("SCIDAC gauge configuration data is not in the expected lime record"));}
+ size_t linkreals=2*FieldNcolor*FieldNcolor;
+ size_t ndir=LayoutInfo::Ndim;
+ size_t nelemsite=ndir*linkreals;
+ size_t nsites=NX*NY*NZ*NT;
+ size_t nelem=nsites*nelemsite;
+ char prec='U';
+ size_t rsize=0;
+ if (precision==32){
+    rsize=sizeof(float); prec='S';}
+ else if (precision==64){
+    rsize=sizeof(double); prec='D';}
+ if (lime_record_data_length!=rsize*nelem){
+    errorLaph(make_str("SCIDAC gauge configuration data is not the expected size"));}
+
+    //  read the data into a buffer since not in same order as will be in memory
+ padded_length=lime_record_data_length+(7-((lime_record_data_length-1)%8));
+ total_bytes+=144+padded_length;
+ vector<char> record_data(padded_length);
+ iotimer.start();
+ fin.read(reinterpret_cast<char *>(record_data.data()),padded_length);
+ iotimer.stop();
+ if (endian_convert){
+    BH.byte_swap(reinterpret_cast<char *>(record_data.data()), rsize, nelem);}
+     // now rearrange links
+ u.resize(ndir);
+ size_t sitesize=rsize*linkreals;
+ for (int dir=0;dir<int(ndir);++dir){
+     u[dir].reset_by_precision(FieldSiteType::ColorMatrix,prec);}
+ char* src=record_data.data();
+ char* xlinks=u[0].getDataPtr();
+ char* ylinks=u[1].getDataPtr();
+ char* zlinks=u[2].getDataPtr();
+ char* tlinks=u[3].getDataPtr();
+ for (size_t k=0;k<nsites;++k){
+    std::memcpy(xlinks,src,sitesize);
+    xlinks+=sitesize; src+=sitesize;
+    std::memcpy(ylinks,src,sitesize);
+    ylinks+=sitesize; src+=sitesize;
+    std::memcpy(zlinks,src,sitesize);
+    zlinks+=sitesize; src+=sitesize;
+    std::memcpy(tlinks,src,sitesize);
+    tlinks+=sitesize; src+=sitesize;}
+    // convert from lexico to even/odd checkerboard, then to quda precision
+ GaugeCERNConfigReader GCCR;
+ GCCR.lexico_to_evenodd(u);
+
+     // Now get the 7th and last lime record (checksum info)
+ iotimer.start();
+ fin.read(reinterpret_cast<char *>(lime_record_header.data()),144);
+ iotimer.stop();
+ get_lime_record_header(lime_record_header,lime_magic_number,lime_version,
+                        lime_record_data_length,lime_type);
+ padded_length=lime_record_data_length+(7-((lime_record_data_length-1)%8));
+ total_bytes+=144+padded_length;
+ vector<char> record_info(padded_length);
+ iotimer.start();
+ fin.read(reinterpret_cast<char *>(record_info.data()),padded_length);
+ get_lime_record_xml(record_info,record_xml);
+ iotimer.stop();
+ 
+ fin.close();
+ rtimer.stop();
+ printLaph(make_strf("Read of SCIDAC gauge field done in %g seconds",rtimer.getTimeInSeconds()));
+ printLaph(make_strf("Time of IO operations = %g seconds\n\n",iotimer.getTimeInSeconds()));
+ return true;
+}
+
+#else
+
+            // parallel version
+
+bool GaugeSCIDACConfigReader::read(vector<LattField>& u, const std::string& in_cfg_file)
+{
+ string cfg_file=tidyString(in_cfg_file);
+ if (cfg_file.empty()){
+    errorLaph("Empty file name in GaugeSZINConfigReader::read");}
+ if ((sizeof(int)!=4)||(sizeof(float)!=4)){
+    errorLaph("We assume 4-byte ints, 4-byte floats");}
+ if (FieldNcolor!=3){
+    errorLaph("Only supports Nc=3");}
+ if (LayoutInfo::Ndim!=4){
+    errorLaph("Only supported for 4 space-time dimensions");}
+
+ int NT = LayoutInfo::getLattExtents()[3];
+ int NZ = LayoutInfo::getLattExtents()[2];   // these should all be even
+ int NY = LayoutInfo::getLattExtents()[1];
+ int NX = LayoutInfo::getLattExtents()[0];
+ if ((NT%2)||(NX%2)||(NY%2)||(NZ%2)){
+    errorLaph("Each lattice size in each direction must be even");}
+ printLaph(make_strf("\nBeginning read of SCIDAC gauge field (%d x %d x %d) x %d\n",NX,NY,NZ,NT));
+ StopWatch rtimer; rtimer.start(); 
+ StopWatch iotimer;
+ 
+     // open file for reading
+ iotimer.start();
+ MPI_File fh;        // the MPI-IO file handler
+ int status=MPI_File_open(MPI_COMM_WORLD, (const char*)cfg_file.c_str(), 
+                          MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
+ iotimer.stop();
+ if (status!=MPI_SUCCESS){
+    errorLaph(make_strf("Error open SCIDAC gauge configuration file %s\n",cfg_file));}
+
+     //  read the header of the first lime record
+ uint16_t lime_version;
+ uint32_t lime_magic_number;
+ uint64_t lime_record_data_length, padded_length, total_bytes;
+ string lime_type;
+ vector<char> lime_record_header(144);
+ XMLHandler record_xml; 
+ bool metadata_check=false;
+ uint precision=0;
+ total_bytes=0;
+ MPI_Status mpistatus;
+ 
+    // read the first 5 lime records which should contain XML metadata
+ for (int irec=0;irec<5;++irec){
+    iotimer.start();
+    status=MPI_File_read(fh,&lime_record_header[0], 144, MPI_BYTE, &mpistatus);
+    iotimer.stop();
+    if (status!=MPI_SUCCESS){
+       errorLaph(make_strf("Bad read of lattice size from SCIDAC gauge configuration file %s\n",cfg_file));}
+    get_lime_record_header(lime_record_header,lime_magic_number,lime_version,
+                           lime_record_data_length,lime_type);
+    padded_length=lime_record_data_length+(7-((lime_record_data_length-1)%8));
+    total_bytes+=144+padded_length;
+    vector<char> record_info(padded_length);
+    iotimer.start();
+    status=MPI_File_read(fh,&record_info[0],padded_length, MPI_BYTE, &mpistatus);
+    iotimer.stop();
+    if (status!=MPI_SUCCESS){
+       errorLaph(make_strf("Bad read of lattice size from SCIDAC gauge configuration file %s\n",cfg_file));}
+    get_lime_record_xml(record_info,record_xml);
+    if (lime_type=="ildg-format"){
+       string gcf;
+       int lx,ly,lz,lt;
+       xmlread(record_xml,"field",gcf,"ildg-format");
+       xmlread(record_xml,"lx",lx,"ildg-format");
+       xmlread(record_xml,"ly",ly,"ildg-format");
+       xmlread(record_xml,"lz",lz,"ildg-format");
+       xmlread(record_xml,"lt",lt,"ildg-format");
+       xmlread(record_xml,"precision",precision,"ildg-format");
+       if ((lx==NX)&&(ly==NY)&&(lz==NZ)&&(lt==NT)&&(gcf=="su3gauge")){
+          metadata_check=true;}}}
+ if (!metadata_check){
+    errorLaph(make_str("Metadata checks did NOT pass in SCIDAC gauge configuration read"));}
+
+     // Now get the gauge field data from the 6th lime record
+ iotimer.start();
+ status=MPI_File_read(fh,&lime_record_header[0], 144, MPI_BYTE, &mpistatus);
+ iotimer.stop();
+ if (status!=MPI_SUCCESS){
+    errorLaph(make_strf("Bad read of lattice size from SCIDAC gauge configuration file %s\n",cfg_file));}
+ get_lime_record_header(lime_record_header,lime_magic_number,lime_version,
+                        lime_record_data_length,lime_type);
+ if (lime_type!="ildg-binary-data"){
+    errorLaph(make_str("SCIDAC gauge configuration data is not in the expected lime record"));}
+ size_t linkreals=2*FieldNcolor*FieldNcolor;
+ size_t ndir=LayoutInfo::Ndim;
+ size_t nelemsite=ndir*linkreals;
+ size_t nsites=LayoutInfo::getLatticeNumSites();
+ size_t ranknsites=LayoutInfo::getRankLatticeNumSites();
+ size_t nelem=nsites*nelemsite;
+ char prec='U';
+ size_t rsize=0;
+ if (precision==32){
+    rsize=sizeof(float); prec='S';}
+ else if (precision==64){
+    rsize=sizeof(double); prec='D';}
+ if (lime_record_data_length!=rsize*nelem){
+    errorLaph(make_str("SCIDAC gauge configuration data is not the expected size"));}
+
+    //  read the data into a buffer since not in same order as will be in memory
+ padded_length=lime_record_data_length+(7-((lime_record_data_length-1)%8));
+ total_bytes+=144+padded_length;
+ int nbytes_per_site=nelemsite*rsize;  // links in the 4 directions are contiguous
+ vector<int> starts(ndir);
+ for (int k=0;k<int(ndir);++k){
+    starts[k]=LayoutInfo::getMyCommCoords()[k]*LayoutInfo::getRankLattExtents()[k];}
+ MPI_Datatype etype;
+ MPI_Type_contiguous(nbytes_per_site,MPI_BYTE,&etype);
+ MPI_Type_commit(&etype);
+ MPI_Datatype ftype;
+ status=MPI_Type_create_subarray(ndir,LayoutInfo::getLattExtents().data(),
+                                 LayoutInfo::getRankLattExtents().data(),
+                                 starts.data(),MPI_ORDER_FORTRAN,etype,&ftype);
+ if (status!=MPI_SUCCESS){
+    errorLaph(make_strf("Could not create needed filetype for reading SCIDAC config file %s\n",cfg_file));}
+ MPI_Type_commit(&ftype);
+ MPI_Offset currdisp;
+ status=MPI_File_get_position(fh,&currdisp);
+ if (status!=MPI_SUCCESS){
+    errorLaph(make_strf("File location error while reading SCIDAC config file %s\n",cfg_file));}
+ status=MPI_File_set_view(fh,currdisp,etype,ftype,(char*)"native",MPI_INFO_NULL);
+ if (status!=MPI_SUCCESS){
+    errorLaph(make_strf("Failure during MPI_File_set_view while reading SCIDAC config file %s\n",cfg_file));}
+
+ vector<char> buffer(ranknsites*nbytes_per_site);
+ iotimer.start();
+ status=MPI_File_read_all(fh,buffer.data(),ranknsites,etype,&mpistatus);
+ iotimer.stop();
+ if (status==MPI_SUCCESS){
+    int count=0;
+    status=MPI_Get_count(&mpistatus,etype,&count);
+    if (count!=int(ranknsites)) status=MPI_ERR_COUNT;}
+ if (status!=MPI_SUCCESS){
+    errorLaph(make_strf("Failure while reading SCIDAC config file %s\n",cfg_file));}
+ MPI_Type_free(&ftype);
+ MPI_Type_free(&etype);
+     // set file view back to entire file
+ MPI_File_set_view(fh,0,MPI_BYTE,MPI_BYTE,(char*)"native",MPI_INFO_NULL);
+
+ if (endian_convert){
+    BH.byte_swap(reinterpret_cast<char *>(buffer.data()), rsize, ranknsites*nelemsite);}
+     // now rearrange links
+ u.resize(ndir);
+ size_t sitesize=rsize*linkreals;
+ for (int dir=0;dir<int(ndir);++dir){
+     u[dir].reset_by_precision(FieldSiteType::ColorMatrix,prec);}
+ char* src=buffer.data();
+ char* xlinks=u[0].getDataPtr();
+ char* ylinks=u[1].getDataPtr();
+ char* zlinks=u[2].getDataPtr();
+ char* tlinks=u[3].getDataPtr();
+ for (size_t k=0;k<ranknsites;++k){
+    std::memcpy(xlinks,src,sitesize);
+    xlinks+=sitesize; src+=sitesize;
+    std::memcpy(ylinks,src,sitesize);
+    ylinks+=sitesize; src+=sitesize;
+    std::memcpy(zlinks,src,sitesize);
+    zlinks+=sitesize; src+=sitesize;
+    std::memcpy(tlinks,src,sitesize);
+    tlinks+=sitesize; src+=sitesize;}
+    // convert from lexico to even/odd checkerboard, then to quda precision
+ GaugeCERNConfigReader GCCR;
+ GCCR.lexico_to_evenodd(u);
+
+     // Now get the 7th and last lime record (checksum info)
+ currdisp=total_bytes;  
+ status=MPI_File_seek(fh,currdisp,MPI_SEEK_SET);
+ iotimer.start();
+ status=MPI_File_read(fh,&lime_record_header[0], 144, MPI_BYTE, &mpistatus);
+ iotimer.stop();
+ if (status!=MPI_SUCCESS){
+    errorLaph(make_strf("Bad read of lattice size from SCIDAC gauge configuration file %s\n",cfg_file));}
+ get_lime_record_header(lime_record_header,lime_magic_number,lime_version,
+                        lime_record_data_length,lime_type);
+ padded_length=lime_record_data_length+(7-((lime_record_data_length-1)%8));
+ total_bytes+=144+padded_length;
+ vector<char> record_info(padded_length);
+ iotimer.start();
+ status=MPI_File_read(fh,&record_info[0],padded_length, MPI_BYTE, &mpistatus);
+ iotimer.stop();
+ if (status!=MPI_SUCCESS){
+    errorLaph(make_strf("Bad read of lattice size from SCIDAC gauge configuration file %s\n",cfg_file));}
+ get_lime_record_xml(record_info,record_xml);
+ iotimer.stop();
+ 
+ status=MPI_File_close(&fh);
+ if (status!=MPI_SUCCESS){
+    errorLaph(make_strf("Failure in closing the CERN gauge configuration file %s\n",cfg_file));}
+ rtimer.stop();
+ printLaph(make_strf("Read of SCIDAC gauge field done in %g seconds",rtimer.getTimeInSeconds()));
+ printLaph(make_strf("Time of IO operations = %g seconds\n\n",iotimer.getTimeInSeconds()));
+ return true;
+}
 
 
+#endif
+
+    // extract the magic number, version number, record data length, and lime type
+    // from the 144 byte header
+
+void GaugeSCIDACConfigReader::get_lime_record_header(const std::vector<char>& lime_record_header, 
+                                                     uint32_t& lime_magic_number, uint16_t& lime_version, 
+                                                     uint64_t& lime_record_data_length, 
+                                                     std::string& lime_type)
+{
+ std::memcpy(&lime_magic_number,&lime_record_header[0],sizeof(uint32_t));
+ std::memcpy(&lime_version,&lime_record_header[4],sizeof(uint16_t));
+ std::memcpy(&lime_record_data_length,&lime_record_header[8],sizeof(uint64_t));
+ if (endian_convert){
+    BH.byte_swap(reinterpret_cast<char *>(&lime_magic_number), sizeof(uint32_t), 1);
+    BH.byte_swap(reinterpret_cast<char *>(&lime_version), sizeof(uint32_t), 1);
+    BH.byte_swap(reinterpret_cast<char *>(&lime_record_data_length), sizeof(uint64_t), 1);}
+ vector<char> lime_type_buffer(128);
+ std::memcpy(lime_type_buffer.data(),&lime_record_header[16],128);
+ size_t nullpos=0;
+ for (int k=0;k<128;k++){
+    if (lime_type_buffer[k]=='\0'){
+       nullpos=k; break;}}
+ lime_type.assign(lime_type_buffer.data(),nullpos);
+}
 
 
+void GaugeSCIDACConfigReader::get_lime_record_xml(std::vector<char>& lime_record_info, 
+                                                  XMLHandler& record_xml)
+{
+   // remove XML attributes by replacing with blank characters, 
+   // and find first null character; also, rename any <xml...> tags
+   // to pass validity test
+ size_t nchar=lime_record_info.size();
+ size_t nullpos=0;
+ bool intag=false;
+ bool erase=false;
+ for (int k=0;k<int(nchar);k++){
+    if (lime_record_info[k]=='\0'){
+       nullpos=k; break;}
+    if (lime_record_info[k]=='<'){
+       if ((k<int(nchar-1))&&(lime_record_info[k+1]!='?')&&(lime_record_info[k+1]!='!')){
+          intag=true;
+          if ((k+4)<int(nchar-1)){
+             int kk=k;
+             char tag1=lime_record_info[kk+1];
+             if (tag1=='/'){
+                ++kk; tag1=lime_record_info[kk+1];}
+             if ((tag1=='x')||(tag1=='X')){
+                char tag2=lime_record_info[kk+2];
+                if ((tag2=='m')||(tag2=='M')){
+                   char tag3=lime_record_info[kk+3];
+                   if ((tag3=='l')||(tag3=='L')){
+                      lime_record_info[kk+1]='L';
+                      lime_record_info[kk+2]='M';
+                      lime_record_info[kk+3]='X';}}}}}}
+    else if (lime_record_info[k]=='>'){
+       intag=false; erase=false;}
+    else if (intag){
+       if (erase){
+          lime_record_info[k]=' ';}
+       else if (lime_record_info[k]==' '){
+          erase=true;}}}
+ record_xml.set_from_string(string(lime_record_info.data(),nullpos));
+}
 
-
-
-
-
-
+// *************************************************************************************************
+}

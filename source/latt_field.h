@@ -122,6 +122,10 @@ class LattField
    
    void calc_site_elems();
 
+#ifdef TESTING
+ public:
+#endif
+
    void applyFermionTemporalAntiPeriodic();
 
    LattField& reset_by_precision(FieldSiteType sitetype, char prec);
@@ -138,6 +142,8 @@ class LattField
    
    friend class GaugeCERNConfigReader;
    
+   friend class GaugeSCIDACConfigReader;
+
    friend class QudaInfo;
    
    friend class GaugeConfigurationHandler;

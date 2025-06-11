@@ -281,7 +281,7 @@ inline size_t numbytes(IOFMHandler& ioh, const UIntKey& uikey)
 
  // ********************************************************
  // *                                                      *
- // *              The main event: the IOMap               *
+ // *            The main event: the IOFMMap               *
  // *                                                      *
  // ********************************************************
 
@@ -319,26 +319,22 @@ class IOMap
 
             // read only open, returns header string
             
-    void openReadOnly(const std::string& filename, 
-                      const std::string& filetype_id,
+    void openReadOnly(const std::string& filename, const std::string& filetype_id,
                       std::string& header, bool turn_on_checksum=false);
 
             // read only open, ignores header string
 
-    void openReadOnly(const std::string& filename, 
-                      const std::string& filetype_id,
+    void openReadOnly(const std::string& filename, const std::string& filetype_id,
                       bool turn_on_checksum=false);
 
             // open a new file in read/write mode, writes the header string (fails 
             // if the file exists and "fail_if_exists" is true; if "fail_if_exists"
             // is false, deletes the existing file to start a new file)
 
-    void openNew(const std::string& filename, 
-                 const std::string& filetype_id, 
-                 const std::string& header,  
-                 bool fail_if_exists=true, char endianness='N',
-                 int striping_factor=1, int striping_unit=0,
-                 bool turn_on_checksum=false, bool overwrites_allowed=false);
+    void openNew(const std::string& filename, const std::string& filetype_id, 
+                 const std::string& header, bool fail_if_exists=true, char endianness='N',
+                 bool turn_on_checksum=false, bool overwrites_allowed=false,
+                 int striping_factor=1, int striping_unit=0);
 
             // open a file in read/write mode; if file exists, the header
             // string is read and returned in "header" and writes will update
@@ -346,12 +342,10 @@ class IOMap
             // case, the header string is needed as input so it can be written
             // into the new file)
 
-    void openUpdate(const std::string& filename, 
-                    const std::string& filetype_id, 
-                    std::string& header, 
-                    char endianness='N', int striping_factor=1, 
-                    int striping_unit=0, bool turn_on_checksum=false, 
-                    bool overwrites_allowed=false);
+    void openUpdate(const std::string& filename, const std::string& filetype_id, 
+                    std::string& header, char endianness='N', bool turn_on_checksum=false, 
+                    bool overwrites_allowed=false, int striping_factor=1, 
+                    int striping_unit=0);
 
     ~IOMap() {close();}
 
@@ -423,9 +417,9 @@ class IOMap
 
     void initialize(const std::string& filename, OpenMode mode,
                     const std::string& filetype_id, char endianness,
-                    int striping_factor, int striping_unit,
                     bool turn_on_checksum, std::string& header, 
-                    bool read_header, bool overwrites);
+                    bool read_header, bool overwrites,
+                    int striping_factor, int striping_unit);
 
     void readMap(w_pos mapstart);
     
@@ -455,8 +449,8 @@ void IOMap<K,V>::openReadOnly(const std::string& filename,
 {
  check_for_failure(ioh.isOpen(),"Please do not open an already open IOMap!");
  OpenMode mode=IOFMHandler::ReadOnly;
- initialize(filename,mode,filetype_id,'N',1,0,turn_on_checksum, 
-            header,true,false);
+ initialize(filename,mode,filetype_id,'N',turn_on_checksum, 
+            header,true,false,1,0);
 }
 
 
@@ -469,40 +463,36 @@ void IOMap<K,V>::openReadOnly(const std::string& filename,
  check_for_failure(ioh.isOpen(),"Please do not open an already open IOMap!");
  OpenMode mode=IOFMHandler::ReadOnly;
  std::string header;
- initialize(filename,mode,filetype_id,'N',1,0,turn_on_checksum, 
-            header,false,false);
+ initialize(filename,mode,filetype_id,'N',turn_on_checksum, 
+            header,false,false,1,0);
 }
 
 
 template <typename K, typename V>
-void IOMap<K,V>::openNew(const std::string& filename, 
-                         const std::string& filetype_id, 
-                         const std::string& header,  
-                         bool fail_if_exists, char endianness,
-                         int striping_factor, int striping_unit,
-                         bool turn_on_checksum, bool overwrites_allowed)
+void IOMap<K,V>::openNew(const std::string& filename, const std::string& filetype_id, 
+                         const std::string& header, bool fail_if_exists, char endianness,
+                         bool turn_on_checksum, bool overwrites_allowed,
+                         int striping_factor, int striping_unit)
 {
  check_for_failure(ioh.isOpen(),"Please do not open an already open IOMap!");
  OpenMode mode=(fail_if_exists) ? IOFMHandler::ReadWriteFailIfExists
                                 : IOFMHandler::ReadWriteEraseIfExists;
  std::string tmp_header(header);
- initialize(filename,mode,filetype_id,endianness,striping_factor,striping_unit,
-            turn_on_checksum,tmp_header,false,overwrites_allowed);
+ initialize(filename,mode,filetype_id,endianness,turn_on_checksum,tmp_header,
+            false,overwrites_allowed,striping_factor,striping_unit);
 }
 
 
 template <typename K, typename V>
-void IOMap<K,V>::openUpdate(const std::string& filename, 
-                            const std::string& filetype_id, 
-                            std::string& header, 
-                            char endianness, int striping_factor, 
-                            int striping_unit, bool turn_on_checksum, 
-                            bool overwrites_allowed)
+void IOMap<K,V>::openUpdate(const std::string& filename, const std::string& filetype_id, 
+                            std::string& header, char endianness, bool turn_on_checksum, 
+                            bool overwrites_allowed, int striping_factor, 
+                            int striping_unit)
 {
  check_for_failure(ioh.isOpen(),"Please do not open an already open IOMap!");
  OpenMode mode=IOFMHandler::ReadWriteUpdateIfExists;
- initialize(filename,mode,filetype_id,endianness,striping_factor,striping_unit,
-            turn_on_checksum,header,true,overwrites_allowed);
+ initialize(filename,mode,filetype_id,endianness,turn_on_checksum,header,
+            true,overwrites_allowed,striping_factor,striping_unit);
 }
 
 
@@ -510,12 +500,12 @@ void IOMap<K,V>::openUpdate(const std::string& filename,
 template <typename K, typename V>
 void IOMap<K,V>::initialize(const std::string& filename, OpenMode mode,
                             const std::string& filetype_id, char endianness,
-                            int striping_factor, int striping_unit,
                             bool turn_on_checksum, std::string& header, 
-                            bool read_header, bool overwrites)
+                            bool read_header, bool overwrites,
+                            int striping_factor, int striping_unit)
 {
- ioh.open(filename,mode,filetype_id,endianness,striping_factor,
-          striping_unit,turn_on_checksum);
+ ioh.open(filename,mode,filetype_id,endianness,turn_on_checksum,
+          striping_factor,striping_unit);
  allow_overwrites=overwrites;
 
  if (ioh.isNewFile()){                // this is a new file

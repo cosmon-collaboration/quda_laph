@@ -866,7 +866,7 @@ void DataPutHandlerMF<H,F,R,D>::openUpdate(FileMapValue& fmv)
  try {
     fmv.fptr=new IOMap<R,D>(gmode);
     std::string header;
-    fmv.fptr->openUpdate(filename,fid,header,'L',1,0,checksums,finfo.isModeOverwrite());}
+    fmv.fptr->openUpdate(filename,fid,header,'L',checksums,finfo.isModeOverwrite(),1,0);}
  catch(const std::exception& xp){
     fail("failure opening file "+filename+" in DataPutHandlerMF");}
 }
@@ -883,8 +883,8 @@ void DataPutHandlerMF<H,F,R,D>::openNew(const F& fkey, FileMapValue& fmv)
     fmv.fptr=new IOMap<R,D>(gmode);
     XMLHandler headerxml;
     handler.writeHeader(headerxml,fkey,fmv.suffix);  // write header info 
-    fmv.fptr->openNew(filename,fid,headerxml.str(),false,'L',strpfactor,strpunit,checksums,
-                      finfo.isModeOverwrite());}
+    fmv.fptr->openNew(filename,fid,headerxml.str(),false,'L',checksums,
+                      finfo.isModeOverwrite(),strpfactor,strpunit);}
  catch(const std::exception& xp){
     fail("failure opening file "+filename+" in DataPutHandlerMF");}
 }
@@ -1376,8 +1376,8 @@ DataPutHandlerSF<H,R,D>::DataPutHandlerSF(H& in_handler,
  try{
    iomptr=new IOMap<R,D>(global_mode);
    std::string header(headerxml.str());
-   iomptr->openUpdate(file_name,filetype_id,header,'L',
-                      striping_factor,striping_unit,use_checksums,overwrite);
+   iomptr->openUpdate(file_name,filetype_id,header,'L',use_checksums,overwrite,
+                      striping_factor,striping_unit);
    if (!(iomptr->isNewFile())){
       XMLHandler xmlr; xmlr.set_from_string(header);
       if (!handler.checkHeader(xmlr)){

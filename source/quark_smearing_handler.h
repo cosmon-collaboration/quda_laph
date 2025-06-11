@@ -12,25 +12,9 @@ namespace LaphEnv {
 // *                                                               *
 // *  QuarkSmearingHandler:                                        *
 // *                                                               *
-// *     -- must be constructed in read mode or write mode         *
-// *     -- in 3-d write mode, computes the Laplacian eigenvectors,*
-// *          saving results to "*_time.nn" files, each file       *
-// *          containing all eigenvectors for one time slice OR    *
-// *          inserting into HostGlobal                       *
-// *     -- in 3-d read mode, reads the eigenvectors from the      *
-// *          "*_time.nn" files and makes them available for the   *
-// *          hadron handler to do quark displacements OR gets     *
-// *          from HostGlobal                                  *
-// *     -- in 4-d write mode, either reads the "*_time.nn" files  *
-// *          and combines each level on all time slices into one  *
-// *          4-d file, writing out "_level.nn" files, OR it       *
-// *          computes them on all requested time slices and       *
-// *          inserts results into HostGlobal                  *
-// *     -- in 4-d read mode, reads the "*_level.nn" files and     *
-// *          makes them available for the quark handler to        *
-// *          compute quark sinks, or reads from HostGlobal    *
-// *          (if "level" files are not available, it will read    *
-// *           the "time" files)                                   *
+// *     -- computes the Laplacian eigenvectors, saving to the     *
+// *          HostGlobal or writing to files                       *
+// *     -- also used to read from files                           *
 // *                                                               *
 // *  A note concerning the phases multiplying each eigenvector:   *
 // *                                                               *

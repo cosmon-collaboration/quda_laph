@@ -23,8 +23,7 @@ void GaugeConfigurationInfo::set_info(XMLHandler& xml_in)
  XMLHandler xmlg(xml_in,"GaugeConfigurationInfo");
  xmlread(xmlg,"EnsembleName",ensemble_name,"GaugeConfigurationInfo");
  xmlread(xmlg,"FileFormat",file_format,"GaugeConfigurationInfo");
- check_valid(file_format,"FileFormat",{"CERN","CLS","SZIN_SP","SZIN_DP",
-                                       "USQCD_SP","USQCD_DP"});
+ check_valid(file_format,"FileFormat",{"CERN","CLS","SCIDAC","SZINQIO","USQCD"});
  config_type="WilsonImproved";
  xmlreadif(xmlg,"ConfigType",config_type,"GaugeConfigurationInfo");
  check_valid(config_type,"ConfigType",{"Wilson","WilsonImproved"});
@@ -196,37 +195,6 @@ void GaugeConfigurationInfo::setQudaGaugeParam(QudaGaugeParam &gauge_param) cons
  pad_size = std::max(std::max(x_face_size, y_face_size), std::max(z_face_size, t_face_size));
 #endif
  gauge_param.ga_pad = pad_size;
-
-
-// setDims(gauge_param.X);  not needed as far as we know
-
-//    int site_ga_pad;  // Used by link fattening and the gauge and fermion forces 
-
-//    int staple_pad;   // Used by link fattening 
-//    int llfat_ga_pad; // Used by link fattening 
-//    int mom_ga_pad;   // Used by the gauge and fermion forces 
-
-//    QudaStaggeredPhase staggered_phase_type; // Set the staggered phase type of the links 
-//    int staggered_phase_applied; // Whether the staggered phase has already been applied to the links 
-
-//    double i_mu; // Imaginary chemical potential 
-
-//    int overlap; // Width of overlapping domains 
-
-//    int overwrite_gauge; // When computing gauge, should we overwrite it or accumulate to it 
-//    int overwrite_mom;   // When computing momentum, should we overwrite it or accumulate to it 
-
-//    int use_resident_gauge;  // Use the resident gauge field as input 
-//    int use_resident_mom;    // Use the resident momentum field as input
-//    int make_resident_gauge; // Make the result gauge field resident 
-//    int make_resident_mom;   // Make the result momentum field resident 
-//    int return_result_gauge; // Return the result gauge field 
-//    int return_result_mom;   // Return the result momentum field 
-
-//    size_t gauge_offset; // Offset into MILC site struct to the gauge field (only if gauge_order=MILC_SITE_GAUGE_ORDER) 
-//    size_t mom_offset; // Offset into MILC site struct to the momentum field (only if gauge_order=MILC_SITE_GAUGE_ORDER) 
-//    size_t site_size; // Size of MILC site struct (only if gauge_order=MILC_SITE_GAUGE_ORDER) 
-
  gauge_param.struct_size = sizeof(gauge_param);
 }
 
