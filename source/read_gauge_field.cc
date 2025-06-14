@@ -771,7 +771,7 @@ bool GaugeSCIDACConfigReader::read(vector<LattField>& u, const std::string& in_c
      // open file for reading
  iotimer.start();
  ifstream fin(cfg_file.c_str(), std::ios::binary | std::ios::in);
- iotimer.stop(); // printLaph(make_str("iotime so far = ",iotimer.getTimeInSeconds()));
+ iotimer.stop();
  if (!fin){
     errorLaph(make_strf("Error open SCIDAC gauge configuration file %s\n",cfg_file));}
 
@@ -879,8 +879,8 @@ bool GaugeSCIDACConfigReader::read(vector<LattField>& u, const std::string& in_c
  vector<char> record_info(padded_length);
  iotimer.start();
  fin.read(reinterpret_cast<char *>(record_info.data()),padded_length);
- get_lime_record_xml(record_info,record_xml);
  iotimer.stop();
+ get_lime_record_xml(record_info,record_xml);
  
  fin.close();
  rtimer.stop();
@@ -1077,7 +1077,6 @@ bool GaugeSCIDACConfigReader::read(vector<LattField>& u, const std::string& in_c
  if (status!=MPI_SUCCESS){
     errorLaph(make_strf("Bad read of lattice size from SCIDAC gauge configuration file %s\n",cfg_file));}
  get_lime_record_xml(record_info,record_xml);
- iotimer.stop();
  
  status=MPI_File_close(&fh);
  if (status!=MPI_SUCCESS){
