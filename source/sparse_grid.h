@@ -29,12 +29,12 @@ class RandomSparseGrid {
 	}
 
 
-	RandomSparseGrid(const XMLHandler& xml_in) : is_random(false), seed(0) { 
+	RandomSparseGrid(const XMLHandler& xmlin) : is_random(false), seed(0) { 
 		XMLHandler xml_in(xmlin);
 		xml_tag_assert(xml_in,"RandomSparseGridInfo","RandomSparseGrid");
 		XMLHandler xmlr(xml_in, "RandomSparseGridInfo");
 		if (xml_tag_count(xml_in,"RandomSeed")>0) {
-			is_random(true);
+			is_random=true;
 			xmlread(xml_in,"RandomSeed", seed, "RandomSparseGrid");
 		}
 		xmlread(xml_in,"GridSpacing", grid_spacing, "RandomSparseGrid");
@@ -63,7 +63,7 @@ class RandomSparseGrid {
 	}
 
 	std::vector<std::vector<int>> generateOffsets(int Lx, int Ly, int Lz, 
-			int Lt) {
+			int Lt) const {
 		if (Lt<0) 
 			throw std::logic_error("invalid time extent"); 
 
@@ -79,6 +79,7 @@ class RandomSparseGrid {
 			std::uniform_int_distribution<int> distY(0,Ly-1);
 			std::uniform_int_distribution<int> distZ(0,Lz-1);
 			for (int t=0;t<Lt;t++) {
+			        std::vector<int> coords;	
 				coords.push_back(distX(gen));
 				coords.push_back(distY(gen));
 				coords.push_back(distZ(gen));

@@ -116,17 +116,8 @@ namespace LaphEnv {
 // *  is provided to accomplish this.                              *
 // *                                                               *
 // *****************************************************************
-class SparseGridHandler { 
-	const PerambulatorHandler &pHand;
-	RandomSparseGrid &grid; 
 
-	SparseGridHandler(const PerambulatorHandler& _pHand, 
-			RandomSparseGrid& _grid) : pHand(_pHand), grid(_grid) {} 
-
-	bool checkHeader(XMLHandler& xmlr, int suffix);
-	void writeHeader(XMLHandler& xmlout, const FileKey& fkey,
-                    int suffix);
-}; 
+class SparseGridHandler;
 
 class PerambulatorHandler {
 
@@ -239,6 +230,7 @@ class PerambulatorHandler {
 	 const FileListInfo *fPtr;
 	 const FileListInfo *fPtrSparseGrid;
 	 const InverterInfo *invertPtr;
+	 SparseGridHandler *sgHandler; 	 
 	 uint Nspin;
 	 Mode mode;
 	 void* preconditioner;
@@ -250,7 +242,6 @@ class PerambulatorHandler {
 	 QudaInvertParam quda_inv_param;
 
 	 // sub-handler pointers
-   static std::unique_ptr<SparseGridHandler> sgHandler; 	 
 	 static std::unique_ptr<QuarkSmearingHandler> qSmearHandler;
 	 static std::unique_ptr<GaugeConfigurationHandler> gaugeHandler;
 
@@ -264,7 +255,7 @@ class PerambulatorHandler {
 	 // data I/O handler pointers
 
 	 DataPutHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType> *DHputPtr;
-	 DataPutHandlerMF<SparseGridHandler,FileKey,RecordKey,DataType> *DHputPtrSpGrid;
+	 DataPutHandlerMF<SparseGridHandler,FileKey,RecordKey,DataType> *DHputPtrSparseGrid;
 
 	 DataGetHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType> *DHgetPtr;
 
@@ -319,6 +310,8 @@ class PerambulatorHandler {
 	 uint getNumberOfLaplacianEigenvectors() const;
 
 	 int getTimeExtent() const;
+	 
+	 int getNSpin() const;
 
 	 void getHeader(XMLHandler& xmlout) const;
 
@@ -377,8 +370,9 @@ class PerambulatorHandler {
                  const GluonSmearingInfo& gluonsmear,
                  const QuarkSmearingInfo& quarksmear,
                  const QuarkActionInfo& quark,
-								 const RandomSparseGrid& rsgrid, 
+		 const RandomSparseGrid& rsgrid, 
                  const FileListInfo& flist,
+		 const FileListInfo& flist_sparse_grid,
                  const std::string& smeared_quark_filestub,
                  bool upper_spin_components_only,
                  const std::string& gauge_str, Mode in_mode);
@@ -435,5 +429,24 @@ class PerambulatorHandler {
 
 
 // **************************************************************************************
+
+
+class SparseGridHandler { 
+	const PerambulatorHandler &pHand;
+	const RandomSparseGrid &grid; 
+	
+	public:
+	
+	SparseGridHandler(const PerambulatorHandler& _pHand, 
+			const RandomSparseGrid& _grid) : pHand(_pHand), grid(_grid) {} 
+
+	bool checkHeader(XMLHandler& xmlr, int suffix);
+	void writeHeader(XMLHandler& xmlout, 
+			const PerambulatorHandler::FileKey& fkey,
+			int suffix);
+	const RandomSparseGrid& getGrid() const { return grid; }
+
+};
+
 }
 #endif  

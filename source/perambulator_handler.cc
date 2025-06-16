@@ -149,7 +149,7 @@ void PerambulatorHandler::set_info(const GaugeConfigurationInfo& gaugeinfo,
     gSmearPtr = new GluonSmearingInfo(gluonsmear);
     qSmearPtr = new QuarkSmearingInfo(quarksmear);
     qactionPtr = new QuarkActionInfo(quark);
-		sgHandler = new SparseGridHandler(*this, rsgrid); 
+    sgHandler = new SparseGridHandler(*this, rsgrid); 
     fPtr = new FileListInfo(flist);
     fPtrSparseGrid = new FileListInfo(flist_sparse_grid);
     Nspin = (upper_spin_components_only) ? 2 : 4;
@@ -499,6 +499,11 @@ int PerambulatorHandler::getTimeExtent() const
  return uPtr->getTimeExtent();
 }
 
+int PerambulatorHandler::getNSpin() const 
+{
+ check_info_set("getNSpin");
+ return Nspin;
+}
 
 void PerambulatorHandler::getHeader(XMLHandler& xmlout) const
 {
@@ -722,8 +727,8 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& s
  uint nEigQudaBatch=perambComps.nEigQudaBatch;
  double soln_rescale=qactionPtr->getSolutionRescaleFactor();
 
- int grid_spacing=(*sgHandler).grid.getGridSpacing(); 
- vector<vector<int>> grid_offsets = (*sghandler).grid.generateOffsets(Lx,Ly,Lz,Textent);
+ int grid_spacing=(*sgHandler).getGrid().getGridSpacing(); 
+ vector<vector<int>> grid_offsets = (*sgHandler).getGrid().generateOffsets(Lx,Ly,Lz,Textent);
  int nColor = 3; 
  int nGridPoints = Lx*Ly*Lz/(grid_spacing*grid_spacing*grid_spacing); 
 
@@ -834,74 +839,74 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& s
        // carry out projections
        if (nSinks>0){
 
-          bulova.reset(); bulova.start();
-          int nSinksBatch=std::min(nSinks,int(nSinkQudaBatch));
+	       bulova.reset(); bulova.start();
+	       int nSinksBatch=std::min(nSinks,int(nSinkQudaBatch));
 
-          Array<dcmplx> qudaRes(Nspin, Textent, nEigs, nSinks);   // quda laph reversing major order
-          __complex__ double* qudaResPtr = (__complex__ double*)(&qudaRes(0,0,0,0));
+	       Array<dcmplx> qudaRes(Nspin, Textent, nEigs, nSinks);   // quda laph reversing major order
+	       __complex__ double* qudaResPtr = (__complex__ double*)(&qudaRes(0,0,0,0));
 
-					// sparse grid output to file
-					bulova.reset(); bulova.start();
-					for (int iSink=0; iSink<nSinks; ++iSink) {
-						for (int t=minTime;t<=maxTime;t++){
-							for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
-								vector<dcmplx> quark_sink;
-								vector<int> coords(4);
-								coords[3]=t; 
-								for (int iX=0; iX<(Lx/grid_spacing); ++iX) {
-									coords[0]=(iX*grid_spacing+offsets[t][0])%Lx;
-									for (int iY=0; iY<(Ly/grid_spacing); ++iY) {
-										coords[1]=(iY*grid_spacing+offsets[t][1])%Ly;
-										for (int iZ=0; iZ<(Lz/grid_spacing); ++iZ) {
-											coords[2]=(iZ*grid_spacing+offsets[t][2])%Lz;
-											const complex<double>* colorVec=reinterpret_cast<const complex<double>*>(
-													sinkBatchData[iSink].getSiteData(coords).data());
-											for (int c=0; c<nColor; c++) {
-												quark_sink.push_back(soln_rescale*colorVec[c]);
-											}
-                      DHputPtrSparseGrid->putData(RecordKey(iSpin+1,t,sinkBatchDoneInds[iSink]),quark_sink);
-                      if (print_coeffs){
-                         printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchDoneInds[iSink],iSpin+1,t));
-                         for (int n=0;n<(nColor*nGridPoints);n++){
-                            printLaph(make_strf("component for spin/space component %d = (%14.8f, %14.8f)",
-                                      n,real(quark_sink[n]),imag(quark_sink[n])));
-												 }}}}}}}}
-          bulova.stop();
-          double otime=bulova.getTimeInSeconds();
-          printLaph(make_str(" Output of this batch to sparse grid file took ",otime," seconds"));
-          writetime+=otime;
+	       // sparse grid output to file
+	       bulova.reset(); bulova.start();
+	       for (int iSink=0; iSink<nSinks; ++iSink) {
+		       for (int t=minTime;t<=maxTime;t++){
+			       for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
+				       vector<dcmplx> quark_sink;
+				       vector<int> coords(4);
+				       coords[3]=t; 
+				       for (int iX=0; iX<(Lx/grid_spacing); ++iX) {
+					       coords[0]=(iX*grid_spacing+grid_offsets[t][0])%Lx;
+					       for (int iY=0; iY<(Ly/grid_spacing); ++iY) {
+						       coords[1]=(iY*grid_spacing+grid_offsets[t][1])%Ly;
+						       for (int iZ=0; iZ<(Lz/grid_spacing); ++iZ) {
+							       coords[2]=(iZ*grid_spacing+grid_offsets[t][2])%Lz;
+							       const complex<double>* colorVec=reinterpret_cast<const complex<double>*>(
+									       sinkBatchData[iSink].getSiteData(coords).data());
+							       for (int c=0; c<nColor; c++) {
+								       quark_sink.push_back(soln_rescale*colorVec[c]);
+							       }
+							       DHputPtrSparseGrid->putData(RecordKey(iSpin+1,t,sinkBatchDoneInds[iSink]),quark_sink);
+							       if (print_coeffs){
+								       printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchDoneInds[iSink],iSpin+1,t));
+								       for (int n=0;n<(nColor*nGridPoints);n++){
+									       printLaph(make_strf("component for spin/space component %d = (%14.8f, %14.8f)",
+												       n,real(quark_sink[n]),imag(quark_sink[n])));
+								       }}}}}}}}
+	       bulova.stop();
+	       double otime=bulova.getTimeInSeconds();
+	       printLaph(make_str(" Output of this batch to sparse grid file took ",otime," seconds"));
+	       writetime+=otime;
 
 
-            // do the projections
-          printLaph("projecting batch of solutions onto LapH eigenvectors");
-          laphSinkProject(qudaResPtr, done_sinks_ptr, nSinks, nSinksBatch, evs_ptr, nEigs, 
-                          nEigQudaBatch, &quda_inv_param, LayoutInfo::getRankLattExtents().data());
+	       // do the projections
+	       printLaph("projecting batch of solutions onto LapH eigenvectors");
+	       laphSinkProject(qudaResPtr, done_sinks_ptr, nSinks, nSinksBatch, evs_ptr, nEigs, 
+			       nEigQudaBatch, &quda_inv_param, LayoutInfo::getRankLattExtents().data());
 
-          bulova.stop(); 
-          double addevprojtime=bulova.getTimeInSeconds();
-          printLaph(make_str(" this batch of projections onto Laph evs took ",addevprojtime," seconds"));
-          evprojtime+=addevprojtime;
+	       bulova.stop(); 
+	       double addevprojtime=bulova.getTimeInSeconds();
+	       printLaph(make_str(" this batch of projections onto Laph evs took ",addevprojtime," seconds"));
+	       evprojtime+=addevprojtime;
 
-            // rearrange data then output to file
-          bulova.reset(); bulova.start();
-          for (int iSink=0; iSink<nSinks; ++iSink) {
-             for (int t=minTime;t<=maxTime;t++){
-                for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
-                   vector<dcmplx> quark_sink(nEigs);
-                   for (int iEv=0; iEv<nEigs; ++iEv) {
-                      quark_sink[iEv] = soln_rescale*qudaRes(iSpin, t, iEv, iSink);}
-                      DHputPtr->putData(RecordKey(iSpin+1,t,sinkBatchDoneInds[iSink]),quark_sink);
-                      if (print_coeffs){
-                         printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchDoneInds[iSink],iSpin+1,t));
-                         for (int n=0;n<nEigs;n++){
-                            printLaph(make_strf("coef for eigenlevel %d = (%14.8f, %14.8f)",
-                                      n,real(quark_sink[n]),imag(quark_sink[n])));}}}}}
-          bulova.stop();
-          double otime=bulova.getTimeInSeconds();
-          printLaph(make_str(" Output of this batch to file took ",otime," seconds"));
-          writetime+=otime;
+	       // rearrange data then output to file
+	       bulova.reset(); bulova.start();
+	       for (int iSink=0; iSink<nSinks; ++iSink) {
+		       for (int t=minTime;t<=maxTime;t++){
+			       for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
+				       vector<dcmplx> quark_sink(nEigs);
+				       for (int iEv=0; iEv<nEigs; ++iEv) {
+					       quark_sink[iEv] = soln_rescale*qudaRes(iSpin, t, iEv, iSink);}
+				       DHputPtr->putData(RecordKey(iSpin+1,t,sinkBatchDoneInds[iSink]),quark_sink);
+				       if (print_coeffs){
+					       printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchDoneInds[iSink],iSpin+1,t));
+					       for (int n=0;n<nEigs;n++){
+						       printLaph(make_strf("coef for eigenlevel %d = (%14.8f, %14.8f)",
+									       n,real(quark_sink[n]),imag(quark_sink[n])));}}}}}
+					       bulova.stop();
+					       otime=bulova.getTimeInSeconds();
+					       printLaph(make_str(" Output of this batch to file took ",otime," seconds"));
+					       writetime+=otime;
 
-			 }}  // 	batch end
+       }}  // 	batch end
 
     DHputPtr->flush();}}   // src_ind, src_spin loop end
 
@@ -935,9 +940,7 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
  uint nEigQudaBatch=perambComps.nEigQudaBatch;
  double soln_rescale=qactionPtr->getSolutionRescaleFactor();
 
- int grid_spacing =  
-
-        // allocate space for batched solutions and make pointers suitable for quda
+ // allocate space for batched solutions and make pointers suitable for quda
  int iSinkBatch = 0;
  vector<int> sinkBatchInds(nSinkLaphBatch);
  vector<LattField> sinkBatchData(nSinkLaphBatch,FieldSiteType::ColorSpinVector);
@@ -1407,7 +1410,7 @@ unique_ptr<GaugeConfigurationHandler> PerambulatorHandler::gaugeHandler;
 
 bool SparseGridHandler::checkHeader(XMLHandler& xmlin, int suffix)
 {
- if !(pHand.isInfoSet())
+ if (!pHand.isInfoSet())
 	 throw logic_error("info not set in PerambulatorHandler"); 
  XMLHandler xml_in(xmlin);
  if (xml_tag_count(xml_in,"PerambulatorHandlerSparseGridDataFile")!=1) return false;
@@ -1423,7 +1426,7 @@ bool SparseGridHandler::checkHeader(XMLHandler& xmlin, int suffix)
     pHand.getGaugeConfigurationInfo().checkEqual(gauge_check);
     pHand.getGluonSmearingInfo().checkEqual(gsmear_check);
     pHand.getQuarkSmearingInfo().checkEqual(qsmear_check); 
-    if (numspin!=Nspin){
+    if (numspin!=pHand.getNSpin()){
        throw(std::invalid_argument("Perambulator checkEqual failed...NumSpinComponents mismatch"));}
     pHand.getQuarkActionInfo().checkEqual(qaction_check); 
 		grid.checkEqual(grid_check); 
@@ -1435,7 +1438,7 @@ bool SparseGridHandler::checkHeader(XMLHandler& xmlin, int suffix)
 void SparseGridHandler::writeHeader(XMLHandler& xmlout, 
                                      const PerambulatorHandler::FileKey& fkey,
                                      int suffix) {
- if !(pHand.isInfoSet())
+ if (!(pHand.isInfoSet()))
 	 throw logic_error("info not set in PerambulatorHandler"); 
  xmlout.set_root("PerambulatorHandlerSparseGridDataFile");
  XMLHandler xmltmp;
@@ -1444,7 +1447,7 @@ void SparseGridHandler::writeHeader(XMLHandler& xmlout,
  pHand.getQuarkSmearingInfo().output(xmltmp); xmlout.put_child(xmltmp);
  pHand.getQuarkActionInfo().output(xmltmp); xmlout.put_child(xmltmp);
  fkey.output(xmltmp); xmlout.put_child(xmltmp);
- xmlout.put_child("NumSpinComponents",make_string(Nspin));
+ xmlout.put_child("NumSpinComponents",make_string(pHand.getNSpin()));
  grid.output(xmltmp); xmlout.put_child(xmltmp); 
 }
 

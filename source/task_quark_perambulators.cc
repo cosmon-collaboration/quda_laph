@@ -106,10 +106,15 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
  GaugeConfigurationInfo gaugeinfo(xmlr);
  GluonSmearingInfo gSmear(xmlr);
  QuarkSmearingInfo qSmear(xmlr);
+ RandomSparseGrid sGrid(xmlr);  
  string smeared_quark_filestub;
  xmlreadif(xmlr,"SmearedQuarkFileStub",smeared_quark_filestub,"LAPH_QUARK_PERAMBULATORS");
  QuarkActionInfo quark(xmlr);
- FileListInfo files(xmlr);
+ if (xml_tag_count(xmlr,"FileListInfo")!=2)
+	 throw logic_error("two FileListInfo tags expected: first for perambs, second for sparse grid perambs"); 
+ list<XMLHandler> flxmls(xmlr.find("FileListInfo")); 
+ FileListInfo files(flxmls.front());
+ FileListInfo gridFiles(flxmls.back());
  InverterInfo invinfo(xmlr);
  bool upper_spin_only=false;
  if (xml_tag_count(xmlr,"UpperSpinComponentsOnly")>0){
@@ -139,6 +144,7 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
  printLaph(make_strf("\n%s\n",gaugeinfo.output()));
  printLaph(make_strf("\n\nGluon Smearing:\n%s\n",gSmear.output()));
  printLaph(make_strf("\n\nQuark Smearing:\n%s\n",qSmear.output()));
+ printLaph(make_strf("\n\nSparse Grid:\n%s\n",sGrid.output()));
  if (!smeared_quark_filestub.empty()){
     printLaph(make_strf("SmearedQuarkFileStub: %s",smeared_quark_filestub));}
  printLaph(make_str("\nQuarkAction:\n",quark.output()));
@@ -151,7 +157,7 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
     printLaph("Extra solution checks will be performed");}
 
      // create handler
- PerambulatorHandler Q(gaugeinfo,gSmear,qSmear,quark,files,
+ PerambulatorHandler Q(gaugeinfo,gSmear,qSmear,quark,sGrid,files,gridFiles,
                        smeared_quark_filestub,upper_spin_only,mode);
 
     // read the set of computations (time sources, src eigvec indices)
@@ -238,7 +244,12 @@ void doLaphCheckPerambulators(XMLHandler& xmltask)
  GluonSmearingInfo gSmear(xmlr);
  QuarkSmearingInfo qSmear(xmlr);
  QuarkActionInfo quark(xmlr);
- FileListInfo files(xmlr);
+ RandomSparseGrid sGrid(xmlr);  
+ if (xml_tag_count(xmlr,"FileListInfo")!=2)
+         throw logic_error("two FileListInfo tags expected: first for perambs, second for sparse grid perambs");
+ list<XMLHandler> flxmls(xmlr.find("FileListInfo"));
+ FileListInfo files(flxmls.front());
+ FileListInfo gridFiles(flxmls.back());
  bool upper_spin_only=false;
  if (xml_tag_count(xmlr,"UpperSpinComponentsOnly")>0){
     upper_spin_only=true;}
@@ -259,6 +270,7 @@ void doLaphCheckPerambulators(XMLHandler& xmltask)
  printLaph(make_strf("\n%s\n",gaugeinfo.output()));
  printLaph(make_strf("\n\nGluon Smearing:\n%s\n",gSmear.output()));
  printLaph(make_strf("\n\nQuark Smearing:\n%s\n",qSmear.output()));
+ printLaph(make_strf("\n\nSparse Grid:\n%s\n",sGrid.output()));
  printLaph(make_str("\nQuarkAction:\n",quark.output()));
  if (upper_spin_only){
     printLaph("Only upper spin components used");}
@@ -267,7 +279,7 @@ void doLaphCheckPerambulators(XMLHandler& xmltask)
  printLaph(make_strf("LogFileStub: %s",logfilestub));
 
      // create handler
- PerambulatorHandler Q(gaugeinfo,gSmear,qSmear,quark,files,
+ PerambulatorHandler Q(gaugeinfo,gSmear,qSmear,quark,sGrid,files,gridFiles,
                        "",upper_spin_only,mode);
 
     // read the set of computations (time sources, src eigvec indices)
@@ -346,7 +358,13 @@ void doLaphMergePerambulators(XMLHandler& xmltask)
  GluonSmearingInfo gSmear(xmlr);
  QuarkSmearingInfo qSmear(xmlr);
  QuarkActionInfo quark(xmlr);
- FileListInfo files(xmlr);
+ RandomSparseGrid sGrid(xmlr);
+ if (xml_tag_count(xmlr,"FileListInfo")!=2)
+         throw logic_error("two FileListInfo tags expected: first for perambs, second for sparse grid perambs");
+ list<XMLHandler> flxmls(xmlr.find("FileListInfo"));
+ FileListInfo files(flxmls.front());
+ FileListInfo gridFiles(flxmls.back());
+
  bool upper_spin_only=false;
  if (xml_tag_count(xmlr,"UpperSpinComponentsOnly")>0){
     upper_spin_only=true;}
@@ -361,6 +379,7 @@ void doLaphMergePerambulators(XMLHandler& xmltask)
  printLaph(make_strf("\n%s\n",gaugeinfo.output()));
  printLaph(make_strf("\n\nGluon Smearing:\n%s\n",gSmear.output()));
  printLaph(make_strf("\n\nQuark Smearing:\n%s\n",qSmear.output()));
+ printLaph(make_strf("\n\nSparse Grid:\n%s\n",sGrid.output()));
  printLaph(make_str("\nQuarkAction:\n",quark.output()));
  if (upper_spin_only){
     printLaph("Only upper spin components used");}
@@ -376,7 +395,7 @@ void doLaphMergePerambulators(XMLHandler& xmltask)
     inflos.push_back(FileListInfo(*it));}
 
      // create handler
- PerambulatorHandler Q(gaugeinfo,gSmear,qSmear,quark,files,
+ PerambulatorHandler Q(gaugeinfo,gSmear,qSmear,quark,sGrid,files,gridFiles,
                        "",upper_spin_only,mode);
 
     // read the set of computations (time sources, src eigvec indices)
