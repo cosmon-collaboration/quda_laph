@@ -4,6 +4,7 @@
 #include "gauge_configuration_handler.h"
 #include "quark_smearing_handler.h"
 #include "inverter_info.h"
+#include "sparse_grid.h"
 #include "array.h"
 
 
@@ -115,10 +116,19 @@ namespace LaphEnv {
 // *  is provided to accomplish this.                              *
 // *                                                               *
 // *****************************************************************
+class SparseGridHandler { 
+	const PerambulatorHandler &pHand;
+	RandomSparseGrid &grid; 
 
+	SparseGridHandler(const PerambulatorHandler& _pHand, 
+			RandomSparseGrid& _grid) : pHand(_pHand), grid(_grid) {} 
 
-class PerambulatorHandler
-{
+	bool checkHeader(XMLHandler& xmlr, int suffix);
+	void writeHeader(XMLHandler& xmlout, const FileKey& fkey,
+                    int suffix);
+}; 
+
+class PerambulatorHandler {
 
  public:
 
@@ -129,8 +139,8 @@ class PerambulatorHandler
        // sink time (next 15 bits)
        // source_laphev_index (next 15 bits)
 
-   class RecordKey
-   {
+   class RecordKey {
+
       unsigned long code;   // at least 32 bit integer
 
     public:
@@ -182,7 +192,6 @@ class PerambulatorHandler
 
    };
 
-
    struct FileKey
    {
       int src_time;
@@ -194,14 +203,14 @@ class PerambulatorHandler
       FileKey(const FileKey& rhs);
       FileKey& operator=(const FileKey& rhs);
       ~FileKey(){}
-      void output(XMLHandler& xmlw) const;
-      std::string output(int indent=0) const;
+      virtual void output(XMLHandler& xmlw) const;
+      virtual std::string output(int indent=0) const;
       bool operator<(const FileKey& rhs) const;
       bool operator==(const FileKey& rhs) const;
       bool operator!=(const FileKey& rhs) const;
    };
 
-   struct PerambComputation {
+	 struct PerambComputation {
       int src_time;
       std::set<int> src_lapheigvec_indices;
       PerambComputation(int in_src_time, const std::set<int>& src_evinds)
@@ -220,97 +229,106 @@ class PerambulatorHandler
 
  private:
 
-       // pointers to internal infos (managed by this handler
-       // with new and delete)
+	 // pointers to internal infos (managed by this handler
+	 // with new and delete)
 
-   const GaugeConfigurationInfo *uPtr;
-   const GluonSmearingInfo *gSmearPtr;
-   const QuarkSmearingInfo *qSmearPtr;
-   const QuarkActionInfo *qactionPtr;
-   const FileListInfo *fPtr;
-   const InverterInfo *invertPtr;
-   uint Nspin;
-   Mode mode;
-   void* preconditioner;
+	 const GaugeConfigurationInfo *uPtr;
+	 const GluonSmearingInfo *gSmearPtr;
+	 const QuarkSmearingInfo *qSmearPtr;
+	 const QuarkActionInfo *qactionPtr;
+	 const FileListInfo *fPtr;
+	 const FileListInfo *fPtrSparseGrid;
+	 const InverterInfo *invertPtr;
+	 uint Nspin;
+	 Mode mode;
+	 void* preconditioner;
 
-       // structure containing the computations to perform
-   PerambComputations perambComps;
+	 // structure containing the computations to perform
+	 PerambComputations perambComps;
 
-       // necessary quda data
-   QudaInvertParam quda_inv_param;
+	 // necessary quda data
+	 QudaInvertParam quda_inv_param;
 
-       // sub-handler pointers
+	 // sub-handler pointers
+   static std::unique_ptr<SparseGridHandler> sgHandler; 	 
+	 static std::unique_ptr<QuarkSmearingHandler> qSmearHandler;
+	 static std::unique_ptr<GaugeConfigurationHandler> gaugeHandler;
 
-   static std::unique_ptr<QuarkSmearingHandler> qSmearHandler;
-   static std::unique_ptr<GaugeConfigurationHandler> gaugeHandler;
+	 // Prevent copying ... handler might contain large
+	 // amounts of data
 
-       // Prevent copying ... handler might contain large
-       // amounts of data
-
-   PerambulatorHandler(const PerambulatorHandler&);
-   PerambulatorHandler& operator=(const PerambulatorHandler&);
+	 PerambulatorHandler(const PerambulatorHandler&);
+	 PerambulatorHandler& operator=(const PerambulatorHandler&);
 
 
-       // data I/O handler pointers
+	 // data I/O handler pointers
 
-   DataPutHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType> *DHputPtr;
-   DataGetHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType> *DHgetPtr;
+	 DataPutHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType> *DHputPtr;
+	 DataPutHandlerMF<SparseGridHandler,FileKey,RecordKey,DataType> *DHputPtrSpGrid;
+
+	 DataGetHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType> *DHgetPtr;
 
 
  public:
 
 
-   PerambulatorHandler();
+	 PerambulatorHandler();
 
-   PerambulatorHandler(const GaugeConfigurationInfo& gaugeinfo,
-                       const GluonSmearingInfo& gluonsmear,
-                       const QuarkSmearingInfo& quarksmear,
-                       const QuarkActionInfo& quark,
-                       const FileListInfo& flist,
-                       const std::string& smeared_quark_filestub,
-                       bool upper_spin_components_only=false,
-                       Mode in_mode=ReadOnly,
-                       const std::string& gauge_str="default_gauge_field");
+	 PerambulatorHandler(const GaugeConfigurationInfo& gaugeinfo,
+			 const GluonSmearingInfo& gluonsmear,
+			 const QuarkSmearingInfo& quarksmear,
+			 const QuarkActionInfo& quark,
+			 const RandomSparseGrid& rsgrid, 
+			 const FileListInfo& flist,
+			 const FileListInfo& flist_sparse_grid,
+			 const std::string& smeared_quark_filestub,
+			 bool upper_spin_components_only=false,
+			 Mode in_mode=ReadOnly,
+			 const std::string& gauge_str="default_gauge_field");
 
-   void setInfo(const GaugeConfigurationInfo& gaugeinfo,
-                const GluonSmearingInfo& gluonsmear,
-                const QuarkSmearingInfo& quarksmear,
-                const QuarkActionInfo& quark,
-                const FileListInfo& flist,
-                const std::string& smeared_quark_filestub,
-                bool upper_spin_components_only=false,
-                Mode in_mode=ReadOnly,
-                const std::string& gauge_str="default_gauge_field");
+	 void setInfo(const GaugeConfigurationInfo& gaugeinfo,
+			 const GluonSmearingInfo& gluonsmear,
+			 const QuarkSmearingInfo& quarksmear,
+			 const QuarkActionInfo& quark,
+			 const RandomSparseGrid& rsgrid, 
+			 const FileListInfo& flist,
+			 const FileListInfo& flist_sparse_grid,
+			 const std::string& smeared_quark_filestub,
+			 bool upper_spin_components_only=false,
+			 Mode in_mode=ReadOnly,
+			 const std::string& gauge_str="default_gauge_field");
 
-   ~PerambulatorHandler();
+	 ~PerambulatorHandler();
 
-   void clear();
+	 void clear();
 
-   bool isInfoSet() const;
+	 bool isInfoSet() const;
 
-   const GaugeConfigurationInfo& getGaugeConfigurationInfo() const;
+	 const GaugeConfigurationInfo& getGaugeConfigurationInfo() const;
 
-   const GluonSmearingInfo& getGluonSmearingInfo() const;
+	 const GluonSmearingInfo& getGluonSmearingInfo() const;
 
-   const QuarkSmearingInfo& getQuarkSmearingInfo() const;
+	 const QuarkSmearingInfo& getQuarkSmearingInfo() const;
 
-   const QuarkActionInfo& getQuarkActionInfo() const;
+	 const QuarkActionInfo& getQuarkActionInfo() const;
 
-   const FileListInfo& getFileListInfo() const;
+	 const FileListInfo& getFileListInfo() const;
 
-   uint getNumberOfLaplacianEigenvectors() const;
+	 const FileListInfo& getFileListInfoSparseGrid() const;
 
-   int getTimeExtent() const;
+	 uint getNumberOfLaplacianEigenvectors() const;
 
-   void getHeader(XMLHandler& xmlout) const;
+	 int getTimeExtent() const;
 
-   void getFileMap(XMLHandler& xmlout) const;
+	 void getHeader(XMLHandler& xmlout) const;
 
-   void outputSuffixMap();
+	 void getFileMap(XMLHandler& xmlout) const;
 
-   std::map<int,FileKey> getSuffixMap() const;
+	 void outputSuffixMap();
 
-   void outputSuffixMap(XMLHandler& xmlout);
+	 std::map<int,FileKey> getSuffixMap() const;
+
+	 void outputSuffixMap(XMLHandler& xmlout);
 
    void setInverter(const InverterInfo& invinfo);
 
@@ -359,6 +377,7 @@ class PerambulatorHandler
                  const GluonSmearingInfo& gluonsmear,
                  const QuarkSmearingInfo& quarksmear,
                  const QuarkActionInfo& quark,
+								 const RandomSparseGrid& rsgrid, 
                  const FileListInfo& flist,
                  const std::string& smeared_quark_filestub,
                  bool upper_spin_components_only,
