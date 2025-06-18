@@ -199,7 +199,6 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
 // *               <LaphSigmaCutoff>0.32</LaphSigmaCutoff>                                 *
 // *               <NumberLaphEigvecs> 32 </NumberLaphEigvecs>                             *
 // *            </QuarkLaphSmearingInfo>                                                   *
-// *            <SmearedQuarkFileStub>/path/sq_field</SmearedQuarkFileStub>                *
 // *            <QuarkActionInfo>                                                          *
 // *               <Name> WILSON_CLOVER </Name>                                            *
 // *               <Flavor> ud </Flavor>                                                   *
