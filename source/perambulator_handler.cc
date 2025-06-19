@@ -727,10 +727,8 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& s
  uint nEigQudaBatch=perambComps.nEigQudaBatch;
  double soln_rescale=qactionPtr->getSolutionRescaleFactor();
 
- int grid_spacing=(*sgHandler).getGrid().getGridSpacing(); 
- vector<vector<int>> grid_offsets = (*sgHandler).getGrid().generateOffsets(Lx,Ly,Lz,Textent);
  int nColor = 3; 
- int nGridPoints = Lx*Ly*Lz/(grid_spacing*grid_spacing*grid_spacing); 
+ int nGridPoints = (*sgHandler).getGrid().getNGridPoints(); 
 
         // allocate space for batched solutions and sources, and make pointers suitable for quda
  vector<int> sinkBatchInds(nSinkLaphBatch);
@@ -848,29 +846,46 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& s
 	       // sparse grid output to file
 	       bulova.reset(); bulova.start();
 	       for (int iSink=0; iSink<nSinks; ++iSink) {
+					 const char* field_start=sinkBatchData[iSink].getDataConstPtr();
+					 size_t site_bytes=sinkBatchData[iSink].bytesPerSite();
+					 size_t word_bytes=sinkBatchData[iSink].bytesPerWord();
+					 if (word_bytes!=sizeof(complex<double>))
+						 throw logic_error("only implemented for double precision"); 
+					 size_t colvec_bytes=word_bytes*FieldNcolor;  
+
 		       for (int t=minTime;t<=maxTime;t++){
-			       for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
-				       vector<dcmplx> quark_sink;
-				       vector<int> coords(4);
-				       coords[3]=t; 
-				       for (int iX=0; iX<(Lx/grid_spacing); ++iX) {
-					       coords[0]=(iX*grid_spacing+grid_offsets[t][0])%Lx;
-					       for (int iY=0; iY<(Ly/grid_spacing); ++iY) {
-						       coords[1]=(iY*grid_spacing+grid_offsets[t][1])%Ly;
-						       for (int iZ=0; iZ<(Lz/grid_spacing); ++iZ) {
-							       coords[2]=(iZ*grid_spacing+grid_offsets[t][2])%Lz;
-							       const complex<double>* colorVec=reinterpret_cast<const complex<double>*>(
-									       sinkBatchData[iSink].getSiteData(coords).data());
-							       for (int c=0; c<nColor; c++) {
-								       quark_sink.push_back(soln_rescale*colorVec[c]);
-							       }
-							       DHputPtrSparseGrid->putData(RecordKey(iSpin+1,t,sinkBatchDoneInds[iSink]),quark_sink);
-							       if (print_coeffs){
-								       printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchDoneInds[iSink],iSpin+1,t));
-								       for (int n=0;n<(nColor*nGridPoints);n++){
-									       printLaph(make_strf("component for spin/space component %d = (%14.8f, %14.8f)",
-												       n,real(quark_sink[n]),imag(quark_sink[n])));
-								       }}}}}}}}
+						 const auto& local_offsets =  
+							 (*sgHandler).getGrid().getLocalGridPoints(t);
+				       vector<dcmplx> all_spin_quark_sink(nColor*nGridPoints*Nspin,0.0);
+							 for (const auto& offset : local_offsets) { 
+								 size_t local_offset=site_bytes*offset.local_offset;
+								 const char* get_ptr = field_start+local_offset;
+								 for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
+									 size_t global_offset=colvec_bytes*(
+											 offset.global_offset + iSpin*nGridPoints);
+									 char* dest_ptr = reinterpret_cast<char*>(
+											 all_spin_quark_sink.data())+global_offset; 
+									 memcpy(dest_ptr,get_ptr,colvec_bytes); 
+								 }
+							 MPI_Allreduce(MPI_IN_PLACE, &all_spin_quark_sink, 
+									 2*all_spin_quark_sink.size(), MPI_DOUBLE, MPI_SUM,
+									 MPI_COMM_WORLD);
+							 for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
+								 vector<dcmplx> quark_sink(all_spin_quark_sink.cbegin()+
+										 iSpin*nColor*nGridPoints,all_spin_quark_sink.cbegin()+
+										 (iSpin+1)*nColor*nGridPoints);
+								 DHputPtrSparseGrid->putData(RecordKey(iSpin+1,t,sinkBatchDoneInds[iSink]),quark_sink);
+								 if (print_coeffs){
+									 printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchDoneInds[iSink],iSpin+1,t));
+									 for (int n=0;n<(nColor*nGridPoints);n++){
+										 printLaph(make_strf("component for spin/space component %d = (%14.8f, %14.8f)",
+													 n,real(quark_sink[n]),imag(quark_sink[n])));
+									 }
+								 }
+							 }
+						 }
+					 }
+				 }
 	       bulova.stop();
 	       double otime=bulova.getTimeInSeconds();
 	       printLaph(make_str(" Output of this batch to sparse grid file took ",otime," seconds"));
