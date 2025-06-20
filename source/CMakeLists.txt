@@ -71,10 +71,6 @@ set(QUDA_DIR ${QUDA_DIR}/lib/cmake/QUDA)
 find_package(QUDA REQUIRED)
 #find_package(MPI REQUIRED)
 
-#if(BUILD_MULTISRCINVERTER)
-#   add_compile_definitions(USE_MULTI_SRC_INVERTER)
-#endif()
-
 add_executable(quda_laph)
 
 target_sources(quda_laph PRIVATE
@@ -114,3 +110,4 @@ target_sources(quda_laph PRIVATE
 target_link_libraries(quda_laph PUBLIC cblas)
 target_link_libraries(quda_laph PUBLIC gputoolkitlib)
 target_link_libraries(quda_laph PUBLIC quda)
+install(TARGETS quda_laph)
