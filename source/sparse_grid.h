@@ -29,10 +29,10 @@ namespace LaphEnv {
 			if (grid_spacing<0) {
 				throw std::logic_error("invalid grid spacing");
 			}
-			if (((grid_spacing%LayoutInfo::getLattExtents()[0])!=0)||
-					((grid_spacing%LayoutInfo::getLattExtents()[1])!=0)||
-					((grid_spacing%LayoutInfo::getLattExtents()[2])!=0)) {
-				throw std::logic_error("grid spacing must divide local spatial extents");
+			if (((LayoutInfo::getLattExtents()[0]%grid_spacing)!=0)||
+					((LayoutInfo::getLattExtents()[1]%grid_spacing)!=0)||
+					((LayoutInfo::getLattExtents()[2]%grid_spacing)!=0)) {
+				throw std::logic_error("grid spacing must divide global spatial extents");
 			}
 		}	
 
