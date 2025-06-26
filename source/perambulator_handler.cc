@@ -958,6 +958,7 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
 
  int nColor = 3; 
  int nGridPoints = (*sgHandler).getGrid().getNGridPoints(); 
+ //printLaph(make_strf(" nGridPoints = %d",nGridPoints));
 
  double soln_rescale=qactionPtr->getSolutionRescaleFactor();
 
@@ -985,6 +986,7 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
      // get the file key and open file for writing
   FileKey fkey(src_time,srcspin);
   DHputPtr->open(fkey);
+  DHputPtrSparseGrid->open(fkey);
   int invcount=0;
 
   for (set<int>::const_iterator vt=src_evindices.begin();vt!=src_evindices.end();++vt,++invcount){
@@ -1064,6 +1066,7 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
          printLaph(" Outputting to sparse grid file");
 			 // sparse grid output to file
          for (int iSink=0; iSink<nSinks; ++iSink) {
+					 printLaph(make_strf("doing sink %d", iSink));
            const char* field_start=sinkBatchData[iSink].getDataConstPtr();
            size_t site_bytes=sinkBatchData[iSink].bytesPerSite();
            size_t word_bytes=sinkBatchData[iSink].bytesPerWord();
@@ -1071,39 +1074,57 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
              throw logic_error("only implemented for double precision");
            size_t colvec_bytes=word_bytes*FieldNcolor;
 
-           for (int t=minTime;t<=maxTime;t++){
-             const auto& local_offsets =
-               (*sgHandler).getGrid().getLocalGridPoints(t);
-               vector<dcmplx> all_spin_quark_sink(nColor*nGridPoints*Nspin,0.0);
-               for (const auto& offset : local_offsets) {
-                 size_t local_offset=site_bytes*offset.local_offset;
-                 const char* get_ptr = field_start+local_offset;
-                 for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
-                   size_t global_offset=colvec_bytes*(
-                       offset.global_offset + iSpin*nGridPoints);
-                   char* dest_ptr = reinterpret_cast<char*>(
-                       all_spin_quark_sink.data())+global_offset;
-                   memcpy(dest_ptr,get_ptr,colvec_bytes);
-                 }
-               MPI_Allreduce(MPI_IN_PLACE, &all_spin_quark_sink,
-                   2*all_spin_quark_sink.size(), MPI_DOUBLE, MPI_SUM,
-                   MPI_COMM_WORLD);
-               for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
-                 vector<dcmplx> quark_sink(all_spin_quark_sink.cbegin()+
-                     iSpin*nColor*nGridPoints,all_spin_quark_sink.cbegin()+
-                     (iSpin+1)*nColor*nGridPoints);
-                 DHputPtrSparseGrid->putData(RecordKey(iSpin+1,t,sinkBatchInds[iSink]),quark_sink);
-                 if (print_coeffs){
-                   printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchInds[iSink],iSpin+1,t));
-                   for (int n=0;n<(nColor*nGridPoints);n++){
-                     printLaph(make_strf("component for spin/space component %d = (%14.8f, %14.8f)",
-                           n,real(quark_sink[n]),imag(quark_sink[n])));
-                   }
-                 }
-               }
-             }
-           }
-         }
+					 for (int t=minTime;t<=maxTime;t++){
+						 //printLaph(make_strf("  t =  %d", t));
+						 const auto& local_offsets =
+							 (*sgHandler).getGrid().getLocalGridPoints(t);
+						 vector<dcmplx> all_spin_quark_sink(nColor*nGridPoints*Nspin,0.0);
+						 int sz1 = all_spin_quark_sink.size(); 
+						 //printLaph(make_strf("Intialized storage vector. all_spin_quark_sink.size() = %d",sz1));
+						 for (const auto& offset : local_offsets) {
+							 size_t local_offset=site_bytes*offset.local_offset;
+							 //printLaph(make_strf("      local_offset =  (%d,%u)", offset.local_offset,local_offset));
+							 const char* get_ptr = field_start+local_offset;
+							 for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
+								 //printLaph(make_strf("         spin =  %d", iSpin));
+								 size_t global_offset=colvec_bytes*(
+										 offset.global_offset + iSpin*nGridPoints);
+								 //printLaph(make_strf("         global_offset =  (%d,%u)", offset.global_offset,global_offset));
+								 char* dest_ptr = reinterpret_cast<char*>(
+										 all_spin_quark_sink.data())+global_offset;
+								 memcpy(dest_ptr,get_ptr,colvec_bytes);
+							 }
+						 }
+						 /*for (const auto& cdb : all_spin_quark_sink)  
+							 printLaph(make_strf("cdb = (%14.8f, %14.8f)", cdb.real(), cdb.imag()));
+						 printLaph("doing MPI all_reduce");*/
+						 MPI_Allreduce(MPI_IN_PLACE, all_spin_quark_sink.data(),
+								 2*all_spin_quark_sink.size(), MPI_DOUBLE, MPI_SUM,
+								 MPI_COMM_WORLD);
+						 /*for (const auto& cdb : all_spin_quark_sink)  
+							 printLaph(make_strf("cdb = (%14.8f, %14.8f)", cdb.real(), cdb.imag()));*/
+						 for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
+							 //printLaph(make_strf("         spin =  %d", iSpin));
+							 vector<dcmplx> quark_sink(all_spin_quark_sink.cbegin()+
+									 iSpin*nColor*nGridPoints,all_spin_quark_sink.cbegin()+
+									 (iSpin+1)*nColor*nGridPoints);
+							 /*vector<dcmplx> quark_sink;
+								 for (int ctr=0; ctr<nColor*nGridPoints; ctr++) 
+								 quark_sink.push_back(all_spin_quark_sink[iSpin*nColor*nGridPoints+ctr]);*/ 
+							 /*int sz=quark_sink.size();
+							 printLaph(make_strf("Intialized vector. quark_sink.size() = %d",sz));*/
+							 DHputPtrSparseGrid->putData(RecordKey(iSpin+1,t,sinkBatchInds[iSink]),quark_sink);
+							 //printLaph("wrote to file");
+							 if (print_coeffs){
+								 printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchInds[iSink],iSpin+1,t));
+								 for (int n=0;n<(nColor*nGridPoints);n++){
+									 printLaph(make_strf("component for spin/space component %d = (%14.8f, %14.8f)",
+												 n,real(quark_sink[n]),imag(quark_sink[n])));
+								 }
+							 }
+						 }
+					 }
+				 }
          bulova.stop();
          double otime=bulova.getTimeInSeconds();
          printLaph(make_str(" Output of this batch to sparse grid file took ",otime," seconds"));
@@ -1143,7 +1164,9 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
 				 writetime+=otime;
 
 				 iSinkBatch = 0;}    // batch end
-		DHputPtr->flush();}}   // src_ind, src_spin loop end
+		DHputPtr->flush();
+		DHputPtrSparseGrid->flush();
+	}}   // src_ind, src_spin loop end
 
  inv_time+=invtime;
  makesrc_time+=srctime; 

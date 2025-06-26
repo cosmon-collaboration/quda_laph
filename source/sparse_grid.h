@@ -121,7 +121,7 @@ namespace LaphEnv {
 		  int Ly = LayoutInfo::getLattExtents()[1];	
 		  int Lz = LayoutInfo::getLattExtents()[2];
 
-			int ctr; 
+			int ctr=0; 
 			for (int iZ=0; iZ<Lz/grid_spacing; iZ++) {
 				coords[2]=(iZ*grid_spacing+offsets[t][2])%Lz;
 				for (int iY=0; iY<Ly/grid_spacing; iY++) {
@@ -137,6 +137,12 @@ namespace LaphEnv {
 					}
 				}
 			}
+			/*
+		  for (int rank = 0 ; rank < LayoutInfo::getNumRanks(); rank++) {
+				if (rank==LayoutInfo::getMyRank())
+					std::cout<<"on rank "<<rank<<" ret.size() = "<<ret.size()<<std::endl;
+			}
+			*/
 			return ret; 
 		}
 
