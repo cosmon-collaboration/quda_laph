@@ -152,15 +152,17 @@ void PerambulatorHandler::set_info(const GaugeConfigurationInfo& gaugeinfo,
     sgHandler = new SparseGridHandler(*this, rsgrid); 
     fPtr = new FileListInfo(flist);
     fPtrSparseGrid = new FileListInfo(flist_sparse_grid);
-    Nspin = (upper_spin_components_only) ? 2 : 4;
+    printLaph("created file list handlers\n");  
+		Nspin = (upper_spin_components_only) ? 2 : 4;
     mode = in_mode;
     if ((mode==Compute)||(mode==Merge)){
        DHputPtr=new DataPutHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType>(
                        *this,*fPtr,"Laph--QuarkPeramb","PerambulatorHandlerDataFile");
 			 DHputPtrSparseGrid=new DataPutHandlerMF<SparseGridHandler,FileKey,RecordKey,DataType>(
-                       *sgHandler,*fPtr,"Laph--SparseGridQuarkPeramb","PerambulatorHandlerSparseGridDataFile");
+                       *sgHandler,*fPtrSparseGrid,"Laph--SparseGridQuarkPeramb","PerambulatorHandlerSparseGridDataFile");
 
 
+    printLaph("created DH put handlers\n");  
 		}
     if ((mode==ReadOnly)||(mode==Check)){
        bool globalmode=(mode==ReadOnly); 
