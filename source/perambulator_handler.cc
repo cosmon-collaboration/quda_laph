@@ -955,6 +955,10 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
  uint nSinkLaphBatch=perambComps.nSinkLaphBatch;
  uint nSinkQudaBatch=perambComps.nSinkQudaBatch;
  uint nEigQudaBatch=perambComps.nEigQudaBatch;
+
+ int nColor = 3; 
+ int nGridPoints = (*sgHandler).getGrid().getNGridPoints(); 
+
  double soln_rescale=qactionPtr->getSolutionRescaleFactor();
 
  // allocate space for batched solutions and make pointers suitable for quda
@@ -1057,40 +1061,89 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
        Array<dcmplx> qudaRes(Nspin, Textent, nEigs, nSinks);   // quda laph reversing major order
        __complex__ double* qudaResPtr = (__complex__ double*)(&qudaRes(0,0,0,0));
 
-         // do the projections
-       printLaph("projecting batch of solutions onto LapH eigenvectors");
-       laphSinkProject(qudaResPtr, sinks_ptr, nSinks, nSinksBatch, evs_ptr, nEigs, 
-                       nEigQudaBatch, &quda_inv_param, LayoutInfo::getRankLattExtents().data());
+         printLaph(" Outputting to sparse grid file");
+			 // sparse grid output to file
+         for (int iSink=0; iSink<nSinks; ++iSink) {
+           const char* field_start=sinkBatchData[iSink].getDataConstPtr();
+           size_t site_bytes=sinkBatchData[iSink].bytesPerSite();
+           size_t word_bytes=sinkBatchData[iSink].bytesPerWord();
+           if (word_bytes!=sizeof(complex<double>))
+             throw logic_error("only implemented for double precision");
+           size_t colvec_bytes=word_bytes*FieldNcolor;
 
-       bulova.stop(); 
-       double addevprojtime=bulova.getTimeInSeconds();
-       printLaph(make_str(" this batch of projections onto Laph evs took ",addevprojtime," seconds"));
-       evprojtime+=addevprojtime;
+           for (int t=minTime;t<=maxTime;t++){
+             const auto& local_offsets =
+               (*sgHandler).getGrid().getLocalGridPoints(t);
+               vector<dcmplx> all_spin_quark_sink(nColor*nGridPoints*Nspin,0.0);
+               for (const auto& offset : local_offsets) {
+                 size_t local_offset=site_bytes*offset.local_offset;
+                 const char* get_ptr = field_start+local_offset;
+                 for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
+                   size_t global_offset=colvec_bytes*(
+                       offset.global_offset + iSpin*nGridPoints);
+                   char* dest_ptr = reinterpret_cast<char*>(
+                       all_spin_quark_sink.data())+global_offset;
+                   memcpy(dest_ptr,get_ptr,colvec_bytes);
+                 }
+               MPI_Allreduce(MPI_IN_PLACE, &all_spin_quark_sink,
+                   2*all_spin_quark_sink.size(), MPI_DOUBLE, MPI_SUM,
+                   MPI_COMM_WORLD);
+               for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
+                 vector<dcmplx> quark_sink(all_spin_quark_sink.cbegin()+
+                     iSpin*nColor*nGridPoints,all_spin_quark_sink.cbegin()+
+                     (iSpin+1)*nColor*nGridPoints);
+                 DHputPtrSparseGrid->putData(RecordKey(iSpin+1,t,sinkBatchInds[iSink]),quark_sink);
+                 if (print_coeffs){
+                   printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchInds[iSink],iSpin+1,t));
+                   for (int n=0;n<(nColor*nGridPoints);n++){
+                     printLaph(make_strf("component for spin/space component %d = (%14.8f, %14.8f)",
+                           n,real(quark_sink[n]),imag(quark_sink[n])));
+                   }
+                 }
+               }
+             }
+           }
+         }
+         bulova.stop();
+         double otime=bulova.getTimeInSeconds();
+         printLaph(make_str(" Output of this batch to sparse grid file took ",otime," seconds"));
+         writetime+=otime;
 
-         // rearrange data then output to file
-       bulova.reset(); bulova.start();
-       for (int iSink=0; iSink<nSinks; ++iSink) {
-          for (int t=minTime;t<=maxTime;t++){
-             for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {  
+				 // do the projections
+				 bulova.reset(); bulova.start();
+				 printLaph("projecting batch of solutions onto LapH eigenvectors");
+				 laphSinkProject(qudaResPtr, sinks_ptr, nSinks, nSinksBatch, evs_ptr, nEigs, 
+						 nEigQudaBatch, &quda_inv_param, LayoutInfo::getRankLattExtents().data());
+
+				 bulova.stop(); 
+				 double addevprojtime=bulova.getTimeInSeconds();
+				 printLaph(make_str(" this batch of projections onto Laph evs took ",addevprojtime," seconds"));
+				 evprojtime+=addevprojtime;
+
+				 // rearrange data then output to file
+				 bulova.reset(); bulova.start();
+				 for (int iSink=0; iSink<nSinks; ++iSink) {
+					 for (int t=minTime;t<=maxTime;t++){
+						 for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {  
 							 vector<dcmplx> quark_sink(nEigs);
-                for (int iEv=0; iEv<nEigs; ++iEv) {
-                   quark_sink[iEv] = soln_rescale*qudaRes(iSpin, t, iEv, iSink);}
-                   DHputPtr->putData(RecordKey(iSpin+1,t,sinkBatchInds[iSink]),quark_sink);
-                   if (print_coeffs){
-                      printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchInds[iSink],iSpin+1,t));
-                      for (int n=0;n<nEigs;n++){
-                         printLaph(make_strf("coef for eigenlevel %d = (%14.8f, %14.8f)",
-                                   n,real(quark_sink[n]),imag(quark_sink[n])));}}
+							 for (int iEv=0; iEv<nEigs; ++iEv) {
+								 quark_sink[iEv] = soln_rescale*qudaRes(iSpin, t, iEv, iSink);}
+							 DHputPtr->putData(RecordKey(iSpin+1,t,sinkBatchInds[iSink]),quark_sink);
+							 if (print_coeffs){
+								 printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchInds[iSink],iSpin+1,t));
+								 for (int n=0;n<nEigs;n++){
+									 printLaph(make_strf("coef for eigenlevel %d = (%14.8f, %14.8f)",
+												 n,real(quark_sink[n]),imag(quark_sink[n])));}}
 
 
 						 }}}
-       bulova.stop();
-       double otime=bulova.getTimeInSeconds();
-       printLaph(make_str(" Output of this batch to file took ",otime," seconds"));
-       writetime+=otime;
+				 bulova.stop();
+				 otime=bulova.getTimeInSeconds();
+				 printLaph(make_str(" Output of this batch to file took ",otime," seconds"));
+				 writetime+=otime;
 
-       iSinkBatch = 0;}    // batch end
-    DHputPtr->flush();}}   // src_ind, src_spin loop end
+				 iSinkBatch = 0;}    // batch end
+		DHputPtr->flush();}}   // src_ind, src_spin loop end
 
  inv_time+=invtime;
  makesrc_time+=srctime; 
@@ -1101,61 +1154,61 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
 
 // ***************************************************************************
 
-    // Creates the source (multiplied by gamma_4) in Dirac-Pauli basis
-    //   src_spin here is 1,2,3,4
+// Creates the source (multiplied by gamma_4) in Dirac-Pauli basis
+//   src_spin here is 1,2,3,4
 
 void PerambulatorHandler::make_source(LattField& ferm_src, const void* ev_src_ptr, 
-                                      int src_time, int src_spin)
+		int src_time, int src_spin)
 {
- printLaph(" Making source for this inversion...");
- ferm_src.reset(FieldSiteType::ColorSpinVector);
- bool dp=(ferm_src.bytesPerWord()==sizeof(std::complex<double>));
-    // initialize source field to zero
- int loc_nsites=LayoutInfo::getRankLatticeNumSites();
- int ncmplx_per_site=ferm_src.elemsPerSite();
- int ncmplx=ncmplx_per_site*loc_nsites;
- int cbytes;
- dcmplx zrhodp;
- fcmplx zrhosp;
- char *zrho;
- if (dp){
-    double* z0=reinterpret_cast<double*>(ferm_src.getDataPtr());
-    std::fill(z0,z0+2*ncmplx,0.0);
-    cbytes=sizeof(std::complex<double>);
-    zrho=reinterpret_cast<char*>(&zrhodp);}
- else{
-    float* z0=reinterpret_cast<float*>(ferm_src.getDataPtr());
-    std::fill(z0,z0+2*ncmplx,0.0);
-    cbytes=sizeof(std::complex<float>);
-    zrho=reinterpret_cast<char*>(&zrhosp);}
+	printLaph(" Making source for this inversion...");
+	ferm_src.reset(FieldSiteType::ColorSpinVector);
+	bool dp=(ferm_src.bytesPerWord()==sizeof(std::complex<double>));
+	// initialize source field to zero
+	int loc_nsites=LayoutInfo::getRankLatticeNumSites();
+	int ncmplx_per_site=ferm_src.elemsPerSite();
+	int ncmplx=ncmplx_per_site*loc_nsites;
+	int cbytes;
+	dcmplx zrhodp;
+	fcmplx zrhosp;
+	char *zrho;
+	if (dp){
+		double* z0=reinterpret_cast<double*>(ferm_src.getDataPtr());
+		std::fill(z0,z0+2*ncmplx,0.0);
+		cbytes=sizeof(std::complex<double>);
+		zrho=reinterpret_cast<char*>(&zrhodp);}
+	else{
+		float* z0=reinterpret_cast<float*>(ferm_src.getDataPtr());
+		std::fill(z0,z0+2*ncmplx,0.0);
+		cbytes=sizeof(std::complex<float>);
+		zrho=reinterpret_cast<char*>(&zrhosp);}
 
- int loc_npsites=loc_nsites/2;
- int start_parity=LayoutInfo::getMyStartParity();
- int mytmin=LayoutInfo::getMyCommCoords()[3]*LayoutInfo::getRankLattExtents()[3];
- int mytmax=mytmin+LayoutInfo::getRankLattExtents()[3]-1;
- int tstride=LayoutInfo::getRankLattExtents()[0]*LayoutInfo::getRankLattExtents()[1]
-            *LayoutInfo::getRankLattExtents()[2];
- int incx=FieldNcolor;
- int incy=FieldNcolor*FieldNspin;
+	int loc_npsites=loc_nsites/2;
+	int start_parity=LayoutInfo::getMyStartParity();
+	int mytmin=LayoutInfo::getMyCommCoords()[3]*LayoutInfo::getRankLattExtents()[3];
+	int mytmax=mytmin+LayoutInfo::getRankLattExtents()[3]-1;
+	int tstride=LayoutInfo::getRankLattExtents()[0]*LayoutInfo::getRankLattExtents()[1]
+		*LayoutInfo::getRankLattExtents()[2];
+	int incx=FieldNcolor;
+	int incy=FieldNcolor*FieldNspin;
 
- if ((src_time>=mytmin)&&(src_time<=mytmax)){
-    int tloc=src_time-mytmin;
-    int parshift=loc_npsites*((start_parity+tloc)%2);
-    int start1=((tstride*tloc)/2) + parshift;
-    int stop1=((1+tstride*(tloc+1))/2) + parshift;
-    int n1=stop1-start1;
-    parshift=loc_npsites*((start_parity+1+tloc)%2);
-    int start2=((1+tstride*tloc)/2) + parshift;
-    int stop2=((tstride*(tloc+1))/2) + parshift;
-    int n2=stop2-start2;
-    int xstart1=start1*incx*cbytes;
-    int xstart2=start2*incx*cbytes;
-    char* ystart1=ferm_src.getDataPtr()+start1*incy*cbytes;
-    char* ystart2=ferm_src.getDataPtr()+start2*incy*cbytes;
-    
-    const char* x0=reinterpret_cast<const char*>(ev_src_ptr);
-    zrhodp=dcmplx(1.0,0.0);
-    if (src_spin>2){ zrhodp=-zrhodp;}  // multiply by gamma_4
+	if ((src_time>=mytmin)&&(src_time<=mytmax)){
+		int tloc=src_time-mytmin;
+		int parshift=loc_npsites*((start_parity+tloc)%2);
+		int start1=((tstride*tloc)/2) + parshift;
+		int stop1=((1+tstride*(tloc+1))/2) + parshift;
+		int n1=stop1-start1;
+		parshift=loc_npsites*((start_parity+1+tloc)%2);
+		int start2=((1+tstride*tloc)/2) + parshift;
+		int stop2=((tstride*(tloc+1))/2) + parshift;
+		int n2=stop2-start2;
+		int xstart1=start1*incx*cbytes;
+		int xstart2=start2*incx*cbytes;
+		char* ystart1=ferm_src.getDataPtr()+start1*incy*cbytes;
+		char* ystart2=ferm_src.getDataPtr()+start2*incy*cbytes;
+
+		const char* x0=reinterpret_cast<const char*>(ev_src_ptr);
+		zrhodp=dcmplx(1.0,0.0);
+		if (src_spin>2){ zrhodp=-zrhodp;}  // multiply by gamma_4
     if (!dp){
        zrhosp=complex<float>(real(zrhodp),imag(zrhodp));}
     const char* x1=x0+xstart1;
