@@ -19,7 +19,7 @@ using namespace quda ;
 using namespace LaphEnv ;
 
 //#define VERBOSE_COMPARISON
-#define GPU_STRESS
+//#define GPU_STRESS
 
 static void cpu_code( const int n1,
 		      const int n2,

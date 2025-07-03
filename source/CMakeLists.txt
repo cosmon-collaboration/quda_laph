@@ -8,8 +8,8 @@ add_subdirectory(Field)
 add_subdirectory(IO)
 add_subdirectory(Quarks)
 add_subdirectory(Quda_Interface)
-add_subdirectory(tasks)
-add_subdirectory(utils)
+add_subdirectory(Tasks)
+add_subdirectory(Utils)
 
 ## need to set these
 if(PARALLEL_BUILD)
