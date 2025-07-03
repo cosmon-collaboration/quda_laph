@@ -16,8 +16,7 @@ void GaugeConfigurationInfo::set_info(XMLHandler &xml_in) {
   XMLHandler xmlg(xml_in, "GaugeConfigurationInfo");
   xmlread(xmlg, "EnsembleName", ensemble_name, "GaugeConfigurationInfo");
   xmlread(xmlg, "FileFormat", file_format, "GaugeConfigurationInfo");
-  check_valid(file_format, "FileFormat",
-              {"CERN", "CLS", "SZIN_SP", "SZIN_DP", "USQCD_SP", "USQCD_DP"});
+  check_valid(file_format,"FileFormat",{"CERN","CLS","SCIDAC","SZINQIO","USQCD"});
   config_type = "WilsonImproved";
   xmlreadif(xmlg, "ConfigType", config_type, "GaugeConfigurationInfo");
   check_valid(config_type, "ConfigType", {"Wilson", "WilsonImproved"});

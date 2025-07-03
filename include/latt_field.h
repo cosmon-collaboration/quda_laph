@@ -111,14 +111,14 @@ public:
 
   static int get_cpu_prec_bytes() { return cpu_prec_bytes; }
 
+  LattField &reset_by_precision(FieldSiteType sitetype, char prec);
+
 private:
   void do_resize();
 
   void calc_site_elems();
 
   void applyFermionTemporalAntiPeriodic();
-
-  LattField &reset_by_precision(FieldSiteType sitetype, char prec);
 
   LattField &reset_by_bytes_per_site(int bytes_per_site);
 
