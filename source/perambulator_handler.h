@@ -42,6 +42,12 @@ namespace LaphEnv {
 // *                                                               *
 // *         src_time, snk_time, spin and Laph eigvec indices      *
 // *                                                               *
+// *  Optionally, sparse-grid projected perambulators can also be  *
+// *  written to file. These files have the same structure as      *
+// *  the ordinary perambulators. In order to compute sparse-grid  *
+// *  perambulators, an additional FileListInfo is required, as    *
+// *  well as an object of type 'RandomSparseGrid'                 *
+// *                                                               *
 // *  File structure and contents:                                 *
 // *                                                               *
 // *   - Results manipulated by one handler are contained in       *
@@ -51,7 +57,11 @@ namespace LaphEnv {
 // *             stub.1                                            *
 // *             ...                                               *
 // *             stub.N                                            *
-// *     The files included are specified in a FileListInfo.       *
+// *     The files included are specified in a FileListInfo. If    *
+// *     sparse-grid perambulators are also to be computed, a      *
+// *     second FileListInfo tag is required. The sparse grid      *
+// *     files are handled internally by a subclass of             *
+// *     PerambulatorHandler.                                      *
 // *                                                               *
 // *   - The header info in each file has a common part and a      *
 // *     part that is specific to that one file:                   *
@@ -59,6 +69,8 @@ namespace LaphEnv {
 // *           - common part                                       *
 // *           - specific part                                     *
 // *        </PerambulatorHandlerDataFile>                         *
+// *     For the sparse-grid files, the outer tag is               *
+// *     'PerambulatorHandlerSparseGridDataFile'                   *
 // *                                                               *
 // *   - The common header info includes                           *
 // *         GaugeConfigurationInfo                                *
@@ -66,6 +78,7 @@ namespace LaphEnv {
 // *         QuarkSmearingInfo                                     *
 // *         QuarkActionInfo                                       *
 // *         Nspin  (4 or 2)                                       *
+// *         RandomSparseGridInfo (for sparse-grid files only)     *
 // *                                                               *
 // *   - The specific header info includes (FileKey)               *
 // *         int src_time, src_spin                                *
@@ -73,10 +86,14 @@ namespace LaphEnv {
 // *   - Each file contains several records whose access is given  *
 // *     by a RecordKey.  The RecordKey contains an integer        *
 // *     that specifies sink spin, sink time, and source eigenvec  *
-// *     index.  The data in each record (DataType) is a           *
-// *     vector<complex<double>> containing "nev" complex numbers, *
-// *     where "nev" is the number of Laph eigenvectors.   The     *
-// *     Dirac-Pauli spin convention is used.                      *
+// *     index.  For ordinary perambulators, the data in each      *
+// *     record (DataType) is a vector<complex<double>>            *
+// *     containing "nev" complex numbers, where "nev" is the      * 
+// *     number of Laph eigenvectors. For sparse-grid              *
+// *     perambulators, The DataType is the same, but the vector   *
+// *     contains NColor*NGrid complex numbers, where NColor = 3   *
+// *     and NGrid is number of spatial sparse grid points.        *
+// *     The Dirac-Pauli spin convention is used.                  *
 // *                                                               *
 // *  All Laph Handlers follow the member naming convention:       *
 // *                                                               *
@@ -232,6 +249,7 @@ class PerambulatorHandler {
 	 const InverterInfo *invertPtr;
 	 SparseGridHandler *sgHandler; 	 
 	 uint Nspin;
+	 bool sGridOutput;
 	 Mode mode;
 	 void* preconditioner;
 
@@ -258,6 +276,7 @@ class PerambulatorHandler {
 	 DataPutHandlerMF<SparseGridHandler,FileKey,RecordKey,DataType> *DHputPtrSparseGrid;
 
 	 DataGetHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType> *DHgetPtr;
+	 DataGetHandlerMF<SparseGridHandler,FileKey,RecordKey,DataType> *DHgetPtrSparseGrid;
 
 
  public:
@@ -277,6 +296,16 @@ class PerambulatorHandler {
 			 Mode in_mode=ReadOnly,
 			 const std::string& gauge_str="default_gauge_field");
 
+	  PerambulatorHandler(const GaugeConfigurationInfo& gaugeinfo,
+       const GluonSmearingInfo& gluonsmear,
+       const QuarkSmearingInfo& quarksmear,
+       const QuarkActionInfo& quark,
+       const FileListInfo& flist,
+       const std::string& smeared_quark_filestub,
+       bool upper_spin_components_only=false,
+       Mode in_mode=ReadOnly,
+       const std::string& gauge_str="default_gauge_field");
+
 	 void setInfo(const GaugeConfigurationInfo& gaugeinfo,
 			 const GluonSmearingInfo& gluonsmear,
 			 const QuarkSmearingInfo& quarksmear,
@@ -289,11 +318,26 @@ class PerambulatorHandler {
 			 Mode in_mode=ReadOnly,
 			 const std::string& gauge_str="default_gauge_field");
 
+	  void setInfo(const GaugeConfigurationInfo& gaugeinfo,
+       const GluonSmearingInfo& gluonsmear,
+       const QuarkSmearingInfo& quarksmear,
+       const QuarkActionInfo& quark,
+       const FileListInfo& flist,
+       const std::string& smeared_quark_filestub,
+       bool upper_spin_components_only=false,
+       Mode in_mode=ReadOnly,
+       const std::string& gauge_str="default_gauge_field");
+
+
 	 ~PerambulatorHandler();
 
 	 void clear();
 
 	 bool isInfoSet() const;
+	
+	 //Was this handler constructed with the necessary classes for sparse-grid 
+	 //output?
+	 bool sparseGridOutput() const;
 
 	 const GaugeConfigurationInfo& getGaugeConfigurationInfo() const;
 
@@ -304,6 +348,9 @@ class PerambulatorHandler {
 	 const QuarkActionInfo& getQuarkActionInfo() const;
 
 	 const FileListInfo& getFileListInfo() const;
+	 const FileListInfo& getSparseGridFileListInfo() const;
+	 const RandomSparseGrid& getSparseGrid() const;
+
 
 	 const FileListInfo& getFileListInfoSparseGrid() const;
 
@@ -343,14 +390,25 @@ class PerambulatorHandler {
 
    const DataType& getData(int snk_time, int snk_spin, int src_time, int src_spin,
                            int src_eigvec_index) const;
+   
+	 const DataType& getSparseGridData(int snk_time, int snk_spin, int src_time, int src_spin,
+                           int src_eigvec_index) const;
 
    Array<std::complex<double>> getFullData(int snk_time, int snk_spin, 
+                                           int src_time, int src_spin, int nEigsUse) const;
+   
+	 Array<std::complex<double>> getFullSparseGridData(int snk_time, int snk_spin, 
                                            int src_time, int src_spin, int nEigsUse) const;
 
    bool queryData(int snk_time, int snk_spin, int src_time, int src_spin,
                   int src_eigvec_index) const;
+   
+	 bool querySparseGridData(int snk_time, int snk_spin, int src_time, int src_spin,
+                  int src_eigvec_index) const;
 
    bool queryFullData(int snk_time, int snk_spin, int src_time, int src_spin, int nEigsUse) const;
+   
+	 bool queryFullSparseGridData(int snk_time, int snk_spin, int src_time, int src_spin, int nEigsUse) const;
 
         // merge data
 
@@ -370,13 +428,21 @@ class PerambulatorHandler {
                  const GluonSmearingInfo& gluonsmear,
                  const QuarkSmearingInfo& quarksmear,
                  const QuarkActionInfo& quark,
-		 const RandomSparseGrid& rsgrid, 
+								 const RandomSparseGrid& rsgrid, 
                  const FileListInfo& flist,
-		 const FileListInfo& flist_sparse_grid,
+								 const FileListInfo& flist_sparse_grid,
                  const std::string& smeared_quark_filestub,
                  bool upper_spin_components_only,
                  const std::string& gauge_str, Mode in_mode);
 
+	 void set_info(const GaugeConfigurationInfo& gaugeinfo,
+                 const GluonSmearingInfo& gluonsmear,
+                 const QuarkSmearingInfo& quarksmear,
+                 const QuarkActionInfo& quark,
+                 const FileListInfo& flist,
+                 const std::string& smeared_quark_filestub,
+                 bool upper_spin_components_only,
+                 const std::string& gauge_str, Mode in_mode);
 
    bool checkHeader(XMLHandler& xmlr, int suffix);
    void writeHeader(XMLHandler& xmlout, const FileKey& fkey,
@@ -429,8 +495,8 @@ class PerambulatorHandler {
 
 
 // **************************************************************************************
-
-
+// An internal subclass which handles the sparse-grid datafile output. 
+// **************************************************************************************
 class SparseGridHandler { 
 	const PerambulatorHandler &pHand;
 	const RandomSparseGrid &grid; 

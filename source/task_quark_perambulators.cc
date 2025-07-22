@@ -43,6 +43,20 @@ namespace LaphEnv {
 // *               <MinFileNumber>0</MinFileNumber>                                        *
 // *               <MaxFileNumber>200</MaxFileNumber>                                      *
 // *            </FileListInfo>                                                            *
+// *                                                                                       *
+// *   (A second FileListInfo tag is required if sparse grid parameters are desired)       *
+// *            <FileListInfo>/path/sparse_grid_quark_perambs_1</FileNameStub>             *
+// *               <MinFileNumber>0</MinFileNumber>                                        *
+// *               <MaxFileNumber>200</MaxFileNumber>                                      *
+// *            </FileListInfo>                                                            *
+// *                                                                                       *
+// *   (A RandomSparseGridInfo tag is required if sparse grid parameters are desired)      *
+// *            <RandomSparseGridInfo>                                                     *
+// *               <RandomSeed>243525</RandomSeed>                                         *
+// *               <GridSpacing>8</GridSpacing>                                            *
+// *            </RandomSparseGridInfo>                                                    *
+// *                                                                                       *
+// *                                                                                       *
 // *            <InverterInfo>                                                             *
 // *               <Name>BICGSTAB</Name>                                                   *
 // *               <Tolerance>1.0e-11</Tolerance>                                          *
@@ -106,15 +120,18 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
  GaugeConfigurationInfo gaugeinfo(xmlr);
  GluonSmearingInfo gSmear(xmlr);
  QuarkSmearingInfo qSmear(xmlr);
- RandomSparseGrid sGrid(xmlr);  
  string smeared_quark_filestub;
  xmlreadif(xmlr,"SmearedQuarkFileStub",smeared_quark_filestub,"LAPH_QUARK_PERAMBULATORS");
  QuarkActionInfo quark(xmlr);
+ bool sparse_grid = true; 
  if (xml_tag_count(xmlr,"FileListInfo")!=2)
-	 throw logic_error("two FileListInfo tags expected: first for perambs, second for sparse grid perambs"); 
+	 sparse_grid = false; 
+ if ((sparse_grid)&&(xml_tag_count(xmlr,"RandomSparseGridInfo")==1))
+	 errorLaph("If RandomSparseGridInfo is specified, must have two FileListInfo tags.");
+
  list<XMLHandler> flxmls(xmlr.find("FileListInfo")); 
  FileListInfo files(flxmls.front());
- FileListInfo gridFiles(flxmls.back());
+ 
  InverterInfo invinfo(xmlr);
  bool upper_spin_only=false;
  if (xml_tag_count(xmlr,"UpperSpinComponentsOnly")>0){
@@ -144,7 +161,6 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
  printLaph(make_strf("\n%s\n",gaugeinfo.output()));
  printLaph(make_strf("\n\nGluon Smearing:\n%s\n",gSmear.output()));
  printLaph(make_strf("\n\nQuark Smearing:\n%s\n",qSmear.output()));
- printLaph(make_strf("\n\nSparse Grid:\n%s\n",sGrid.output()));
  if (!smeared_quark_filestub.empty()){
     printLaph(make_strf("SmearedQuarkFileStub: %s",smeared_quark_filestub));}
  printLaph(make_str("\nQuarkAction:\n",quark.output()));
@@ -157,16 +173,23 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
     printLaph("Extra solution checks will be performed");}
 
      // create handler
- PerambulatorHandler Q(gaugeinfo,gSmear,qSmear,quark,sGrid,files,gridFiles,
+ PerambulatorHandler Q;  
+ if (sparse_grid) {   
+	 FileListInfo gridFiles(flxmls.back());
+	 RandomSparseGrid sGrid(xmlr);  
+	 printLaph(make_strf("\n\nSparse Grid:\n%s\n",sGrid.output()));
+	 Q.setInfo(gaugeinfo,gSmear,qSmear,quark,sGrid,files,gridFiles,
                        smeared_quark_filestub,upper_spin_only,mode);
-
+ } else { 
+	 Q.setInfo(gaugeinfo,gSmear,qSmear,quark,files,smeared_quark_filestub,
+			 upper_spin_only,mode);
+ }
     // read the set of computations (time sources, src eigvec indices)
     // as well as the batching parameters
  XMLHandler xmlcmp(xmltask,"ComputationSet");
  Q.setComputationSet(xmlcmp);
 
      // set the inverter info
-
  Q.setInverter(invinfo);
  printLaph("Inverter initialized in PerambulatorHandler");
  Q.outputSuffixMap();
