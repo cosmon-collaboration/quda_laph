@@ -232,29 +232,27 @@ PerambulatorHandler::~PerambulatorHandler()
 
 void PerambulatorHandler::clear()
 {
- try{
-    delete uPtr;
-    delete gSmearPtr;
-    delete qSmearPtr;
-    delete qactionPtr;
-    if (QudaInfo::clover_on_device){
-       freeCloverQuda();
-       QudaInfo::clover_on_device=false;}  // delete clover in case next task uses different kappa
-    delete fPtr;
-		if (sGridOutput) {
-			delete fPtrSparseGrid;
-			delete sgHandler; 
-			delete DHputPtrSparseGrid; 
- 			delete DHgetPtrSparseGrid; 
-			sgHandler=0;
-			fPtrSparseGrid=0;
-			DHputPtrSparseGrid=0;
-			DHgetPtrSparseGrid=0;
-		}
-    delete invertPtr;
-    if (preconditioner){
-       destroyMultigridQuda(preconditioner);}
-    clearComputationSet();}
+	try{
+		delete uPtr;
+		delete gSmearPtr;
+		delete qSmearPtr;
+		delete qactionPtr;
+		if (QudaInfo::clover_on_device){
+			freeCloverQuda();
+			QudaInfo::clover_on_device=false;}  // delete clover in case next task uses different kappa
+		delete fPtr;
+		delete fPtrSparseGrid;
+		delete sgHandler; 
+		delete DHputPtrSparseGrid; 
+		delete DHgetPtrSparseGrid; 
+		sgHandler=0;
+		fPtrSparseGrid=0;
+		DHputPtrSparseGrid=0;
+		DHgetPtrSparseGrid=0;
+		delete invertPtr;
+		if (preconditioner){
+			destroyMultigridQuda(preconditioner);}
+		clearComputationSet();}
  catch(const std::exception& xp){
     errorLaph("abort");}
  uPtr=0;
@@ -542,12 +540,16 @@ const FileListInfo& PerambulatorHandler::getFileListInfo() const
  return *fPtr;
 }
 
-const FileListInfo& PerambulatorHandler::getSparseGridFileListInfo() const 
+const FileListInfo& PerambulatorHandler::getFileListInfoSparseGrid() const 
 {
 	if (!sGridOutput)
     errorLaph("There is no sparse grid file list.");
  check_info_set("getSparseGridFileListInfo");
  return *fPtrSparseGrid;
+}
+
+bool PerambulatorHandler::sparseGridOutput() const { 
+	return sGridOutput; 
 }
 
 uint PerambulatorHandler::getNumberOfLaplacianEigenvectors() const
@@ -1206,7 +1208,8 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
 
 			 iSinkBatch = 0;}    // batch end
 		DHputPtr->flush();
-		DHputPtrSparseGrid->flush();
+	  if (sGridOutput)	
+			DHputPtrSparseGrid->flush();
 	}}   // src_ind, src_spin loop end
 
  inv_time+=invtime;
@@ -1310,6 +1313,26 @@ const PerambulatorHandler::DataType& PerambulatorHandler::getData(
  return DHgetPtr->getData(fkey,rkey);
 }
 
+const PerambulatorHandler::DataType& PerambulatorHandler::getDataSparseGrid(
+                             int snk_time, int snk_spin, int src_time, int src_spin,
+                             int src_eigvec_index) const
+{
+ if (!sGridOutput){
+    errorLaph("Cannot getDataSparseGrid in PerambulatorHandler: no sparse grid specified");}
+ if (!isInfoSet()){
+    errorLaph("Cannot getData in PerambulatorHandler unless info is set");}
+ if (mode==Compute){
+    errorLaph("Cannot getData in PerambulatorHandler unless not in compute mode");}
+ int Textent = uPtr->getTimeExtent();
+ int nEigs=getNumberOfLaplacianEigenvectors();
+ if ((src_time<0)||(src_time>=Textent)||(snk_time<0)||(snk_time>=Textent)
+    ||(src_spin<1)||(src_spin>int(Nspin))||(snk_spin<1)||(snk_spin>int(Nspin))
+    ||(src_eigvec_index<0)||(src_eigvec_index>=nEigs)){
+    errorLaph("Invalid parameters passed to getData in PerambulatorHandler");}
+ FileKey fkey(src_time,src_spin);
+ RecordKey rkey(snk_spin,snk_time,src_eigvec_index);
+ return DHgetPtrSparseGrid->getData(fkey,rkey);
+}
 
 Array<std::complex<double>> PerambulatorHandler::getFullData(
                  int snk_time, int snk_spin, int src_time, int src_spin, int nEigsUse) const
@@ -1335,6 +1358,32 @@ Array<std::complex<double>> PerambulatorHandler::getFullData(
  return result;
 }
 
+Array<std::complex<double>> PerambulatorHandler::getFullDataSparseGrid(
+                 int snk_time, int snk_spin, int src_time, int src_spin, int nEigsUse) const
+{
+ if (!sGridOutput){
+    errorLaph("Cannot getFullDataSparseGrid in PerambulatorHandler: no sparse grid specified");}
+ if (!isInfoSet()){
+    errorLaph("Cannot getData in PerambulatorHandler unless info is set");}
+ if (mode==Compute){
+    errorLaph("Cannot getData in PerambulatorHandler unless not in compute mode");}
+ int Textent = uPtr->getTimeExtent();
+ int nEigs=getNumberOfLaplacianEigenvectors();
+ if ((src_time<0)||(src_time>=Textent)||(snk_time<0)||(snk_time>=Textent)
+    ||(src_spin<1)||(src_spin>int(Nspin))||(snk_spin<1)||(snk_spin>int(Nspin))
+    ||(nEigsUse<1)||(nEigsUse>nEigs)){
+    errorLaph("Invalid parameters passed to getFullData in PerambulatorHandler");}
+ FileKey fkey(src_time,src_spin);
+ int gridSize = sgHandler->getGrid().getNGridPoints();
+ Array<std::complex<double>> result(gridSize,nEigsUse);
+ for (int srcev_ind=0;srcev_ind<nEigsUse;srcev_ind++){
+    RecordKey rkey(snk_spin,snk_time,srcev_ind);
+    const PerambulatorHandler::DataType& buff=DHgetPtrSparseGrid->getData(fkey,rkey);
+    for (int n=0;n<gridSize;n++){
+       result(n,srcev_ind)=buff[n];}
+    DHgetPtrSparseGrid->removeData(fkey,rkey);}
+ return result;
+}
 
 bool PerambulatorHandler::queryData(int snk_time, int snk_spin, int src_time, int src_spin,
                                     int src_eigvec_index) const
@@ -1352,6 +1401,24 @@ bool PerambulatorHandler::queryData(int snk_time, int snk_spin, int src_time, in
  return DHgetPtr->queryData(fkey,rkey);
 }
 
+bool PerambulatorHandler::queryDataSparseGrid(int snk_time, int snk_spin, int src_time, int src_spin,
+                                    int src_eigvec_index) const
+{
+ if (!sGridOutput){
+    errorLaph("Cannot queryDataSparseGrid in PerambulatorHandler: no sparse grid specified");}
+ if (!isInfoSet()) return false;
+ if (mode==Compute) return false;
+ int Textent = uPtr->getTimeExtent();
+ int nEigs=getNumberOfLaplacianEigenvectors();
+ if ((src_time<0)||(src_time>=Textent)||(snk_time<0)||(snk_time>=Textent)
+    ||(src_spin<1)||(src_spin>int(Nspin))||(snk_spin<1)||(snk_spin>int(Nspin))
+    ||(src_eigvec_index<0)||(src_eigvec_index>=nEigs)){
+    return false;}
+ FileKey fkey(src_time,src_spin);
+ RecordKey rkey(snk_spin,snk_time,src_eigvec_index);
+ return DHgetPtrSparseGrid->queryData(fkey,rkey);
+}
+
 
 bool PerambulatorHandler::queryFullData(int snk_time, int snk_spin, 
                                         int src_time, int src_spin, int nEigsUse) const
@@ -1365,11 +1432,31 @@ bool PerambulatorHandler::queryFullData(int snk_time, int snk_spin,
     ||(nEigsUse<1)||(nEigsUse>nEigs)){
     return false;}
  FileKey fkey(src_time,src_spin);
- Array<std::complex<double>> result(nEigsUse,nEigsUse);
  for (int srcev_ind=0;srcev_ind<nEigsUse;srcev_ind++){
     RecordKey rkey(snk_spin,snk_time,srcev_ind);
     if (!DHgetPtr->queryData(fkey,rkey)) return false;}
  return true;
+}
+
+bool PerambulatorHandler::queryFullDataSparseGrid(int snk_time, int snk_spin,
+                                        int src_time, int src_spin, int nEigsUse) const
+{
+	if (!sGridOutput){
+		errorLaph("Cannot queryFullDataSparseGrid in PerambulatorHandler: no sparse grid specified");}
+	if (!isInfoSet()) return false;
+	if (mode==Compute) return false;
+	int Textent = uPtr->getTimeExtent();
+	int nEigs=getNumberOfLaplacianEigenvectors();
+	if ((src_time<0)||(src_time>=Textent)||(snk_time<0)||(snk_time>=Textent)
+			||(src_spin<1)||(src_spin>int(Nspin))||(snk_spin<1)||(snk_spin>int(Nspin))
+			||(nEigsUse<1)||(nEigsUse>nEigs)){
+		return false;}
+	FileKey fkey(src_time,src_spin);
+	int gridSize = sgHandler->getGrid().getNGridPoints();
+	for (int srcev_ind=0;srcev_ind<nEigsUse;srcev_ind++){
+		RecordKey rkey(snk_spin,snk_time,srcev_ind);
+		if (!DHgetPtrSparseGrid->queryData(fkey,rkey)) return false;}
+	return true;
 }
 
         // merge data
@@ -1392,7 +1479,25 @@ void PerambulatorHandler::mergeData(const FileListInfo& input_files)
         DHget.removeData(*it,*rt);}}
 }
 
-
+void PerambulatorHandler::mergeDataSparseGrid(const FileListInfo& input_files)
+{
+	if (!sGridOutput){
+		errorLaph("Cannot queryFullDataSparseGrid in PerambulatorHandler: no sparse grid specified");}
+	if (!isInfoSet()){
+		errorLaph("Cannot mergeData in PerambulatorHandler unless info is set");}
+	if (mode!=Merge){
+		errorLaph("Cannot mergeData in PerambulatorHandler unless in merge mode");}
+	DataGetHandlerMF<SparseGridHandler,FileKey,RecordKey,DataType> DHget(
+			*sgHandler,input_files,"Laph--SparseGridQuarkPeramb","PerambulatorHandlerSparseGridDataFile");
+	set<FileKey> fkeys(DHget.getFileKeys());
+	for (set<FileKey>::iterator it=fkeys.begin();it!=fkeys.end();++it){
+		DHputPtrSparseGrid->open(*it);
+		set<RecordKey> rkeys(DHget.getKeys(*it));
+		for (set<RecordKey>::iterator rt=rkeys.begin();rt!=rkeys.end();++rt){
+			const DataType& buff=DHget.getData(*it,*rt);
+			DHputPtrSparseGrid->putData(*rt,buff);
+			DHget.removeData(*it,*rt);}}
+}
         // check data
    
 void PerambulatorHandler::setChecks(const XMLHandler& xmlin)
@@ -1455,7 +1560,10 @@ void PerambulatorHandler::doChecks(const std::string& logfilestub, bool verbose_
        logfile+=string("_")+make_string(count)+string(".checklog");
        printLaph(make_str("Check results will be sent to ",logfile));
        if (count%numranks==myrank){
-          doACheck(*it,src_spin,logfile,verbose_output);}}}
+          doACheck(*it,src_spin,logfile,verbose_output);
+					if (sGridOutput)
+          	doACheckSparseGrid(*it,src_spin,logfile,verbose_output);
+			 }}}
 #ifdef ARCH_PARALLEL
  comm_barrier();
 #endif
@@ -1530,6 +1638,77 @@ void PerambulatorHandler::doACheck(const PerambComputation& pcomp, int src_spin,
  else{
     fout << "     Some checks FAILED"<<endl;}
  fout.close();
+}
+
+void PerambulatorHandler::doACheckSparseGrid(const PerambComputation& pcomp, int src_spin,
+                                   const std::string& logfile, bool verbose_output)
+{
+	if (!sGridOutput){
+		errorLaph("Cannot doACheckSparseGrid in PerambulatorHandler: no sparse grid specified");}
+	XMLHandler xmlout("SparseGridPerambulatorDataCheck");
+	xmlout.put_child("SourceTime",make_string(pcomp.src_time));
+	xmlout.put_child("SourceSpin",make_string(src_spin));
+	string srcevindstr;
+	const set<int>& indices(pcomp.src_lapheigvec_indices);
+	set<int>::const_iterator vt=indices.begin();
+	int rangestart=*vt; int rangestop=*vt+1; ++vt;
+	bool keep_going=true;
+	while (keep_going){
+		if ((vt!=indices.end())&&(rangestop==(*vt))){   // in a started range, increase rangestop
+			rangestop++; ++vt;}
+		else{                    // end of a range
+			if (rangestop==(rangestart+1)){             // only one in range
+				srcevindstr+=make_string(rangestart);}
+			else{                                       // more than one in range
+				srcevindstr+=make_string(rangestart)+"-"+make_string(rangestop-1);}
+			if (vt!=indices.end()){
+				rangestart=*vt; rangestop=rangestart+1;
+				srcevindstr+=" "; ++vt;}
+			else{
+				keep_going=false;}}}
+	xmlout.put_child("SourceLaphEigvecIndices",srcevindstr);
+
+	ofstream fout(logfile);
+	fout << "Sparse Grid Perambulator check: "<<endl;
+	fout << xmlout.output() <<endl;
+	uint Textent = uPtr->getTimeExtent();
+	uint nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
+	uint src_time=pcomp.src_time;
+	int gridSize = sgHandler->getGrid().getNGridPoints(); 
+	bool flag=true;
+	FileKey fkey(src_time,src_spin);
+	if (!DHgetPtrSparseGrid->queryFile(fkey)){
+		if (verbose_output) fout << " Could not find data for src spin "<<src_spin<<endl;
+		flag=false;}
+	else{
+		for (uint sink_time=0;sink_time<Textent;++sink_time){
+			for (uint sinkspin=1;sinkspin<=Nspin;++sinkspin){
+				for (set<int>::iterator st=pcomp.src_lapheigvec_indices.begin();
+						st!=pcomp.src_lapheigvec_indices.end();++st){
+					uint srcev_ind=*st;
+					RecordKey rkey(sinkspin,sink_time,srcev_ind);
+					if (!DHgetPtrSparseGrid->queryData(fkey,rkey)){
+						if (verbose_output) fout << "Could not find record for "<<rkey.output()<<endl;
+						flag=false;}
+					else{
+						const DataType& data=DHgetPtrSparseGrid->getData(fkey,rkey);
+						if (data.size()!=gridSize){
+							if (verbose_output) fout << "Incorrect data size for record key "<<rkey.output()<<endl;
+							flag=false;}
+						else{
+							bool nanflag=false;
+							for (uint k=0;k<data.size();k++){
+								if ((std::isnan(data[k].real()))||(std::isnan(data[k].imag()))){
+									nanflag=true; break;}}
+							if (nanflag){
+								if (verbose_output) fout << "Data contains NaNs for record key "<<rkey.output()<<endl;
+								flag=false;}}}}}}}
+
+	if (flag){
+		fout << "     Checks OK"<<endl;}
+	else{
+		fout << "     Some checks FAILED"<<endl;}
+	fout.close();
 }
 
 

@@ -348,10 +348,9 @@ class PerambulatorHandler {
 	 const QuarkActionInfo& getQuarkActionInfo() const;
 
 	 const FileListInfo& getFileListInfo() const;
-	 const FileListInfo& getSparseGridFileListInfo() const;
+	 
 	 const RandomSparseGrid& getSparseGrid() const;
-
-
+	
 	 const FileListInfo& getFileListInfoSparseGrid() const;
 
 	 uint getNumberOfLaplacianEigenvectors() const;
@@ -391,33 +390,32 @@ class PerambulatorHandler {
    const DataType& getData(int snk_time, int snk_spin, int src_time, int src_spin,
                            int src_eigvec_index) const;
    
-	 const DataType& getSparseGridData(int snk_time, int snk_spin, int src_time, int src_spin,
+	 const DataType& getDataSparseGrid(int snk_time, int snk_spin, int src_time, int src_spin,
                            int src_eigvec_index) const;
 
    Array<std::complex<double>> getFullData(int snk_time, int snk_spin, 
                                            int src_time, int src_spin, int nEigsUse) const;
    
-	 Array<std::complex<double>> getFullSparseGridData(int snk_time, int snk_spin, 
+	 Array<std::complex<double>> getFullDataSparseGrid(int snk_time, int snk_spin, 
                                            int src_time, int src_spin, int nEigsUse) const;
 
    bool queryData(int snk_time, int snk_spin, int src_time, int src_spin,
                   int src_eigvec_index) const;
    
-	 bool querySparseGridData(int snk_time, int snk_spin, int src_time, int src_spin,
+	 bool queryDataSparseGrid(int snk_time, int snk_spin, int src_time, int src_spin,
                   int src_eigvec_index) const;
 
    bool queryFullData(int snk_time, int snk_spin, int src_time, int src_spin, int nEigsUse) const;
    
-	 bool queryFullSparseGridData(int snk_time, int snk_spin, int src_time, int src_spin, int nEigsUse) const;
+	 bool queryFullDataSparseGrid(int snk_time, int snk_spin, int src_time, int src_spin, int nEigsUse) const;
 
         // merge data
 
    void mergeData(const FileListInfo& input_files);
+   void mergeDataSparseGrid(const FileListInfo& input_files);
    
         // check data
-   
    void setChecks(const XMLHandler& xmlin);
-   
    void doChecks(const std::string& logfilestub, bool verbose_output=true);
    
 
@@ -485,6 +483,8 @@ class PerambulatorHandler {
                     int src_time, int src_spin);
 
    void doACheck(const PerambComputation& pcomp, int src_spin,
+                 const std::string& logfile, bool verbose_output);
+   void doACheckSparseGrid(const PerambComputation& pcomp, int src_spin,
                  const std::string& logfile, bool verbose_output);
 
    friend class DataPutHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType>;

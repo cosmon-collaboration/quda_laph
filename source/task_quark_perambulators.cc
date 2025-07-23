@@ -44,13 +44,13 @@ namespace LaphEnv {
 // *               <MaxFileNumber>200</MaxFileNumber>                                      *
 // *            </FileListInfo>                                                            *
 // *                                                                                       *
-// *   (A second FileListInfo tag is required if sparse grid parameters are desired)       *
+// *   (A second FileListInfo tag is required if sparse-grid perambs are desired)       *
 // *            <FileListInfo>/path/sparse_grid_quark_perambs_1</FileNameStub>             *
 // *               <MinFileNumber>0</MinFileNumber>                                        *
 // *               <MaxFileNumber>200</MaxFileNumber>                                      *
 // *            </FileListInfo>                                                            *
 // *                                                                                       *
-// *   (A RandomSparseGridInfo tag is required if sparse grid parameters are desired)      *
+// *   (A RandomSparseGridInfo tag is required if sparse-grid perambs are desired)      *
 // *            <RandomSparseGridInfo>                                                     *
 // *               <RandomSeed>243525</RandomSeed>                                         *
 // *               <GridSpacing>8</GridSpacing>                                            *
@@ -126,12 +126,11 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
  bool sparse_grid = true; 
  if (xml_tag_count(xmlr,"FileListInfo")!=2)
 	 sparse_grid = false; 
- if ((sparse_grid)&&(xml_tag_count(xmlr,"RandomSparseGridInfo")==1))
+ if ((!sparse_grid)&&(xml_tag_count(xmlr,"RandomSparseGridInfo")==1))
 	 errorLaph("If RandomSparseGridInfo is specified, must have two FileListInfo tags.");
 
  list<XMLHandler> flxmls(xmlr.find("FileListInfo")); 
  FileListInfo files(flxmls.front());
- 
  InverterInfo invinfo(xmlr);
  bool upper_spin_only=false;
  if (xml_tag_count(xmlr,"UpperSpinComponentsOnly")>0){
@@ -172,7 +171,7 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
  if (extra_soln_check){
     printLaph("Extra solution checks will be performed");}
 
-     // create handler
+ // create handler
  PerambulatorHandler Q;  
  if (sparse_grid) {   
 	 FileListInfo gridFiles(flxmls.back());
@@ -184,17 +183,17 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
 	 Q.setInfo(gaugeinfo,gSmear,qSmear,quark,files,smeared_quark_filestub,
 			 upper_spin_only,mode);
  }
-    // read the set of computations (time sources, src eigvec indices)
-    // as well as the batching parameters
+ // read the set of computations (time sources, src eigvec indices)
+ // as well as the batching parameters
  XMLHandler xmlcmp(xmltask,"ComputationSet");
  Q.setComputationSet(xmlcmp);
 
-     // set the inverter info
+ // set the inverter info
  Q.setInverter(invinfo);
  printLaph("Inverter initialized in PerambulatorHandler");
  Q.outputSuffixMap();
 
-     // now do the computations!
+ // now do the computations!
  StopWatch outer; outer.start();
  Q.computePerambulators(extra_soln_check,print_coeffs,report_gflops);
  outer.stop();
@@ -240,6 +239,21 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
 // *               <MinFileNumber>0</MinFileNumber>                                        *
 // *               <MaxFileNumber>200</MaxFileNumber>                                      *
 // *            </FileListInfo>                                                            *
+// *                                                                                       *
+// *                                                                                       *
+// *     (A second FileListInfo tag is required to also check sparse-grid perambs)         *
+// *            <FileListInfo>/path/sparse_grid_quark_perambs_1</FileNameStub>             *
+// *               <MinFileNumber>0</MinFileNumber>                                        *
+// *               <MaxFileNumber>200</MaxFileNumber>                                      *
+// *            </FileListInfo>                                                            *
+// *                                                                                       *
+// *   (A RandomSparseGridInfo tag is required to also check sparse-grid perambs)          *
+// *            <RandomSparseGridInfo>                                                     *
+// *               <RandomSeed>243525</RandomSeed>                                         *
+// *               <GridSpacing>8</GridSpacing>                                            *
+// *            </RandomSparseGridInfo>                                                    *
+// *                                                                                       *
+// *                                                                                       *
 // *         </QuarkPerambulatorInfo>                                                      *
 // *         <CheckSet>                                                                    *
 // *            <Check>                                                                    *
@@ -267,12 +281,14 @@ void doLaphCheckPerambulators(XMLHandler& xmltask)
  GluonSmearingInfo gSmear(xmlr);
  QuarkSmearingInfo qSmear(xmlr);
  QuarkActionInfo quark(xmlr);
- RandomSparseGrid sGrid(xmlr);  
+ bool sparse_grid = true;
  if (xml_tag_count(xmlr,"FileListInfo")!=2)
-         throw logic_error("two FileListInfo tags expected: first for perambs, second for sparse grid perambs");
+   sparse_grid = false;
+ if ((!sparse_grid)&&(xml_tag_count(xmlr,"RandomSparseGridInfo")==1))
+   errorLaph("If RandomSparseGridInfo is specified, must have two FileListInfo tags.");
+
  list<XMLHandler> flxmls(xmlr.find("FileListInfo"));
  FileListInfo files(flxmls.front());
- FileListInfo gridFiles(flxmls.back());
  bool upper_spin_only=false;
  if (xml_tag_count(xmlr,"UpperSpinComponentsOnly")>0){
     upper_spin_only=true;}
@@ -293,24 +309,30 @@ void doLaphCheckPerambulators(XMLHandler& xmltask)
  printLaph(make_strf("\n%s\n",gaugeinfo.output()));
  printLaph(make_strf("\n\nGluon Smearing:\n%s\n",gSmear.output()));
  printLaph(make_strf("\n\nQuark Smearing:\n%s\n",qSmear.output()));
- printLaph(make_strf("\n\nSparse Grid:\n%s\n",sGrid.output()));
  printLaph(make_str("\nQuarkAction:\n",quark.output()));
  if (upper_spin_only){
     printLaph("Only upper spin components used");}
  else{
     printLaph("All spin components used");}
  printLaph(make_strf("LogFileStub: %s",logfilestub));
-
-     // create handler
- PerambulatorHandler Q(gaugeinfo,gSmear,qSmear,quark,sGrid,files,gridFiles,
+ // create handler
+ PerambulatorHandler Q;
+ if (sparse_grid) {
+	 FileListInfo gridFiles(flxmls.back());
+	 RandomSparseGrid sGrid(xmlr);
+   printLaph(make_strf("\n\nSparse Grid:\n%s\n",sGrid.output()));
+   Q.setInfo(gaugeinfo,gSmear,qSmear,quark,sGrid,files,gridFiles,
                        "",upper_spin_only,mode);
-
-    // read the set of computations (time sources, src eigvec indices)
-    // as well as the batching parameters
+ } else {
+   Q.setInfo(gaugeinfo,gSmear,qSmear,quark,files,"",
+       upper_spin_only,mode);
+ }
+ // read the set of computations (time sources, src eigvec indices)
+ // as well as the batching parameters
  XMLHandler xmlchk(xmltask,"CheckSet");
  Q.setChecks(xmlchk);
 
-     // now do the checks!
+ // now do the checks!
  StopWatch outer; outer.start();
  Q.doChecks(logfilestub,verbose_output);
  outer.stop();
@@ -356,6 +378,21 @@ void doLaphCheckPerambulators(XMLHandler& xmltask)
 // *               <MinFileNumber>0</MinFileNumber>                                        *
 // *               <MaxFileNumber>200</MaxFileNumber>                                      *
 // *            </FileListInfo>                                                            *
+// *                                                                                       *
+// *                                                                                       *
+// *     (A second FileListInfo tag is required to also merge sparse-grid perambs)         *
+// *            <FileListInfo>/path/sparse_grid_quark_perambs_1</FileNameStub>             *
+// *               <MinFileNumber>0</MinFileNumber>                                        *
+// *               <MaxFileNumber>200</MaxFileNumber>                                      *
+// *            </FileListInfo>                                                            *
+// *                                                                                       *
+// *   (A RandomSparseGridInfo tag is required to also merge sparse-grid perambs)          *
+// *            <RandomSparseGridInfo>                                                     *
+// *               <RandomSeed>243525</RandomSeed>                                         *
+// *               <GridSpacing>8</GridSpacing>                                            *
+// *            </RandomSparseGridInfo>                                                    *
+// *                                                                                       *
+// *                                                                                       *
 // *         </QuarkPerambulatorInfo>                                                      *
 // *         <InputFileListInfos>                                                          *
 // *            <FileListInfo>/path/quark_perambs_1</FileNameStub>                         *
@@ -367,73 +404,113 @@ void doLaphCheckPerambulators(XMLHandler& xmltask)
 // *               <MaxFileNumber>200</MaxFileNumber>                                      *
 // *            </FileListInfo>                                                            *
 // *                    ...                                                                *
-// *         </InputFileListInfos>                                                         *
+// *         </InputFileListInfos>                                                         * 
+// *                                                                                       *
+// *     (A second InputFileListInfos tag is required to also merge sparse-grid perambs)   *
+// *     <InputFileListInfos>                                                              *
+// *            <FileListInfo>/path/sparse_grid_quark_perambs_1</FileNameStub>             *
+// *               <MinFileNumber>0</MinFileNumber>                                        *
+// *               <MaxFileNumber>200</MaxFileNumber>                                      *
+// *            </FileListInfo>                                                            *
+// *            <FileListInfo>/path/sparse_quark_perambs_2</FileNameStub>                  *
+// *               <MinFileNumber>0</MinFileNumber>                                        *
+// *               <MaxFileNumber>200</MaxFileNumber>                                      *
+// *            </FileListInfo>                                                            *
+// *                    ...                                                                *
+// *         </InputFileListInfos>      
+// * 
 // *      </Task>                                                                          *
 // *                                                                                       *
 // *****************************************************************************************
 
 void doLaphMergePerambulators(XMLHandler& xmltask)
 {
- if (xml_tag_count(xmltask,"QuarkPerambulatorInfo")!=1){
-    errorLaph("Must have one <QuarkPerambulatorInfo> tag");}
- XMLHandler xmlr(xmltask,"QuarkPerambulatorInfo");
- GaugeConfigurationInfo gaugeinfo(xmlr);
- GluonSmearingInfo gSmear(xmlr);
- QuarkSmearingInfo qSmear(xmlr);
- QuarkActionInfo quark(xmlr);
- RandomSparseGrid sGrid(xmlr);
- if (xml_tag_count(xmlr,"FileListInfo")!=2)
-         throw logic_error("two FileListInfo tags expected: first for perambs, second for sparse grid perambs");
- list<XMLHandler> flxmls(xmlr.find("FileListInfo"));
- FileListInfo files(flxmls.front());
- FileListInfo gridFiles(flxmls.back());
+	if (xml_tag_count(xmltask,"QuarkPerambulatorInfo")!=1){
+		errorLaph("Must have one <QuarkPerambulatorInfo> tag");}
+	XMLHandler xmlr(xmltask,"QuarkPerambulatorInfo");
+	GaugeConfigurationInfo gaugeinfo(xmlr);
+	GluonSmearingInfo gSmear(xmlr);
+	QuarkSmearingInfo qSmear(xmlr);
+	QuarkActionInfo quark(xmlr);
+	bool sparse_grid = true;
+	if (xml_tag_count(xmlr,"FileListInfo")!=2)
+		sparse_grid = false;
+	if ((!sparse_grid)&&(xml_tag_count(xmlr,"RandomSparseGridInfo")==1))
+		errorLaph("If RandomSparseGridInfo is specified, must have two FileListInfo tags.");
 
- bool upper_spin_only=false;
- if (xml_tag_count(xmlr,"UpperSpinComponentsOnly")>0){
-    upper_spin_only=true;}
- PerambulatorHandler::Mode mode=PerambulatorHandler::Merge;
+	list<XMLHandler> flxmls(xmlr.find("FileListInfo"));
+	FileListInfo files(flxmls.front());
+	bool upper_spin_only=false;
+	if (xml_tag_count(xmlr,"UpperSpinComponentsOnly")>0){
+		upper_spin_only=true;}
+	PerambulatorHandler::Mode mode=PerambulatorHandler::Merge;
 
- printLaph("\n");
- printLaph(" ***********************************************************");
- printLaph(" *                                                         *");
- printLaph(" *   Laph Task: Merge the quark perambulators              *");
- printLaph(" *                                                         *");
- printLaph(" ***********************************************************\n");
- printLaph(make_strf("\n%s\n",gaugeinfo.output()));
- printLaph(make_strf("\n\nGluon Smearing:\n%s\n",gSmear.output()));
- printLaph(make_strf("\n\nQuark Smearing:\n%s\n",qSmear.output()));
- printLaph(make_strf("\n\nSparse Grid:\n%s\n",sGrid.output()));
- printLaph(make_str("\nQuarkAction:\n",quark.output()));
- if (upper_spin_only){
-    printLaph("Only upper spin components used");}
- else{
-    printLaph("All spin components used");}
+	printLaph("\n");
+	printLaph(" ***********************************************************");
+	printLaph(" *                                                         *");
+	printLaph(" *   Laph Task: Merge the quark perambulators              *");
+	printLaph(" *                                                         *");
+	printLaph(" ***********************************************************\n");
+	printLaph(make_strf("\n%s\n",gaugeinfo.output()));
+	printLaph(make_strf("\n\nGluon Smearing:\n%s\n",gSmear.output()));
+	printLaph(make_strf("\n\nQuark Smearing:\n%s\n",qSmear.output()));
+	printLaph(make_str("\nQuarkAction:\n",quark.output()));
+	if (upper_spin_only){
+		printLaph("Only upper spin components used");}
+	else{
+		printLaph("All spin components used");}
 
- if (xml_tag_count(xmltask,"InputFileListInfos")!=1){
-    errorLaph("Must have one <InputFileListInfos> tag");}
- XMLHandler xmlinf(xmltask,"InputFileListInfos");
- list<XMLHandler> infxmls=xmlinf.find_among_children("FileListInfo");
- list<FileListInfo> inflos;
- for (list<XMLHandler>::iterator it=infxmls.begin();it!=infxmls.end();++it){
-    inflos.push_back(FileListInfo(*it));}
+	if ((!sparse_grid)&&xml_tag_count(xmltask,"InputFileListInfos")!=1){
+		errorLaph("Must have one <InputFileListInfos> tag");}
+	else if ((sparse_grid)&&(xml_tag_count(xmltask, "InputFileListInfos")!=2))
+			errorLaph("Must have two <InputFileListInfos> tags for sparse grid merge");
 
-     // create handler
- PerambulatorHandler Q(gaugeinfo,gSmear,qSmear,quark,sGrid,files,gridFiles,
-                       "",upper_spin_only,mode);
+	list<XMLHandler> both_inflos = xmltask.find_among_children("InputFileListInfos"); 
+	XMLHandler xmlinf=both_inflos.front();
+	list<XMLHandler> infxmls=xmlinf.find_among_children("FileListInfo");
+	list<FileListInfo> inflos, inflos_sg;
+	for (list<XMLHandler>::iterator it=infxmls.begin();it!=infxmls.end();++it){
+		inflos.push_back(FileListInfo(*it));
+	}
 
-    // read the set of computations (time sources, src eigvec indices)
-    // as well as the batching parameters
- XMLHandler xmlchk(xmltask,"CheckSet");
- Q.setChecks(xmlchk);
+	if (sparse_grid) { 
+		XMLHandler xmlinf_sg=both_inflos.back();
+		list<XMLHandler> infxmls_sg=xmlinf_sg.find_among_children("FileListInfo");
+		for (list<XMLHandler>::iterator it=infxmls_sg.begin();it!=infxmls_sg.end();++it)
+			inflos_sg.push_back(FileListInfo(*it));
+	}
 
-     // now do the checks!
- StopWatch outer; outer.start();
- for (list<FileListInfo>::iterator it=inflos.begin();it!=inflos.end();++it){
-    Q.mergeData(*it);}
- outer.stop();
- printLaph(make_strf("LAPH_MERGE_PERAMBULATORS: total time = %g secs",
-           outer.getTimeInSeconds()));
- printLaph("LAPH_MERGE_PERAMBULATORS: ran successfully\n"); 
+	PerambulatorHandler Q;
+	if (sparse_grid) {
+		FileListInfo gridFiles(flxmls.back());
+		RandomSparseGrid sGrid(xmlr);
+		printLaph(make_strf("\n\nSparse Grid:\n%s\n",sGrid.output()));
+		Q.setInfo(gaugeinfo,gSmear,qSmear,quark,sGrid,files,gridFiles,
+				"",upper_spin_only,mode);
+	} else {
+		Q.setInfo(gaugeinfo,gSmear,qSmear,quark,files,"",
+				upper_spin_only,mode);
+	}
+
+
+	//Is this necessary here? 
+	// read the set of computations (time sources, src eigvec indices)
+	// as well as the batching parameters
+	//XMLHandler xmlchk(xmltask,"CheckSet");
+	//Q.setChecks(xmlchk);
+
+	StopWatch outer; outer.start();
+	for (list<FileListInfo>::iterator it=inflos.begin();it!=inflos.end();++it){
+		Q.mergeData(*it);}
+	if (sparse_grid) { 	
+		for (list<FileListInfo>::iterator it=inflos_sg.begin();it!=inflos_sg.end();++it){
+			Q.mergeDataSparseGrid(*it);
+		}
+	}
+	outer.stop();
+	printLaph(make_strf("LAPH_MERGE_PERAMBULATORS: total time = %g secs",
+				outer.getTimeInSeconds()));
+	printLaph("LAPH_MERGE_PERAMBULATORS: ran successfully\n"); 
 } 
 
 
