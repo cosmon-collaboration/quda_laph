@@ -129,6 +129,11 @@ void doLaphQuarkPerambulators(XMLHandler& xmltask)
  if ((!sparse_grid)&&(xml_tag_count(xmlr,"RandomSparseGridInfo")==1))
 	 errorLaph("If RandomSparseGridInfo is specified, must have two FileListInfo tags.");
 
+ if (sparse_grid) 
+	 printLaph("Sparse grid output enabled.");
+ else 
+	 printLaph("Sparse grid output disabled.");
+
  list<XMLHandler> flxmls(xmlr.find("FileListInfo")); 
  FileListInfo files(flxmls.front());
  InverterInfo invinfo(xmlr);

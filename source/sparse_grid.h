@@ -15,7 +15,6 @@ namespace LaphEnv {
 		int grid_spacing, n_grid_points;
 		bool is_random; 
 		uint32_t seed;
-		std::vector<std::vector<int>> offsets; 
 
 		struct SparseOffset { 
 			int local_offset; 
@@ -44,28 +43,6 @@ namespace LaphEnv {
 			n_grid_points = Lx*Ly*Lz/(grid_spacing*grid_spacing*grid_spacing); 
 		}
 
-		void generate_offsets() {
-  		offsets.clear();     
-			int Lt = LayoutInfo::getLattExtents()[3];
-      if (is_random) {
-        std::mt19937 gen(seed);
-        std::uniform_int_distribution<int> dist(0,grid_spacing-1);
-        for (int t=0;t<Lt;t++) {
-          std::vector<int> coords;
-          coords.push_back(dist(gen));
-          coords.push_back(dist(gen));
-          coords.push_back(dist(gen));
-          offsets.push_back(coords);
-        }
-      } else {
-        std::vector<int> coords = {0, 0, 0};
-        for (int t=0;t<Lt;t++) {
-          offsets.push_back(coords);
-        }
-      }
-    }
-
-
 		public:
 
 		RandomSparseGrid(int _grid_spacing, const uint32_t& _seed=0) : 
@@ -73,7 +50,6 @@ namespace LaphEnv {
         if (seed==0) 
 					is_random=false;
 				check_grid_spacing(); 
-				generate_offsets();
 				set_number_of_grid_points();
 			}
 
@@ -87,7 +63,6 @@ namespace LaphEnv {
 			}
 			xmlread(xml_in,"GridSpacing", grid_spacing, "RandomSparseGrid");
 			check_grid_spacing();
-			generate_offsets();
 			set_number_of_grid_points();
 		}
 
@@ -110,8 +85,29 @@ namespace LaphEnv {
 				throw(std::invalid_argument("RandomSparseGrid checkEqual failed..."));}
 		}
 
+		void generateOffsets(std::vector<std::vector<int>>& offsets) const {
+      offsets.clear();
+      int Lt = LayoutInfo::getLattExtents()[3];
+      if (is_random) {
+        std::mt19937 gen(seed);
+        std::uniform_int_distribution<int> dist(0,grid_spacing-1);
+        for (int t=0;t<Lt;t++) {
+          std::vector<int> coords;
+          coords.push_back(dist(gen));
+          coords.push_back(dist(gen));
+          coords.push_back(dist(gen));
+          offsets.push_back(coords);
+        }
+      } else {
+        std::vector<int> coords = {0, 0, 0};
+        for (int t=0;t<Lt;t++) {
+          offsets.push_back(coords);
+        }
+      }
+    }
+
 		//Return the offsets corresponding to the sparse grid points on the local lattice 
-		std::vector<SparseOffset> getLocalGridPoints(int t) const {
+		std::vector<SparseOffset> getLocalGridPoints(const std::vector<int>& offset, int t) const {
 			if ((t<0)||(t>=LayoutInfo::getLattExtents()[3]))
 				throw std::logic_error("invalid time Extent in getLocalGridPoints");
 
@@ -120,14 +116,14 @@ namespace LaphEnv {
 		  int Lx = LayoutInfo::getLattExtents()[0];	
 		  int Ly = LayoutInfo::getLattExtents()[1];	
 		  int Lz = LayoutInfo::getLattExtents()[2];
-
 			int ctr=0; 
+		  	
 			for (int iZ=0; iZ<Lz/grid_spacing; iZ++) {
-				coords[2]=(iZ*grid_spacing+offsets[t][2])%Lz;
+				coords[2]=(iZ*grid_spacing+offset[2])%Lz;
 				for (int iY=0; iY<Ly/grid_spacing; iY++) {
-					coords[1]=(iY*grid_spacing+offsets[t][1])%Ly;
+					coords[1]=(iY*grid_spacing+offset[1])%Ly;
 					for (int iX=0; iX<Lx/grid_spacing; iX++) {
-						coords[0]=(iX*grid_spacing+offsets[t][0])%Lx;
+						coords[0]=(iX*grid_spacing+offset[0])%Lx;
 						int rank,rank_site_linear_index; 
 						LayoutInfo::getCommInfoFromLatticeCoords(
 								coords, rank, rank_site_linear_index);
