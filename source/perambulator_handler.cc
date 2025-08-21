@@ -830,6 +830,8 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& s
      // get the file key and open file for writing
   FileKey fkey(src_time,srcspin);
   DHputPtr->open(fkey);
+	if (sGridOutput)
+    DHputPtrSparseGrid->open(fkey);
   int invcount=0;
   int iSinkBatch = 0;
  
@@ -918,9 +920,8 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& s
 					 int nColor = 3; 
 					 int nGridPoints = (*sgHandler).getGrid().getNGridPoints(); 
 					 vector<vector<int>> offsets; (*sgHandler).getGrid().generateOffsets(offsets); 
-					 //bulova.reset(); bulova.start();
+					 printLaph(" Outputting to sparse grid file"); 
 					 for (int iSink=0; iSink<nSinks; ++iSink) {
-						 printLaph(make_strf("iSink = %d",iSink));
 						 const char* field_start=sinkBatchData[iSink].getDataConstPtr();
 						 size_t site_bytes=sinkBatchData[iSink].bytesPerSite();
 						 size_t word_bytes=sinkBatchData[iSink].bytesPerWord();
@@ -929,13 +930,11 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& s
 						 size_t colvec_bytes=word_bytes*FieldNcolor;  
 
 						 for (int t=minTime;t<=maxTime;t++){
-							 printLaph(make_strf("t = %d",t));
 							 const auto& local_offsets =  
 								 (*sgHandler).getGrid().getLocalGridPoints(offsets[t],t);
 							 vector<dcmplx> all_spin_quark_sink(nColor*nGridPoints*Nspin,0.0);
 							 for (const auto& offset : local_offsets) { 
 								 size_t local_offset=site_bytes*offset.local_offset;
-								 printLaph(make_strf("local_offset = %d",local_offset));
 								 const char* get_ptr = field_start+local_offset;
 								 for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
 									 size_t global_offset=colvec_bytes*(
@@ -948,7 +947,6 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& s
 										 2*all_spin_quark_sink.size(), MPI_DOUBLE, MPI_SUM,
 										 MPI_COMM_WORLD);
 								 for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
-									 printLaph(make_strf("iSpin = %d",iSpin));
 									 vector<dcmplx> quark_sink(all_spin_quark_sink.cbegin()+
 											 iSpin*nColor*nGridPoints,all_spin_quark_sink.cbegin()+
 											 (iSpin+1)*nColor*nGridPoints);
@@ -956,7 +954,7 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& s
 									 if (print_coeffs){
 										 printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchDoneInds[iSink],iSpin+1,t));
 										 for (int n=0;n<(nColor*nGridPoints);n++){
-											 printLaph(make_strf("component for spin/space component %d = (%14.8f, %14.8f)",
+											 printLaph(make_strf("component for color/space component %d = (%14.8f, %14.8f)",
 														 n,real(quark_sink[n]),imag(quark_sink[n])));
 										 }
 									 }
