@@ -943,6 +943,7 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& s
 											 all_spin_quark_sink.data())+global_offset; 
 									 memcpy(dest_ptr,get_ptr,colvec_bytes); 
 								 }
+							 }
 								 MPI_Allreduce(MPI_IN_PLACE, all_spin_quark_sink.data(), 
 										 2*all_spin_quark_sink.size(), MPI_DOUBLE, MPI_SUM,
 										 MPI_COMM_WORLD);
@@ -956,7 +957,6 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& s
 										 for (int n=0;n<(nColor*nGridPoints);n++){
 											 printLaph(make_strf("component for color/space component %d = (%14.8f, %14.8f)",
 														 n,real(quark_sink[n]),imag(quark_sink[n])));
-										 }
 									 }
 								 }
 							 }
