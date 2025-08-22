@@ -76,6 +76,9 @@ namespace LaphEnv {
 			xmlout.set_root("RandomSparseGridInfo");
 			xmlout.put_child("RandomSeed", make_string(seed));
 			xmlout.put_child("GridSpacing", make_string(grid_spacing));
+	    std::vector<std::vector<int>> offsets; 
+			generateOffsets(offsets);
+			xmlout.put_child("Offsets", make_string(offsets));
 		}
 
 		void checkEqual(const RandomSparseGrid& in) const {
