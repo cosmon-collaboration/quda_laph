@@ -31,6 +31,7 @@ namespace LaphEnv {
 			if (((LayoutInfo::getLattExtents()[0]%grid_spacing)!=0)||
 					((LayoutInfo::getLattExtents()[1]%grid_spacing)!=0)||
 					((LayoutInfo::getLattExtents()[2]%grid_spacing)!=0)) {
+				printLaph(make_strf("  global layout = (%d, %d, %d, %d), grid_spacing = %d",LayoutInfo::getLattExtents()[0], LayoutInfo::getLattExtents()[1], LayoutInfo::getLattExtents()[2], LayoutInfo::getLattExtents()[3], grid_spacing));
 				throw std::logic_error("grid spacing must divide global spatial extents");
 			}
 		}	
