@@ -58,11 +58,11 @@ namespace LaphEnv {
 			XMLHandler xml_in(xmlin);
 			xml_tag_assert(xml_in,"RandomSparseGridInfo","RandomSparseGrid");
 			XMLHandler xmlr(xml_in, "RandomSparseGridInfo");
-			if (xml_tag_count(xml_in,"RandomSeed")>0) {
+			if (xml_tag_count(xmlr,"RandomSeed")>0) {
 				is_random=true;
-				xmlread(xml_in,"RandomSeed", seed, "RandomSparseGrid");
+				xmlread(xmlr,"RandomSeed", seed, "RandomSparseGrid");
 			}
-			xmlread(xml_in,"GridSpacing", grid_spacing, "RandomSparseGrid");
+			xmlread(xmlr,"GridSpacing", grid_spacing, "RandomSparseGrid");
 			check_grid_spacing();
 			set_number_of_grid_points();
 		}
