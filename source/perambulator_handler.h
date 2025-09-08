@@ -498,13 +498,18 @@ class PerambulatorHandler {
 // An internal subclass which handles the sparse-grid datafile output. 
 // **************************************************************************************
 class SparseGridHandler { 
-	const PerambulatorHandler &pHand;
+	const GaugeConfigurationInfo &gInfo;
+	const GluonSmearingInfo &gsInfo;
+	const QuarkSmearingInfo &qsInfo;
+	const QuarkActionInfo &qInfo;
 	const RandomSparseGrid &grid; 
-	
+  int Nspin; 	
 	public:
 	
-	SparseGridHandler(const PerambulatorHandler& _pHand, 
-			const RandomSparseGrid& _grid) : pHand(_pHand), grid(_grid) {} 
+	SparseGridHandler(const GaugeConfigurationInfo& _gInfo, const GluonSmearingInfo& _gsInfo, 
+			const QuarkSmearingInfo& _qsInfo, const QuarkActionInfo& _qInfo, 
+			const RandomSparseGrid& _grid, int _Nspin) : gInfo(_gInfo), gsInfo(_gsInfo), qsInfo(_qsInfo),
+	qInfo(_qInfo), grid(_grid), Nspin(_Nspin) {} 
 
 	bool checkHeader(XMLHandler& xmlr, int suffix);
 	void writeHeader(XMLHandler& xmlout, 

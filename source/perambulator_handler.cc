@@ -178,7 +178,8 @@ void PerambulatorHandler::set_info(const GaugeConfigurationInfo& gaugeinfo,
  set_info(gaugeinfo,gluonsmear,quarksmear,quark,flist,smeared_quark_filestub,
 		 upper_spin_components_only,gauge_str,in_mode);
  try{
-	  sgHandler = new SparseGridHandler(*this, rsgrid);
+
+	  sgHandler = new SparseGridHandler(gaugeinfo,gluonsmear,quarksmear,quark,rsgrid,Nspin);
     fPtrSparseGrid = new FileListInfo(flist_sparse_grid);
     if ((mode==Compute)||(mode==Merge)){
 			 DHputPtrSparseGrid=new DataPutHandlerMF<SparseGridHandler,FileKey,RecordKey,DataType>(
@@ -1740,8 +1741,6 @@ unique_ptr<GaugeConfigurationHandler> PerambulatorHandler::gaugeHandler;
 
 bool SparseGridHandler::checkHeader(XMLHandler& xmlin, int suffix)
 {
- if (!pHand.isInfoSet())
-	 throw logic_error("info not set in PerambulatorHandler"); 
  XMLHandler xml_in(xmlin);
  if (xml_tag_count(xml_in,"PerambulatorHandlerSparseGridDataFile")!=1) return false;
  XMLHandler xmlr(xml_in,"PerambulatorHandlerSparseGridDataFile");
@@ -1753,12 +1752,12 @@ bool SparseGridHandler::checkHeader(XMLHandler& xmlin, int suffix)
  QuarkActionInfo qaction_check(xmlr);
  RandomSparseGrid grid_check(xmlr);  
  try {
-    pHand.getGaugeConfigurationInfo().checkEqual(gauge_check);
-    pHand.getGluonSmearingInfo().checkEqual(gsmear_check);
-    pHand.getQuarkSmearingInfo().checkEqual(qsmear_check); 
-    if (numspin!=pHand.getNSpin()){
+    gInfo.checkEqual(gauge_check);
+    gsInfo.checkEqual(gsmear_check);
+    qsInfo.checkEqual(qsmear_check); 
+    if (numspin!=Nspin){
        throw(std::invalid_argument("Perambulator checkEqual failed...NumSpinComponents mismatch"));}
-    pHand.getQuarkActionInfo().checkEqual(qaction_check); 
+    qInfo.checkEqual(qaction_check); 
 		grid.checkEqual(grid_check); 
  }
  catch(const exception& xp){ return false;}
@@ -1768,16 +1767,14 @@ bool SparseGridHandler::checkHeader(XMLHandler& xmlin, int suffix)
 void SparseGridHandler::writeHeader(XMLHandler& xmlout, 
                                      const PerambulatorHandler::FileKey& fkey,
                                      int suffix) {
- if (!(pHand.isInfoSet()))
-	 throw logic_error("info not set in PerambulatorHandler"); 
  xmlout.set_root("PerambulatorHandlerSparseGridDataFile");
  XMLHandler xmltmp;
- pHand.getGaugeConfigurationInfo().output(xmltmp); xmlout.put_child(xmltmp);
- pHand.getGluonSmearingInfo().output(xmltmp); xmlout.put_child(xmltmp);
- pHand.getQuarkSmearingInfo().output(xmltmp); xmlout.put_child(xmltmp);
- pHand.getQuarkActionInfo().output(xmltmp); xmlout.put_child(xmltmp);
+ gInfo.output(xmltmp); xmlout.put_child(xmltmp);
+ gsInfo.output(xmltmp); xmlout.put_child(xmltmp);
+ qsInfo.output(xmltmp); xmlout.put_child(xmltmp);
+ qInfo.output(xmltmp); xmlout.put_child(xmltmp);
  fkey.output(xmltmp); xmlout.put_child(xmltmp);
- xmlout.put_child("NumSpinComponents",make_string(pHand.getNSpin()));
+ xmlout.put_child("NumSpinComponents",make_string(Nspin));
  grid.output(xmltmp); xmlout.put_child(xmltmp); 
 }
 
