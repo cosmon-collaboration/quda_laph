@@ -504,6 +504,7 @@ class SparseGridHandler {
 	const QuarkActionInfo &qInfo;
 	const RandomSparseGrid &grid; 
   int Nspin; 	
+	
 	public:
 	
 	SparseGridHandler(const GaugeConfigurationInfo& _gInfo, const GluonSmearingInfo& _gsInfo, 
@@ -517,6 +518,9 @@ class SparseGridHandler {
 			int suffix);
 	const RandomSparseGrid& getGrid() const { return grid; }
 
+	private: 
+		SparseGridHandler(const SparseGridHandler&); 
+		SparseGridHandler& operator=(const SparseGridHandler&);  
 };
 
 }

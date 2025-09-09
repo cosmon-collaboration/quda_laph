@@ -53,7 +53,11 @@ namespace LaphEnv {
 				check_grid_spacing(); 
 				set_number_of_grid_points();
 			}
-
+/*
+		RandomSparseGrid(const RandomSparseGrid& rhs) :
+      grid_spacing(rhs.grid_spacing), n_grid_points(rhs.n_grid_points), 
+			is_random(rhs.is_random), seed(rhs.seed) {}
+*/
 		RandomSparseGrid(const XMLHandler& xmlin) : is_random(false), seed(0) { 
 			XMLHandler xml_in(xmlin);
 			xml_tag_assert(xml_in,"RandomSparseGridInfo","RandomSparseGrid");
