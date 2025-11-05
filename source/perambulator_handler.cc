@@ -936,8 +936,9 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& s
 							 vector<dcmplx> all_spin_quark_sink(nColor*nGridPoints*Nspin,0.0);
 							 for (const auto& offset : local_offsets) { 
 								 size_t local_offset=site_bytes*offset.local_offset;
-								 const char* get_ptr = field_start+local_offset;
 								 for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
+									 const char* get_ptr = field_start+local_offset+
+										iSpin*colvec_bytes;
 									 size_t global_offset=colvec_bytes*(
 											 offset.global_offset + iSpin*nGridPoints);
 									 char* dest_ptr = reinterpret_cast<char*>(
@@ -1159,8 +1160,9 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
 						 vector<dcmplx> all_spin_quark_sink(nColor*nGridPoints*Nspin,0.0);
 						 for (const auto& offset : local_offsets) {
 							 size_t local_offset=site_bytes*offset.local_offset;
-							 const char* get_ptr = field_start+local_offset;
 							 for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
+								 const char* get_ptr = field_start+local_offset+
+									 iSpin*colvec_bytes;
 								 size_t global_offset=colvec_bytes*(
 										 offset.global_offset + iSpin*nGridPoints);
 								 char* dest_ptr = reinterpret_cast<char*>(
