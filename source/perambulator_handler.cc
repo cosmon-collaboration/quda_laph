@@ -1002,7 +1002,10 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& s
 
        }}  // 	batch end
 
-    DHputPtr->flush();}}   // src_ind, src_spin loop end
+    DHputPtr->flush();
+	  if (sGridOutput)	
+			DHputPtrSparseGrid->flush();
+	}}   // src_ind, src_spin loop end
 
  inv_time+=invtime;
  makesrc_time+=srctime; 
