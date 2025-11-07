@@ -21,57 +21,53 @@ using namespace LaphEnv ;
 //#define VERBOSE_COMPARISON
 //#define GPU_STRESS
 
-static void cpu_code( const int n1,
-		      const int n2,
-		      const int nMom,
-		      const int block_size_mom_proj,
-		      void **host_quark,
-		      void **host_quark_bar,
-		      const double _Complex *host_mom,
-		      void *ret_arr,
-		      const int X[4])
+static void
+cpuInner( void **host_quark , void **host_quark_bar , void *result , const int X[4] , const int A , const int B )
 {
-  const size_t nSp = X[0]*X[1]*X[2] ;
-  const size_t nSites = nSp*X[3] ;
-  double _Complex *loc_sum = (double _Complex*)calloc( X[3]*nMom*n1*n2 , sizeof( double _Complex) );  
-  // loop over all sites
-#pragma omp parallel for reduction(+:loc_sum[:X[3]*nMom*n1*n2])
-  for( size_t i = 0 ; i < nSites ; i++ ) {
-    const size_t spidx = i%(nSp) , T = i/nSp ;
-    const double _Complex *q1[n1] , *q2[n2] ;
-    for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
-      q1[dil1] = (const double _Complex*)host_quark_bar[dil1] + i*3 ;
-    }
+  const int Nsites = X[0]*X[1]*X[2]*X[3] ;
+  std::complex<double> *ptA = (std::complex<double>*)host_quark_bar[A] ;
+  std::complex<double> *ptB = (std::complex<double>*)host_quark[B] ;
+  std::complex<double> *ptC = (std::complex<double>*)result ;  
+#pragma omp parallel for
+  for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
+    // simple inner product over color A_{c}B*_{c}
+    ptC[i]  = conj(ptA[0+3*i])*(ptB[0+3*i]) ;
+    ptC[i] += conj(ptA[1+3*i])*(ptB[1+3*i]) ;
+    ptC[i] += conj(ptA[2+3*i])*(ptB[2+3*i]) ;  
+  }
+}
+
+static void cpu_code_v2( const int n1,
+			 const int n2,
+			 const int nMom,
+			 const int block_size_mom_proj,
+			 void **host_quark,
+			 void **host_quark_bar,
+			 const double _Complex *host_mom,
+			 void *ret_arr,
+			 const int X[4])
+{
+  const size_t Nsp = (size_t)X[0]*X[1]*X[2] ;
+  const size_t V   = Nsp*X[3] ;
+  double _Complex *rt = (double _Complex*)ret_arr ;
+  double _Complex *result = (double _Complex*)calloc( V , sizeof( double _Complex ) ) ;
+  for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
     for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
-      q2[dil2] = (const double _Complex*)host_quark[dil2] + i*3 ;
-    }
-    const double _Complex *Mom = host_mom + spidx ;
-    for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
-      // diagonal guy
-      const double _Complex iP =		\
-	conj(q1[dil1][0])*(q2[dil1][0])+
-	conj(q1[dil1][1])*(q2[dil1][1])+
-	conj(q1[dil1][2])*(q2[dil1][2]) ;
-      // momentum project
+      cpuInner( host_quark , host_quark_bar , result , X , dil1 , dil2 ) ;
       for( int p = 0 ; p < nMom ; p++ ) {
-	loc_sum[ T + X[3]*( p + nMom*( dil1 + n2*dil1 ) ) ] += Mom[ p*nSp ]*iP ;
-      }
-      for( int dil2 = dil1+1 ; dil2 < n2 ; dil2++ ) {
-	// do the inner product over color
-	const double _Complex iP =		\
-	  conj(q1[dil1][0])*(q2[dil2][0])+
-	  conj(q1[dil1][1])*(q2[dil2][1])+
-	  conj(q1[dil1][2])*(q2[dil2][2]) ;
-	// momentum project
-	for( int p = 0 ; p < nMom ; p++ ) {
-	  loc_sum[ T + X[3]*( p + nMom*( dil2 + n2*dil1 ) ) ] += Mom[ p*nSp ]*iP ;
-	  loc_sum[ T + X[3]*( p + nMom*( dil1 + n2*dil2 ) ) ] += Mom[ p*nSp ]*conj(iP) ;
+	double _Complex *pm = (double _Complex*)host_mom + Nsp*p ;
+	for( int t = 0 ; t < X[3] ; t++ ) {
+	  double _Complex *rs = (double _Complex*)result + Nsp*t ;
+	  double _Complex sum = 0. ;
+	  for( size_t i = 0 ; i < (size_t)Nsp ; i++ ) {
+	    sum += pm[i]*rs[i] ;
+	  }
+	  rt[ t + X[3]*( p + nMom*( dil2 + n2*dil1 )) ] = sum ;
 	}
       }
     }
   }
-  memcpy( ret_arr , loc_sum , X[3]*n1*n2*nMom*sizeof(double _Complex) ) ;
-  free( loc_sum ) ;
+  free( result ) ;
 }
 
 // new GPU interface with better behaviour
@@ -83,7 +79,7 @@ static void alamode( const int n1,
 		     void **host_quark_bar,
 		     const double _Complex *host_mom,
 		     QudaInvertParam inv_param,
-		     void *ret_arr,
+		     double _Complex *ret_arr,
 		     const int X[4])
 {
   //getProfileCurrentKernel().TPSTART(QUDA_PROFILE_TOTAL);
@@ -97,11 +93,15 @@ static void alamode( const int n1,
   if( (n2*n1)%block_size_mom_proj != 0 ) {
     errorQuda("I only support block sizes that are factors of n1*n2") ;
   }
+  if( inv_param.cuda_prec != QUDA_DOUBLE_PRECISION &&
+      inv_param.cuda_prec != QUDA_SINGLE_PRECISION ) {
+    errorQuda("Unsupported device precision") ;
+  }
 
   // Some common variables
   const size_t n_spatial_sites = X[0]*X[1]*X[2];
   const size_t n_sites = n_spatial_sites * X[3];
-  const QudaPrecision precision = QUDA_DOUBLE_PRECISION;
+  const QudaPrecision precision = inv_param.cuda_prec ;
   
   const lat_dim_t x = { X[0] , X[1] , X[2] , X[3] } ;
 
@@ -158,8 +158,8 @@ static void alamode( const int n1,
   cublas_param_mom_sum.alpha = (__complex__ double)alpha;  
   cublas_param_mom_sum.beta  = (__complex__ double)beta;
   cublas_param_mom_sum.data_order = QUDA_BLAS_DATAORDER_ROW;
-  cublas_param_mom_sum.data_type = QUDA_BLAS_DATATYPE_Z;
-  //--------------------------------------------------------------------------------
+  cublas_param_mom_sum.data_type = (inv_param.cuda_prec == QUDA_DOUBLE_PRECISION) ? \
+    QUDA_BLAS_DATATYPE_Z : QUDA_BLAS_DATATYPE_C ;
 
   // Copy host data to device
   //getProfileCurrentKernel().TPSTART(QUDA_PROFILE_H2D);
@@ -171,7 +171,16 @@ static void alamode( const int n1,
     quda_quark[dil2] = quark[dil2] ;
   }
   // For the moment, use the chroma_laph defined momenta, then compute on host
-  qudaMemcpy(d_mom, host_mom, data_mom_bytes, qudaMemcpyHostToDevice);  
+  if( precision == QUDA_SINGLE_PRECISION ) {
+    float _Complex *tmp = (float _Complex*)malloc( data_mom_bytes ) ;
+    for( size_t i = 0 ; i < n_mom*n_spatial_sites ; i++ ) {
+      tmp[i] = (float _Complex)host_mom[i] ;
+    }
+    qudaMemcpy(d_mom, tmp, data_mom_bytes, qudaMemcpyHostToDevice);  
+    free( tmp ) ;
+  } else {
+    qudaMemcpy(d_mom, host_mom, data_mom_bytes, qudaMemcpyHostToDevice);  
+  }
   //getProfileCurrentKernel().TPSTOP(QUDA_PROFILE_H2D);
 
   // doing too much work here as (di1,dil2) == (dil2,dil1)*
@@ -184,14 +193,17 @@ static void alamode( const int n1,
     // just block dil2
     for (int dil2=0; dil2<n2; dil2++){
       //getProfileCurrentKernel().TPSTART(QUDA_PROFILE_COMPUTE);
-      innerProductQuda( quda_quark_bar, quda_quark[dil2], (std::complex<double>*)d_tmp + n_sites*n_in_block );
+      innerProductQuda( quda_quark_bar, quda_quark[dil2],
+			//(std::complex<double>*)d_tmp + n_sites*n_in_block ) ;
+			(char*)d_tmp + n_sites*n_in_block*2*precision ) ;
       n_in_block++ ;
       //getProfileCurrentKernel().TPSTOP(QUDA_PROFILE_COMPUTE);
 
       ///getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);
       if( n_in_block == block_size_mom_proj ) {
 	blas_lapack::native::stridedBatchGEMM( d_mom, d_tmp,
-					       (std::complex<double>*)d_ret+(idx_last)*X[3]*n_mom,
+					       //(std::complex<double>*)d_ret+(idx_last)*X[3]*n_mom,
+					       (char*)d_ret+(idx_last)*X[3]*n_mom*2*precision,
 					       cublas_param_mom_sum,
 					       QUDA_CUDA_FIELD_LOCATION);
 	//getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);
@@ -202,7 +214,16 @@ static void alamode( const int n1,
   }
 
   // Copy device data back to host
-  qudaMemcpy(ret_arr, d_ret, data_ret_bytes, qudaMemcpyDeviceToHost) ;
+  if( precision == QUDA_SINGLE_PRECISION ) {
+    float _Complex *tmp = (float _Complex*)calloc( n_mom*X[3]*n1*n2 , sizeof(float _Complex) ) ;
+    qudaMemcpy(tmp, d_ret, data_ret_bytes, qudaMemcpyDeviceToHost) ;
+    for( size_t i = 0 ; i < (size_t)n_mom*X[3]*n1*n2 ; i++ ) {
+      ret_arr[i] = (double _Complex)tmp[i] ;
+    }
+    free( tmp ) ;
+  } else {
+    qudaMemcpy(ret_arr, d_ret, data_ret_bytes, qudaMemcpyDeviceToHost) ;
+  }
   
   // Clean up memory allocations
   //getProfileCurrentKernel().TPSTART(QUDA_PROFILE_FREE);
@@ -259,13 +280,13 @@ int main(int argc, char *argv[]) {
 #ifdef ARCH_PARALLEL
   MPI_Comm_size( MPI_COMM_WORLD , &global ) ;
 #endif
-  assert( global == 1 ) ;
+  setVerbosityQuda(QUDA_VERBOSE, "#" , stdout ) ;
   
   // call rephase here
 #ifdef GPU_STRESS
   const int Nev = 512 , n1 = 288 , n2 = 288 ;
 #else
-  const int Nev = 64 , n1 = 16 , n2 = 16 ;
+  const int Nev = 64 , n1 = 64 , n2 = 64 ;
 #endif
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
   set_constant( laphEigvecs ) ;
@@ -275,7 +296,7 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 40 ;
+  const int nmom = 128 ;
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
@@ -308,7 +329,7 @@ int main(int argc, char *argv[]) {
   inv_param.solution_type = QUDA_MAT_SOLUTION;
   inv_param.solve_type = QUDA_DIRECT_SOLVE;
   inv_param.cpu_prec = QUDA_DOUBLE_PRECISION;
-  inv_param.cuda_prec = QUDA_DOUBLE_PRECISION;
+  inv_param.cuda_prec = QUDA_SINGLE_PRECISION;
   inv_param.dirac_order = QUDA_DIRAC_ORDER;
   inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
   inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
@@ -319,12 +340,10 @@ int main(int argc, char *argv[]) {
     std::cout<< "block " << blockSizeMomProj << std::endl ;
     memset( GPU_ret , 0.0 , n1*n2*nmom*X[3]*sizeof(double _Complex));
 #else
-    const int blockSizeMomProj = 32 ;
+    const int blockSizeMomProj = 512 ;
 #endif
-    // GPU version
-    StopWatch gpu ;
-    gpu.start() ;
-    laphCurrentKernel( n1, n2,
+
+    alamode( n1,n2,
 		       nmom,
 		       blockSizeMomProj,
 		       evList.data() , 
@@ -333,27 +352,49 @@ int main(int argc, char *argv[]) {
 		       inv_param ,
 		       GPU_ret ,
 		       X ) ;
-    gpu.stop();
-    const double GPUtime = gpu.getTimeInSeconds();
-    printLaph(make_strf("\nGPU current kernel in = %g seconds\n", GPUtime)) ;
+
+    
+    // GPU version
+    double GPUtime = 0 ;
+    //for( int NP = 1 ; NP < nmom ; NP*=2 ) { 
+      StopWatch gpu ;
+      gpu.start() ;
+      //laphCurrentKernel(
+      alamode(
+			n1,n2,
+			 nmom,
+			 blockSizeMomProj,
+			 evList.data() , 
+			 evList.data() ,
+			 host_mom ,
+			 inv_param ,
+			 GPU_ret ,
+			 X ) ;
+      gpu.stop();
+      GPUtime = gpu.getTimeInSeconds();
+      printLaph(make_strf("\nGPU (NP%d) current kernel in = %g seconds\n", 1 , GPUtime)) ;
+      //}
 #ifdef GPU_STRESS
   }
 #else
   double _Complex *CPU_ret = (double _Complex*)calloc(n1*n2*nmom*X[3],sizeof(double _Complex)) ;
   // CPU version
-  StopWatch cpu ;
-  cpu.start() ;
-  cpu_code( n1, n2,
-	    nmom,
-	    blockSizeMomProj,
-	    evList.data() , 
-	    evList.data() ,
-	    host_mom ,
-	    CPU_ret ,
-	    X ) ;
-  cpu.stop() ;
-  const double CPUtime = cpu.getTimeInSeconds() ;
-  printLaph(make_strf("\nCPU current kernel in = %g seconds\n", CPUtime));
+  double CPUtime = 0. ;
+  //for( int NP = 1 ; NP <= nmom ; NP*=2 ) { 
+    StopWatch cpu ;
+    cpu.start() ;
+    cpu_code_v2( n1, n2,
+	      nmom,
+	      blockSizeMomProj,
+	      evList.data() , 
+	      evList.data() ,
+	      host_mom ,
+	      CPU_ret ,
+	      X ) ;
+    cpu.stop() ;
+    CPUtime = cpu.getTimeInSeconds() ;
+    printLaph(make_strf("\nCPU current (NP%d) kernel in = %g seconds\n", 1 , CPUtime));
+    //  }
   printf( "\n*************************************\n" ) ;
   printf( "-----> GPU speedup factor %gx\n" , CPUtime/GPUtime ) ;
   printf( "*************************************\n\n" ) ;
@@ -377,7 +418,7 @@ int main(int argc, char *argv[]) {
 	}
       }
     }
-    printf( "diff %e\n" , sum ) ;
+    printf( "diff %e\n" , sum/(n1*n2*nmom*X[3]) ) ;
   }
   free( CPU_ret ) ;
 #endif

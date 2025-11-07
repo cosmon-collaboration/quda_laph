@@ -21,7 +21,7 @@
 using namespace LaphEnv ;
 using namespace quda ;
 
-//#define VERBOSE_COMPARISON
+#define VERBOSE_COMPARISON
 //#define GPU_STRESS
 
 static inline void
@@ -348,8 +348,33 @@ void cpu_code_v3( const int n1, const int n2, const int n3, const int nMom,
   free(q1) ;
   free(q2) ;
   free(q3) ;
-}  
+}
 
+// device-side
+static void
+apply_noises( const std::vector<ColorSpinorField> &evec ,
+	      const ColorSpinorParam cuda_evec_param ,
+	      std::vector<ColorSpinorField> &quda_q1 ,
+	      const std::vector<std::complex<double>> &coeffs1 ,
+	      std::vector<ColorSpinorField> &quda_q2 ,
+	      const std::vector<std::complex<double>> &coeffs2 ,
+	      std::vector<ColorSpinorField> &quda_q3 ,
+	      const std::vector<std::complex<double>> &coeffs3 )
+{
+  const size_t n1 = quda_q1.size() , n2 = quda_q2.size() , n3 = quda_q3.size() ;
+  const size_t nEv = evec.size() ;
+  std::vector<ColorSpinorField> quda_evec(1) ;
+  quda_evec[0] = ColorSpinorField(cuda_evec_param);
+  for (size_t i=0; i<nEv; i++) {
+    quda_evec[0] = evec[i] ;
+    blas::block::caxpy( {coeffs1.begin()+n1*i,coeffs1.begin()+n1*i+n1},
+			{quda_evec[0]}, {quda_q1.begin(),quda_q1.end()} ) ;
+    blas::block::caxpy( {coeffs2.begin()+n2*i,coeffs2.begin()+n2*i+n2},
+			{quda_evec[0]}, {quda_q2.begin(),quda_q2.end()} ) ;
+    blas::block::caxpy( {coeffs3.begin()+n3*i,coeffs3.begin()+n3*i+n3},
+			{quda_evec[0]}, {quda_q3.begin(),quda_q3.end()} ) ;
+  }
+}
 
 static void
 alamode2( const int n1, const int n2, const int n3, const int nMom,
@@ -373,10 +398,16 @@ alamode2( const int n1, const int n2, const int n3, const int nMom,
   if( blockSizeMomProj > (n1*n2*n3) ) {
     errorQuda( "Block size mom proj needs %d > %d \n" , blockSizeMomProj , n1*n2*n3 ) ;
   }
+  if( inv_param.cuda_prec != QUDA_DOUBLE_PRECISION &&
+      inv_param.cuda_prec != QUDA_SINGLE_PRECISION ) {
+    errorQuda( "Unsupported device precision %d" , inv_param.cuda_prec ) ;
+  }
+  
   // Allocate device memory for evecs. This is done to ensure a contiguous
   // this is a double store of evecs, which is bad  
   const int nSp    = X[0]*X[1]*X[2] ;
   const int nSites = nSp*X[3] ;
+  const int precision = inv_param.cuda_prec ;
 
   //getProfileBaryonKernel().TPSTART(QUDA_PROFILE_INIT);
   lat_dim_t x = { X[0] , X[1] , X[2] , X[3] } ;
@@ -414,14 +445,14 @@ alamode2( const int n1, const int n2, const int n3, const int nMom,
   std::vector<std::complex<double>> coeffs3(n3*nEv) ;
   std::vector<ColorSpinorField> quda_q3(n3) ;
   for(int i=0; i<n3; i++) {
-    quda_q3[i] = ColorSpinorField(cuda_q2_param) ;
+    quda_q3[i] = ColorSpinorField(cuda_q3_param) ;
     for( int j = 0 ; j < nEv ; j++ ) coeffs3[j*n3+i] = (std::complex<double>)host_coeffs3[j+i*nEv] ;
   }
 
   // device temporaries, momentum and return buffers
-  const size_t data_tmp_bytes = blockSizeMomProj*nSites*2*quda_q3[0].Precision();
-  const size_t data_ret_bytes = X[3]*nMom*n1*n2*n3*2*quda_q3[0].Precision();
-  const size_t data_mom_bytes = nMom*nSp*2*quda_q3[0].Precision();
+  const size_t data_tmp_bytes = blockSizeMomProj*nSites*2*precision ;
+  const size_t data_ret_bytes = X[3]*nMom*n1*n2*n3*2*precision ;
+  const size_t data_mom_bytes = nMom*nSp*2*precision ;
   void *d_tmp = pool_device_malloc(data_tmp_bytes);
   void *d_ret = pool_device_malloc(data_ret_bytes);
   void *d_mom = pool_device_malloc(data_mom_bytes);
@@ -434,31 +465,25 @@ alamode2( const int n1, const int n2, const int n3, const int nMom,
   
   // Copy host_mom data to device
   //getProfileBaryonKernel().TPSTART(QUDA_PROFILE_H2D);
-  qudaMemcpy(d_mom, host_mom, data_mom_bytes, qudaMemcpyHostToDevice);  
-  //getProfileBaryonKernel().TPSTOP(QUDA_PROFILE_H2D);
+  if( precision == QUDA_SINGLE_PRECISION ) {
+    float _Complex *tmp = (float _Complex*)calloc( nMom*nSp , sizeof( float _Complex ) ) ;
+    for( size_t i = 0 ; i < (size_t)nMom*nSp ; i++ ) {
+      tmp[i] = (float _Complex)host_mom[i] ;
+    }
+    qudaMemcpy(d_mom, tmp , data_mom_bytes, qudaMemcpyHostToDevice);  
+    free( tmp ) ;
+  } else {
+    qudaMemcpy(d_mom, host_mom, data_mom_bytes, qudaMemcpyHostToDevice);  
+  }
+    //getProfileBaryonKernel().TPSTOP(QUDA_PROFILE_H2D);
 
   // this is a <significantly> memory-cheaper version with a slight degrade
   // in performance compared to pulling all the evecs in
-  {
-    std::vector<ColorSpinorField> quda_evec(1) ;
-    quda_evec[0] = ColorSpinorField(cuda_evec_param);
-    for (int i=0; i<nEv; i++) {
-      quda_evec[0] = evec[i] ;
-      for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
-	std::vector<std::complex<double>> cf(1,coeffs1[dil1+n1*i]) ;
-	blas::caxpy( cf, quda_evec, quda_q1[dil1] ) ;
-      }
-      for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
-	std::vector<std::complex<double>> cf(1,coeffs2[dil2+n2*i]) ;
-	blas::caxpy( cf, quda_evec, quda_q2[dil2] ) ;
-      }
-      for( int dil3 = 0 ; dil3 < n3 ; dil3++ ) {
-	std::vector<std::complex<double>> cf(1,coeffs3[dil3+n3*i]) ;
-	blas::caxpy( cf, quda_evec, quda_q3[dil3] ) ;
-      }
-    }
-  }
-
+  apply_noises( evec , cuda_evec_param ,
+		quda_q1 , coeffs1 ,
+		quda_q2 , coeffs2 ,
+		quda_q3 , coeffs3 ) ;
+  
   // Create device diquark vector
   ColorSpinorParam cuda_diq_param( cuda_evec_param , inv_param , QUDA_CUDA_FIELD_LOCATION ) ;
   ColorSpinorField quda_diq( cuda_diq_param ) ;
@@ -482,26 +507,23 @@ alamode2( const int n1, const int n2, const int n3, const int nMom,
   cublas_param_mom_sum.alpha = (__complex__ double)alpha;  
   cublas_param_mom_sum.beta  = (__complex__ double)beta;
   cublas_param_mom_sum.data_order = QUDA_BLAS_DATAORDER_ROW;
-  cublas_param_mom_sum.data_type = QUDA_BLAS_DATATYPE_Z;
+  cublas_param_mom_sum.data_type = precision == QUDA_SINGLE_PRECISION ? \
+    QUDA_BLAS_DATATYPE_C : QUDA_BLAS_DATATYPE_Z;
   cublas_param_mom_sum.blas_type = QUDA_BLAS_GEMM ;
   
   int nInBlock = 0 , blockStart = 0 ;
   for( int dil1=0; dil1<n1; dil1++ ) {
     for( int dil2=0; dil2<n2; dil2++ ) {
-
       //getProfileColorCross().TPSTART(QUDA_PROFILE_COMPUTE);
       colorCrossQuda(quda_q1[dil1], quda_q2[dil2], quda_diq);
       //getProfileColorCross().TPSTOP(QUDA_PROFILE_COMPUTE);
-      
       for (int dil3=0; dil3<n3; dil3++) {
-
 	//getProfileColorContract().TPSTART(QUDA_PROFILE_COMPUTE);	
-	colorContractQuda(quda_diq, quda_q3[dil3], (std::complex<double>*)d_tmp + nSites*nInBlock);
+	colorContractQuda(quda_diq, quda_q3[dil3], (char*)d_tmp + nSites*nInBlock*2*precision);
 	//getProfileColorContract().TPSTOP(QUDA_PROFILE_COMPUTE);
 	nInBlock++;
-
 	if (nInBlock == blockSizeMomProj ) {
-	  blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp, (std::complex<double>*)d_ret + X[3]*blockStart,
+	  blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp, (char*)d_ret + X[3]*blockStart*2*precision,
 						cublas_param_mom_sum, QUDA_CUDA_FIELD_LOCATION);
 	  blockStart = (dil1*n2 + dil2)*n3 + dil3 + 1 ;
 	  nInBlock = 0;
@@ -511,13 +533,22 @@ alamode2( const int n1, const int n2, const int n3, const int nMom,
   }
   if( nInBlock > 0 ) {
     cublas_param_mom_sum.batch_count = nInBlock;
-    blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp, (std::complex<double>*)d_ret + X[3]*blockStart,
+    blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp, (char*)d_ret + X[3]*blockStart*2*precision,
 					  cublas_param_mom_sum, QUDA_CUDA_FIELD_LOCATION);
   }
 
   // Copy return array back to host
   // getProfileBaryonKernel().TPSTART(QUDA_PROFILE_D2H);
-  qudaMemcpy(return_arr, d_ret, data_ret_bytes, qudaMemcpyDeviceToHost);  
+  if( precision == QUDA_SINGLE_PRECISION ) {
+    float _Complex *tmp = (float _Complex*)calloc( X[3]*nMom*n1*n2*n3 , sizeof( float _Complex ) ) ;
+    qudaMemcpy(tmp, d_ret, data_ret_bytes, qudaMemcpyDeviceToHost);
+    for( size_t i = 0 ; i < (size_t)X[3]*nMom*n1*n2*n3 ; i++ ) {
+      return_arr[i] = (double _Complex)tmp[i] ;
+    }
+    free( tmp ) ;
+  } else {
+    qudaMemcpy(return_arr, d_ret, data_ret_bytes, qudaMemcpyDeviceToHost);  
+  }
   //getProfileBaryonKernel().TPSTOP(QUDA_PROFILE_D2H);
   
   // Clean up memory allocations
@@ -582,7 +613,7 @@ int main(int argc, char *argv[]) {
   const int Nev = 256 , n1 = 64 , n2 = 64 , n3 = 64 ;
 #else
   //const int Nev = 32 , n1 = 8 , n2 = 8 , n3 = 8 ;
-  const int Nev = 64 , n1 = 32 , n2 = 32 , n3 = 32 ;
+  const int Nev = 32 , n1 = 4 , n2 = 4 , n3 = 4 ;
 #endif
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
   std::cout<<"Constant Eigvecs"<<std::endl ;
@@ -592,7 +623,7 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 40 ;
+  const int nmom = 4 ;
   const int X[4] = {
     LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
@@ -638,39 +669,59 @@ int main(int argc, char *argv[]) {
   inv_param.solution_type = QUDA_MAT_SOLUTION;
   inv_param.solve_type = QUDA_DIRECT_SOLVE;
   inv_param.cpu_prec = QUDA_DOUBLE_PRECISION;
-  inv_param.cuda_prec = QUDA_DOUBLE_PRECISION;
+  inv_param.cuda_prec = QUDA_SINGLE_PRECISION;
   inv_param.dirac_order = QUDA_DIRAC_ORDER;
   inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
   inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
   inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
 
   double _Complex *retGPU = (double _Complex*)calloc( X[3]*n1*n2*n3*nmom , sizeof( double _Complex) ) ;
+
 #ifdef GPU_STRESS  
   for( int blockSizeMomProj = 2 ; blockSizeMomProj < 8192 ; blockSizeMomProj *= 2 ) {
     memset( retGPU , 0.0 , X[3]*nmom*n1*n2*n3*sizeof(double _Complex)) ;
 #else
-    const int blockSizeMomProj = 13 ;
+    const int blockSizeMomProj = 16 ;
 #endif
+
+    //    laphBaryonKernel(
+    alamode2(
+		     n1,n2,n3,
+		      nmom,
+		      coeffs1 ,
+		      coeffs2 ,
+		      coeffs3 ,
+		      host_mom ,
+		      Nev ,
+		      evList.data(),
+		      inv_param ,
+		      retGPU,
+		      blockSizeMomProj,
+		      X ) ;
+    
+    double GPUtime ;
     printf( "blockSizeMomProj %d\n" , blockSizeMomProj ) ;
-    StopWatch GPU ;
-    GPU.start() ;
-    //alamode2( 
-    laphBaryonKernel(
-		     n1, n2, n3,
-		     nmom,
-		     coeffs1 ,
-		     coeffs2 ,
-		     coeffs3 ,
-		     host_mom ,
-		     Nev ,
-		     evList.data(),
-		     inv_param ,
-		     retGPU,
-		     blockSizeMomProj,
-		     X ) ;
-    GPU.stop() ;
-    const double GPUtime = GPU.getTimeInSeconds() ;
-    printLaph(make_strf("\nGPU baryonkernel in = %g seconds\n", GPUtime )) ;
+    //for( int Np = 1 ; Np <= 512 ; Np *=2 ) {
+      StopWatch GPU ;
+      GPU.start() ;
+      alamode2( 
+	       //      laphBaryonKernel(
+		       n1,n2,n3,
+			nmom,
+			coeffs1 ,
+			coeffs2 ,
+			coeffs3 ,
+			host_mom ,
+			Nev ,
+			evList.data(),
+			inv_param ,
+			retGPU,
+		        blockSizeMomProj,
+			X ) ;
+      GPU.stop() ;
+      GPUtime = GPU.getTimeInSeconds() ;
+      printLaph(make_strf("\nGPU baryonkernel (%d) in = %g seconds\n", 1 , GPUtime )) ;
+      //}
 #ifdef GPU_STRESS
   }
 #else
@@ -766,7 +817,7 @@ int main(int argc, char *argv[]) {
     for( size_t T = 0 ; T < (size_t)X[3] ; T++ ) {
       for( size_t i = 0 ; i < n1*n2*n3 ; i++ ) {
 	const size_t idx = T + X[3]*(i + (n1*n2*n3)*p) ;
-	sum += cabs( retCPU[idx] - retGPU[idx] ) ;
+	sum += cabs(( retCPU[idx] - retGPU[idx] )/retCPU[idx] );
         #ifdef VERBOSE_COMPARISON
 	printf( " (%f %f) == (%f %f)\n" ,
 		creal(retCPU[idx]) , cimag(retCPU[idx]) ,
@@ -774,7 +825,7 @@ int main(int argc, char *argv[]) {
         #endif
       }
     }
-    std::cout<<"Summed diff p="<<p<<" "<<sum<<std::endl ;
+    std::cout<<"Summed diff p="<<p<<" "<<sum/(n1*n2*n3*X[3])<<std::endl ;
   }
   free( retCPU ) ;
 #endif

@@ -304,7 +304,12 @@ void alamode( const int nMom,
   //  errorQuda("Block size mom proj needs to divide %zu %d", nEvChoose3 , blockSizeMomProj);
   //}
   if( (size_t)blockSizeMomProj > nEvChoose3 ) { errorQuda("blockSizeMomProj too big %d > %zu" , blockSizeMomProj , nEvChoose3 ) ; }
-  
+
+  if( inv_param.cuda_prec != QUDA_SINGLE_PRECISION &&
+      inv_param.cuda_prec != QUDA_DOUBLE_PRECISION ) {
+    errorQuda( "Unsupported device precision %d" , inv_param.cuda_prec ) ;
+  }
+  const int precision = inv_param.cuda_prec ;
   //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_INIT);
 
   // Parameter object describing evecs
@@ -330,9 +335,9 @@ void alamode( const int nMom,
   ColorSpinorField quda_diq(cuda_diq_param) ;
   
   // Device side temp array (complBuf in chroma_laph)
-  const size_t data_tmp_bytes = blockSizeMomProj*nSites*2*quda_evec[0].Precision();
-  const size_t data_ret_bytes = nEvChoose3*nMom*X[3]*2*quda_evec[0].Precision();
-  const size_t data_mom_bytes = nMom*nSp*2*quda_evec[0].Precision();
+  const size_t data_tmp_bytes = blockSizeMomProj*nSites*2*precision;
+  const size_t data_ret_bytes = nEvChoose3*nMom*X[3]*2*precision;
+  const size_t data_mom_bytes = nMom*nSp*2*precision;
   void *d_tmp = pool_device_malloc(data_tmp_bytes);
   void *d_ret = pool_device_malloc(data_ret_bytes);
   void *d_mom = pool_device_malloc(data_mom_bytes);
@@ -347,7 +352,16 @@ void alamode( const int nMom,
 
   // Copy host data to device
   //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_H2D);
-  qudaMemcpy(d_mom, host_mom, data_mom_bytes, qudaMemcpyHostToDevice);  
+  if( precision == QUDA_SINGLE_PRECISION ) {
+    float _Complex *tmp = (float _Complex*)calloc( nMom*nSp , sizeof(float _Complex) ) ;
+    for( size_t i = 0 ; i < nMom*nSp ; i++ ) {
+      tmp[i] = (float _Complex)host_mom[i] ;
+    }
+    qudaMemcpy(d_mom, tmp, data_mom_bytes, qudaMemcpyHostToDevice);  
+    free( tmp ) ;
+  } else {
+    qudaMemcpy(d_mom, host_mom, data_mom_bytes, qudaMemcpyHostToDevice);  
+  }
   //getProfileBaryonKernelModeTripletsA().TPSTOP(QUDA_PROFILE_H2D);
 
   // idea here like always is to do several ev-blocks at once in a zgemm
@@ -366,7 +380,8 @@ void alamode( const int nMom,
   cublas_param_mom_sum.batch_count = blockSizeMomProj;
   cublas_param_mom_sum.alpha = 1. ; cublas_param_mom_sum.beta = 0. ;
   cublas_param_mom_sum.data_order = QUDA_BLAS_DATAORDER_ROW;
-  cublas_param_mom_sum.data_type = QUDA_BLAS_DATATYPE_Z;
+  cublas_param_mom_sum.data_type = ( precision == QUDA_SINGLE_PRECISION ) ? \
+    QUDA_BLAS_DATATYPE_C : QUDA_BLAS_DATATYPE_Z;
 
   //getProfileBaryonKernelModeTripletsA().TPSTOP(QUDA_PROFILE_TOTAL);
 
@@ -378,14 +393,14 @@ void alamode( const int nMom,
       //getProfileColorCross().TPSTOP(QUDA_PROFILE_COMPUTE);
       for (int cEv=bEv+1; cEv<nEv; cEv++) {
 	//getProfileColorContract().TPSTART(QUDA_PROFILE_COMPUTE);
-	colorContractQuda(quda_diq, quda_evec[cEv],(std::complex<double>*)d_tmp + nSites*nInBlock);
+	colorContractQuda(quda_diq, quda_evec[cEv],(char*)d_tmp + nSites*nInBlock*2*precision);
 	//getProfileColorContract().TPSTOP(QUDA_PROFILE_COMPUTE);
 	nInBlock++;
 	// eh todo this can be cleaned up
 	if (nInBlock == blockSizeMomProj) {
 	  //getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);  
 	  blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp,
-						(std::complex<double>*)d_ret+X[3]*blockStart,
+						(char*)d_ret+X[3]*blockStart*2*precision,
 						cublas_param_mom_sum,
 						QUDA_CUDA_FIELD_LOCATION);
 	  //getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);
@@ -399,7 +414,7 @@ void alamode( const int nMom,
   if( nInBlock > 0 ) {
     cublas_param_mom_sum.batch_count = nInBlock;
     blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp,
-					  (std::complex<double>*)d_ret+X[3]*blockStart,
+					  (char*)d_ret+X[3]*blockStart*2*precision,
 					  cublas_param_mom_sum,
 					  QUDA_CUDA_FIELD_LOCATION);
   }
@@ -407,7 +422,16 @@ void alamode( const int nMom,
   // Copy return array back to host
   //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_TOTAL); 
   //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_D2H);
-  qudaMemcpy(return_arr, d_ret, data_ret_bytes, qudaMemcpyDeviceToHost);  
+  if( precision == QUDA_SINGLE_PRECISION ) {
+    float _Complex *tmp = (float _Complex*)calloc( nEvChoose3*nMom*X[3] , sizeof( float _Complex ) ) ;
+    qudaMemcpy(tmp, d_ret, data_ret_bytes, qudaMemcpyDeviceToHost);
+    for( size_t i = 0 ; i < nEvChoose3*nMom*X[3] ; i++ ) {
+      return_arr[i] = (double _Complex)tmp[i] ;
+    }
+    free( tmp ) ;
+  } else {
+    qudaMemcpy(return_arr, d_ret, data_ret_bytes, qudaMemcpyDeviceToHost);  
+  }
   //getProfileBaryonKernelModeTripletsA().TPSTOP(QUDA_PROFILE_D2H);
   
   // Clean up memory allocations
@@ -519,7 +543,7 @@ int main(int argc, char *argv[]) {
   inv_param.solution_type = QUDA_MAT_SOLUTION;
   inv_param.solve_type = QUDA_DIRECT_SOLVE;
   inv_param.cpu_prec = QUDA_DOUBLE_PRECISION;
-  inv_param.cuda_prec = QUDA_DOUBLE_PRECISION;
+  inv_param.cuda_prec = QUDA_SINGLE_PRECISION;
   inv_param.dirac_order = QUDA_DIRAC_ORDER;
   inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
   inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
@@ -535,10 +559,23 @@ int main(int argc, char *argv[]) {
 #else
     const int blockSizeMomProj = 64 ;
 #endif
+
+    alamode(
+	    //laphBaryonKernelComputeModeTripletA(
+					nmom,
+					Nev,
+					blockSizeMomProj,
+					evList.data() ,
+					host_mom ,
+					inv_param,
+					retGPU,
+					X ) ;
+
+    
     StopWatch gpu ;
     gpu.start() ;
-    //alamode(
-    laphBaryonKernelComputeModeTripletA(
+    alamode(
+	    //laphBaryonKernelComputeModeTripletA(
 					nmom,
 					Nev,
 					blockSizeMomProj,
@@ -574,7 +611,7 @@ int main(int argc, char *argv[]) {
     for( int T = 0 ; T < X[3] ; T++ ) {
       for( size_t i = 0 ; i < nEvChoose3 ; i++ ) {
 	const size_t idx = T + X[3]*(i + nEvChoose3*p) ;
-	sum += cabs( retCPU[idx] - retGPU[idx] ) ;
+	sum += cabs(( retCPU[idx] - retGPU[idx] )/retCPU[idx] ) ;
 #ifdef VERBOSE_COMPARISON
 	printf( "%d %zu %d (%f %f) == (%f %f)\n" , T , i , p ,
 		creal(retCPU[idx]) , cimag(retCPU[idx]) ,
@@ -582,7 +619,7 @@ int main(int argc, char *argv[]) {
 #endif
       }
     }
-    std::cout<<"Summed diff p="<<p<<" "<<sum<<std::endl ;
+    std::cout<<"Summed diff p="<<p<<" "<<sum/(nEvChoose3*X[3])<<std::endl ;
   }
   free( retCPU ) ;
 #endif

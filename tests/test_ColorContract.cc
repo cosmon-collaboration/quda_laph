@@ -7,6 +7,7 @@
 #include "field_ops.h"
 
 #include <quda.h>
+#include <omp.h>
 #include <timer.h>
 #include <blas_lapack.h>
 #include <blas_quda.h>
@@ -19,23 +20,25 @@ using namespace quda ;
 
 // ok so Dean's code wanted #2 to be daggered already instead of doing the inner product, weird and perhaps wrong ...
 static void
-cpuColorContract( void **host_evec , void *result , const int nEv , const int X[4] , const int A , const int B )
+cpuColorContract( void **host_evec , void *result , const int nEv , const int X[4] , const int A , const int B , const int N )
 {
   const int Nsites = X[0]*X[1]*X[2]*X[3] ;
   std::complex<double> *ptA = (std::complex<double>*)host_evec[A] ;
   std::complex<double> *ptB = (std::complex<double>*)host_evec[B] ;
   std::complex<double> *ptC = (std::complex<double>*)result ;  
-#pragma omp parallel for
-  for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
-    // simple inner product over color A_{c}B*_{c}
-    ptC[i]  = ptA[0+3*i]*(ptB[0+3*i]) ;
-    ptC[i] += ptA[1+3*i]*(ptB[1+3*i]) ;
-    ptC[i] += ptA[2+3*i]*(ptB[2+3*i]) ;  
+#pragma omp parallel for collapse(2)
+  for( size_t n = 0 ; n < (size_t)N ; n++ ) {
+    for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
+      // simple inner product over color A_{c}B*_{c}
+      ptC[i]  = ptA[0+3*i]*(ptB[0+3*i]) ;
+      ptC[i] += ptA[1+3*i]*(ptB[1+3*i]) ;
+      ptC[i] += ptA[2+3*i]*(ptB[2+3*i]) ;  
+    }
   }
 }
 
 static void
-gpuColorContract( void **host_evec , void *result , const int nEv , const int X[4] , const int A , const int B )
+gpuColorContract( void **host_evec , void *result , const int nEv , const int X[4] , const int A , const int B , const int N )
 {
   const int Nsites = X[0]*X[1]*X[2]*X[3] ;
 
@@ -77,8 +80,10 @@ gpuColorContract( void **host_evec , void *result , const int nEv , const int X[
   void *d_tmp = pool_device_malloc(dbytes);
   
   // just cross 0 with 1 for now
-  colorContractQuda( quda_evec[0] , quda_evec[1] , d_tmp ) ;
-
+  for( int i = 0 ; i < N ; i++ ) {
+    colorContractQuda( quda_evec[0] , quda_evec[1] , d_tmp ) ;
+  }
+  
   qudaMemcpy(result,d_tmp,dbytes,qudaMemcpyDeviceToHost) ;
 
   // pool's closed
@@ -139,12 +144,10 @@ int main(int argc, char *argv[]) {
     LayoutInfo::getRankLattExtents()[2],
     LayoutInfo::getRankLattExtents()[3] } ;
 
-  StopWatch timerGPU , timerCPU ;
-
   // test this is zero CPU side
-  cpuColorContract( evList.data() , (void*)resultCPU.getDataPtr() , Nev , X , 0 , 1 ) ;
+  cpuColorContract( evList.data() , (void*)resultCPU.getDataPtr() , Nev , X , 0 , 1 , 1 ) ;
 
-  gpuColorContract( evList.data() , (void*)resultGPU.getDataPtr() , Nev , X , 0 , 1 ) ;
+  gpuColorContract( evList.data() , (void*)resultGPU.getDataPtr() , Nev , X , 0 , 1 , 1 ) ;
 
   // compare them
   std::complex<double> sum = 0 ;
@@ -154,6 +157,26 @@ int main(int argc, char *argv[]) {
     sum += fabs( cpu[i] - gpu[i] ) ;
   }
   std::cout<<"CPU - GPU :: "<<sum<<std::endl ;
+
+  // do a stress test
+  printf( "\nCPU\n" ) ;
+  for( int n = 1 ; n <= 1024 ; n*=2 ) {
+    StopWatch timer ;
+    timer.start() ;
+    cpuColorContract( evList.data() , (void*)resultCPU.getDataPtr() , Nev , X , 0 , 1 , n ) ;
+    timer.stop() ;
+    printf( "Time for n=%d contractions %f\n" , n , timer.getTimeInSeconds() ) ; 
+  }
+
+  // do a stress test
+  printf( "\nGPU\n" ) ;
+  for( int n = 1 ; n <= 1024 ; n*=2 ) {
+    StopWatch timer ;
+    timer.start() ;
+    gpuColorContract( evList.data() , (void*)resultCPU.getDataPtr() , Nev , X , 0 , 1 , n ) ;
+    timer.stop() ;
+    printf( "Time for n=%d contractions %f\n" , n , timer.getTimeInSeconds() ) ; 
+  }
   
   finalize();
 
