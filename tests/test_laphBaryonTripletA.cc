@@ -25,6 +25,7 @@ using namespace quda ;
 //#define PSEUDOCONSTANT
 //#define VERBOSE_COMPARISON
 //#define GPU_STRESS
+//#define CPUCROSSCHECK
 
 // cpu color cross
 static void
@@ -498,7 +499,7 @@ int main(int argc, char *argv[]) {
 #ifdef GPU_STRESS
   const int Nev = 96 ;
 #else
-  const int Nev = 48 ;
+  const int Nev = 64 ;
 #endif
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
 
@@ -557,11 +558,11 @@ int main(int argc, char *argv[]) {
     std::cout<<"nmom "<<nmom<<" | block "<<blockSizeMomProj<<std::endl ;
     memset( retGPU , 0.0 , X[3]*nmom*nEvChoose3*sizeof( double _Complex )) ;
 #else
-    const int blockSizeMomProj = 64 ;
+    const int blockSizeMomProj = 256 ;
 #endif
 
-    alamode(
-	    //laphBaryonKernelComputeModeTripletA(
+    //alamode(
+    laphBaryonKernelComputeModeTripletA(
 					nmom,
 					Nev,
 					blockSizeMomProj,
@@ -574,8 +575,8 @@ int main(int argc, char *argv[]) {
     
     StopWatch gpu ;
     gpu.start() ;
-    alamode(
-	    //laphBaryonKernelComputeModeTripletA(
+    //alamode(
+    laphBaryonKernelComputeModeTripletA(
 					nmom,
 					Nev,
 					blockSizeMomProj,
@@ -589,7 +590,7 @@ int main(int argc, char *argv[]) {
     printLaph(make_strf("\nGPU modetripletA in = %g seconds\n", GPUtime )) ;
 #ifdef GPU_STRESS
   }
-#else
+#elif (defined CPUCROSSCHECK)
   double _Complex *retCPU = (double _Complex*)calloc( X[3]*nmom*nEvChoose3 , sizeof( double _Complex  ) );
   StopWatch cpu ;
   cpu.start() ;

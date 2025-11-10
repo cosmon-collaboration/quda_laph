@@ -21,8 +21,9 @@
 using namespace LaphEnv ;
 using namespace quda ;
 
-#define VERBOSE_COMPARISON
+//#define VERBOSE_COMPARISON
 //#define GPU_STRESS
+//#define CPUCROSSCHECK
 
 static inline void
 evprod( const double _Complex *coeffs ,
@@ -613,7 +614,7 @@ int main(int argc, char *argv[]) {
   const int Nev = 256 , n1 = 64 , n2 = 64 , n3 = 64 ;
 #else
   //const int Nev = 32 , n1 = 8 , n2 = 8 , n3 = 8 ;
-  const int Nev = 32 , n1 = 4 , n2 = 4 , n3 = 4 ;
+  const int Nev = 256 , n1 = 64 , n2 = 64 , n3 = 64 ;
 #endif
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
   std::cout<<"Constant Eigvecs"<<std::endl ;
@@ -623,7 +624,7 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 4 ;
+  const int nmom = 64 ;
   const int X[4] = {
     LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
@@ -681,11 +682,11 @@ int main(int argc, char *argv[]) {
   for( int blockSizeMomProj = 2 ; blockSizeMomProj < 8192 ; blockSizeMomProj *= 2 ) {
     memset( retGPU , 0.0 , X[3]*nmom*n1*n2*n3*sizeof(double _Complex)) ;
 #else
-    const int blockSizeMomProj = 16 ;
+    const int blockSizeMomProj = 256 ;
 #endif
 
-    //    laphBaryonKernel(
-    alamode2(
+    laphBaryonKernel(
+		     //alamode2(
 		     n1,n2,n3,
 		      nmom,
 		      coeffs1 ,
@@ -704,8 +705,8 @@ int main(int argc, char *argv[]) {
     //for( int Np = 1 ; Np <= 512 ; Np *=2 ) {
       StopWatch GPU ;
       GPU.start() ;
-      alamode2( 
-	       //      laphBaryonKernel(
+      laphBaryonKernel(
+		       //alamode2( 
 		       n1,n2,n3,
 			nmom,
 			coeffs1 ,
@@ -724,7 +725,7 @@ int main(int argc, char *argv[]) {
       //}
 #ifdef GPU_STRESS
   }
-#else
+#elif (defined CPUCROSSCHECK)
   double _Complex *retCPU = (double _Complex*)calloc( X[3]*n1*n2*n3*nmom , sizeof( double _Complex) ) ;
 
   #ifdef CPU_STRESS

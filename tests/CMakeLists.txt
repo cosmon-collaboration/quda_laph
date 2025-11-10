@@ -34,10 +34,14 @@ add_executable(TestBaryonTripletB test_laphBaryonTripletB.cc)
 target_include_directories(TestBaryonTripletB PUBLIC include)
 target_link_libraries(TestBaryonTripletB PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
 
-add_executable(TestCurrentKernel test_laphCurrentKernel.cc)
-target_include_directories(TestCurrentKernel PUBLIC include)
-target_link_libraries(TestCurrentKernel PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
+add_executable(TestMesonDoublet test_laphMesonDoublet.cc)
+target_include_directories(TestMesonDoublet PUBLIC include)
+target_link_libraries(TestMesonDoublet PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
 
 add_executable(TestBatchGEMM test_BatchGEMM.cc)
 target_include_directories(TestBatchGEMM PUBLIC include)
 target_link_libraries(TestBatchGEMM PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
+
+add_executable(TestMesonKernel test_laphMesonKernel.cc)
+target_include_directories(TestMesonKernel PUBLIC include)
+target_link_libraries(TestMesonKernel PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
