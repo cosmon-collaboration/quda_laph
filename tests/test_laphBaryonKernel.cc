@@ -23,7 +23,7 @@ using namespace quda ;
 
 //#define VERBOSE_COMPARISON
 //#define GPU_STRESS
-//#define CPUCROSSCHECK
+#define CPUCROSSCHECK
 
 static inline void
 evprod( const double _Complex *coeffs ,
@@ -190,11 +190,11 @@ void cpu_code_v1( const int n1, const int n2, const int n3, const int nMom,
     evprod( host_coeffs3 , host_evec , n3 , nEv , nsites , q3 ) ;
   }
 
-  LattField Diq( FieldSiteType::ColorVector);
-  LattField tmp( FieldSiteType::Complex);
-
+#pragma omp parallel for collapse(2)
   for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
     for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
+      LattField Diq( FieldSiteType::ColorVector);
+      LattField tmp( FieldSiteType::Complex);      
       cpuColorCross( (void*)&q1[dil1*nsites*3] , (void*)&q2[dil2*nsites*3] , (void*)Diq.getDataPtr() , X ) ;
       for( int dil3 = 0 ; dil3 < n3 ; dil3++ ) {
 	cpuColorContract( (void*)Diq.getDataPtr() , (void*)&q3[dil3*nsites*3] , (void*)tmp.getDataPtr() , X ) ;
@@ -204,10 +204,15 @@ void cpu_code_v1( const int n1, const int n2, const int n3, const int nMom,
 	  for( int T = 0 ; T < X[3] ; T++ ) {
 	    const double _Complex *p1 = (const double _Complex*)tmp.getDataPtr() + nSp*T ;
 	    double _Complex sum = 0.0 ;
-            #pragma omp parallel for reduction(+:sum)
+            #ifdef USE_OPENBLAS
+            sum = cblas_zdotu( nSp , p2 , 1 , p1 , 1 ) ;
+            #elif (defined USE_GSL_CBLAS)
+	    cblas_zdotu( nSp , p2 , 1 , p1 , 1 , &sum ) ;
+            #else
 	    for( size_t i = 0 ; i < nSp ; i++ ) {
 	      sum += p2[i]*p1[i] ;
 	    }
+	    #endif
 	    return_array[ T + X[3]*( dil3 + n3*( dil2 + n2*dil1 ) + n1*n2*n3*p ) ] = sum ;
 	  }
 	}
@@ -771,7 +776,7 @@ int main(int argc, char *argv[]) {
     memset( retCPU , 0 , X[3]*n1*n2*n3*nmom*sizeof(double _Complex) ) ;
     StopWatch CPU ;
     CPU.start() ;
-    cpu_code_v3( n1 , n2 , n3 ,
+    cpu_code_v1( n1 , n2 , n3 ,
 		 nmom,
 		 coeffs1, 
 		 coeffs2, 

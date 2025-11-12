@@ -25,7 +25,7 @@ using namespace quda ;
 //#define PSEUDOCONSTANT
 //#define VERBOSE_COMPARISON
 //#define GPU_STRESS
-//#define CPUCROSSCHECK
+#define CPUCROSSCHECK
 
 // cpu color cross
 static void
@@ -35,7 +35,7 @@ cpuColorCross( void *A , void *B , void *result , const int X[4] )
   std::complex<double> *ptA = (std::complex<double>*)A ;
   std::complex<double> *ptB = (std::complex<double>*)B ;
   std::complex<double> *ptC = (std::complex<double>*)result ;
-#pragma omp parallel for
+  //#pragma omp parallel for
   for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
     ptC[ 3*i + 0 ] =  ptA[ 3*i + 1 ]*ptB[ 3*i + 2 ] - ptA[ 3*i + 2 ]*ptB[ 3*i + 1 ] ;
     ptC[ 3*i + 1 ] = -ptA[ 3*i + 0 ]*ptB[ 3*i + 2 ] + ptA[ 3*i + 2 ]*ptB[ 3*i + 0 ] ;
@@ -51,12 +51,17 @@ cpuColorContract( void *A , void *B , void *result , const int X[4] )
   const std::complex<double> *ptA = (const std::complex<double>*)A ;
   const std::complex<double> *ptB = (const std::complex<double>*)B ;
   std::complex<double> *ptC = (std::complex<double>*)result ;
-  #pragma omp parallel for
+  //#pragma omp parallel for
   for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
-    // simple inner product over color A_{c}B_{c}
+    #ifdef USE_OPENBLAS
+    ptC[i] = cblas_zdotu( 3 , ptA+3*i , 1 , ptB+3*i , 1 ) ;
+    #elif (defined USE_GSL_CBLAS)
+    cblas_zdotu( 3 , ptA+3*i , 1 , ptB+3*i , 1 , ptC+i ) ;
+    #else
     ptC[i]  = ptA[0+3*i]*(ptB[0+3*i]) ;
     ptC[i] += ptA[1+3*i]*(ptB[1+3*i]) ;
     ptC[i] += ptA[2+3*i]*(ptB[2+3*i]) ;
+    #endif
   }
 }
 
@@ -69,8 +74,7 @@ cpuColorContractTh( void *A , void *B , void *result , const int X[4] )
   const std::complex<double> *ptB = (const std::complex<double>*)B ;
   std::complex<double> *ptC = (std::complex<double>*)result ;
   #pragma omp for
-  for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
-    // simple inner product over color A_{c}B_{c}                                                                             
+  for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) { 
     #ifdef USE_OPENBLAS
     ptC[i] = cblas_zdotu( 3 , ptA+3*i , 1 , ptB+3*i , 1 ) ;
     #elif (defined USE_GSL_CBLAS)
@@ -97,12 +101,27 @@ cpu_code( const int nMom,
   const size_t nSp   = X[0]*X[1]*X[2] ;
   const size_t nEvC3 = nEv*(nEv-1)*(nEv-2)/6 ;
 
-  LattField Diq( FieldSiteType::ColorVector);
-  LattField tmp( FieldSiteType::Complex);
-
+  // precompute index map
   size_t idx = 0 ;
+  size_t mapEv[nEv][nEv][nEv] = {} ;
   for( int aEv = 0 ; aEv < nEv ; aEv++ ) {
     for( int bEv = aEv+1 ; bEv < nEv ; bEv++ ) {
+      for( int cEv = bEv+1 ; cEv < nEv ; cEv++ ) {
+	mapEv[aEv][bEv][cEv] = idx ; idx++ ;
+      }
+    }
+  }
+  if( idx != nEvC3 ) {
+    printf( "Fuuuuucckk\n" ) ;
+  }
+
+#pragma omp parallel for collapse(2)
+  for( int aEv = 0 ; aEv < nEv ; aEv++ ) {
+    for( int bEv = aEv+1 ; bEv < nEv ; bEv++ ) {
+
+      LattField Diq( FieldSiteType::ColorVector);
+      LattField tmp( FieldSiteType::Complex);
+      
       cpuColorCross( host_evec[aEv] , host_evec[bEv] , (void*)Diq.getDataPtr() , X ) ;
       for( int cEv = bEv+1 ; cEv < nEv ; cEv++ ) {
 	// color contract
@@ -114,14 +133,19 @@ cpu_code( const int nMom,
 	  for( int T = 0 ; T < X[3] ; T++ ) {
 	    const double _Complex *p1 = (const double _Complex*)tmp.getDataPtr() + nSp*T ;
 	    double _Complex sum = 0.0 ;
-            #pragma omp parallel for reduction(+:sum)
+            #ifdef USE_OPENBLAS
+	    sum = cblas_zdotu( nSp , p2 , 1 , p1 , 1 ) ;
+            #elif (defined USE_GSL_CBLAS)
+	    cblas_zdotu( nSp , p2 , 1 , p1 , 1 , &sum ) ;
+            #else
 	    for( size_t i = 0 ; i < nSp ; i++ ) {
 	      sum += p2[i]*p1[i] ;
 	    }
-	    return_arr[ T+X[3]*(idx + nEvC3*p) ] = sum ;
+	    #endif
+	    const size_t midx = mapEv[aEv][bEv][cEv] ; 
+	    return_arr[ T+X[3]*(midx + nEvC3*p) ] = sum ;
 	  }
 	}
-	idx++ ;
       }
     }
   }
@@ -595,7 +619,7 @@ int main(int argc, char *argv[]) {
   StopWatch cpu ;
   cpu.start() ;
   //cpu_code( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
-  cpu_codev4( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
+  cpu_code( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
   //cpu_codev3( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
   cpu.stop() ;
   const double CPUtime = cpu.getTimeInSeconds() ;

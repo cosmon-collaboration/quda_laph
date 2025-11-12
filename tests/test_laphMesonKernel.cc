@@ -54,12 +54,17 @@ cpuInner( const double _Complex *host_quark , const double _Complex *host_quark_
   const std::complex<double> *ptA = (const std::complex<double>*)host_quark_bar ;
   const std::complex<double> *ptB = (const std::complex<double>*)host_quark ;
   std::complex<double> *ptC = (std::complex<double>*)result ;  
-#pragma omp parallel for
+  //#pragma omp parallel for
   for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
-    // simple inner product over color A_{c}B*_{c}
+    #ifdef USE_OPENBLAS
+    ptC[i] = cblas_zdotc( 3 , ptA+3*i , 1 , ptB+3*i , 1 ) ;
+    #elif (defined USE_GSL_CBLAS)
+    cblas_zdotc( 3 , ptA+3*i , 1 , ptB+3*i , 1 , ptC+i ) ;
+    #else
     ptC[i]  = conj(ptA[0+3*i])*(ptB[0+3*i]) ;
     ptC[i] += conj(ptA[1+3*i])*(ptB[1+3*i]) ;
-    ptC[i] += conj(ptA[2+3*i])*(ptB[2+3*i]) ;  
+    ptC[i] += conj(ptA[2+3*i])*(ptB[2+3*i]) ;
+    #endif
   }
 }
 
@@ -86,25 +91,32 @@ static void cpu_code_v2( const int n1,
     evprod( host_coeffs2 , host_evec , n2 , nEv , nsites , q2 ) ;
   }  
   double _Complex *rt = (double _Complex*)return_array ;
-  double _Complex *result = (double _Complex*)calloc( nsites , sizeof( double _Complex ) ) ;
+#pragma omp parallel for collapse(2)
   for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
     for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
+      double _Complex *result = (double _Complex*)calloc( nsites , sizeof( double _Complex ) ) ;
       cpuInner( q2 + dil2*3*nsites , q1 + dil1*3*nsites , result , X ) ;
       for( int p = 0 ; p < nMom ; p++ ) {
 	double _Complex *pm = (double _Complex*)host_mom + nSp*p ;
 	for( int t = 0 ; t < X[3] ; t++ ) {
 	  double _Complex *rs = (double _Complex*)result + nSp*t ;
 	  double _Complex sum = 0. ;
+          #ifdef USE_OPENBLAS
+          sum = cblas_zdotu( nSp , pm , 1 , rs , 1 ) ;
+          #elif (defined USE_GSL_CBLAS)
+          cblas_zdotu( nSp , pm , 1 , rs , 1 , &sum ) ;
+          #else
 	  for( size_t i = 0 ; i < (size_t)nSp ; i++ ) {
 	    sum += pm[i]*rs[i] ;
 	  }
+	  #endif
 	  rt[ t + X[3]*( p + nMom*( dil2 + n2*dil1 )) ] = sum ;
 	}
       }
+      free( result ) ;
     }
   }
   free( q1 ) ; free( q2 ) ;
-  free( result ) ;
 }
 
 // copy Fourier twiddles to the device
@@ -409,8 +421,8 @@ int main(int argc, char *argv[]) {
     const int blockSizeMomProj = 256 ;
 #endif
 
-    alamode(
-    //laphCurrentKernel(
+    //alamode(
+    laphMesonKernel(
 	    n1,n2, nmom, blockSizeMomProj,
 	    coeffs1 , coeffs2 ,
 	    Nev, evList.data() , 
@@ -425,8 +437,8 @@ int main(int argc, char *argv[]) {
     //for( int NP = 1 ; NP < nmom ; NP*=2 ) { 
       StopWatch gpu ;
       gpu.start() ;
-      alamode(
-      //laphCurrentKernel(
+      //alamode(
+      laphMesonKernel(
 	      n1,n2, nmom, blockSizeMomProj,
 	      coeffs1 , coeffs2 ,
 	      Nev, evList.data() , 
