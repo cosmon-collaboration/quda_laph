@@ -423,12 +423,14 @@ int main(int argc, char *argv[]) {
 
     //alamode(
     laphMesonKernel(
-	    n1,n2, nmom, blockSizeMomProj,
+	    n1,n2,
 	    coeffs1 , coeffs2 ,
-	    Nev, evList.data() , 
+	    nmom,
 	    host_mom ,
+	    Nev, evList.data() , 
 	    inv_param ,
 	    GPU_ret ,
+	    blockSizeMomProj,
 	    X ) ;
 
     
@@ -439,13 +441,15 @@ int main(int argc, char *argv[]) {
       gpu.start() ;
       //alamode(
       laphMesonKernel(
-	      n1,n2, nmom, blockSizeMomProj,
-	      coeffs1 , coeffs2 ,
-	      Nev, evList.data() , 
-	      host_mom ,
-	      inv_param ,
-	      GPU_ret ,
-	      X ) ;
+		      n1,n2,
+		      coeffs1 , coeffs2 ,
+		      nmom,
+		      host_mom ,
+		      Nev, evList.data() , 
+		      inv_param ,
+		      GPU_ret ,
+		      blockSizeMomProj,
+		      X ) ;
       gpu.stop();
       GPUtime = gpu.getTimeInSeconds();
       printLaph(make_strf("\nGPU (NP%d) current kernel in = %g seconds\n", 1 , GPUtime)) ;

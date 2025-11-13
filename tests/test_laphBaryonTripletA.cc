@@ -568,7 +568,7 @@ int main(int argc, char *argv[]) {
   inv_param.solution_type = QUDA_MAT_SOLUTION;
   inv_param.solve_type = QUDA_DIRECT_SOLVE;
   inv_param.cpu_prec = QUDA_DOUBLE_PRECISION;
-  inv_param.cuda_prec = QUDA_SINGLE_PRECISION;
+  inv_param.cuda_prec = QUDA_DOUBLE_PRECISION;
   inv_param.dirac_order = QUDA_DIRAC_ORDER;
   inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
   inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
@@ -588,12 +588,12 @@ int main(int argc, char *argv[]) {
     //alamode(
     laphBaryonKernelComputeModeTripletA(
 					nmom,
-					Nev,
-					blockSizeMomProj,
-					evList.data() ,
 					host_mom ,
+					Nev,
+					evList.data() ,
 					inv_param,
 					retGPU,
+					blockSizeMomProj,
 					X ) ;
 
     
@@ -602,12 +602,12 @@ int main(int argc, char *argv[]) {
     //alamode(
     laphBaryonKernelComputeModeTripletA(
 					nmom,
-					Nev,
-					blockSizeMomProj,
-					evList.data() ,
 					host_mom ,
+					Nev,
+					evList.data() ,
 					inv_param,
 					retGPU,
+					blockSizeMomProj,
 					X ) ;
     gpu.stop() ;
     const double GPUtime = gpu.getTimeInSeconds() ;
@@ -623,7 +623,7 @@ int main(int argc, char *argv[]) {
   //cpu_codev3( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
   cpu.stop() ;
   const double CPUtime = cpu.getTimeInSeconds() ;
-  printLaph(make_strf("\nCPUv3 modetripletA in = %g seconds\n", CPUtime ));
+  printLaph(make_strf("\nCPU modetripletA in = %g seconds\n", CPUtime ));
   
   printf( "\n*************************************\n" ) ;
   printf( "-----> GPU speedup factor %gx\n" , CPUtime/GPUtime ) ;

@@ -339,14 +339,14 @@ int main(int argc, char *argv[]) {
 
     //alamode(
     laphMesonKernelComputeModeDoublet(
-	    nmom,
-	    host_mom,
-	    Nev,
-	    evList.data(),
-	    inv_param,
-	    GPU_ret,
-	    blockSizeMomProj,
-	    X ) ;
+				      nmom,
+				      host_mom,
+				      Nev,
+				      evList.data(),
+				      inv_param,
+				      GPU_ret,
+				      blockSizeMomProj,
+				      X ) ;
     
     // GPU version
     double GPUtime = 0 ;

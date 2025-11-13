@@ -28,11 +28,11 @@ void
 cpu_code( const int n1,
 	  const int n2,
 	  const int n3,
-	  const int nMom,
-	  const int nEv,
 	  const double _Complex *host_coeffs1,
 	  const double _Complex *host_coeffs2,
 	  const double _Complex *host_coeffs3,
+	  const int nMom,
+	  const int nEv,
 	  const double _Complex *host_mode_trip_buf,
 	  double _Complex *host_ret_arr )
 {
@@ -313,11 +313,11 @@ int main(int argc, char *argv[]) {
   //alamode
   laphBaryonKernelComputeModeTripletB
       ( n1, n2, n3,
-	nmom,
-	Nev ,
 	host_coeffs1 ,
 	host_coeffs2 ,
 	host_coeffs3 ,
+	nmom,
+	Nev ,
 	host_mode_trip_buf ,
 	host_ret_arr ) ;
   gpu.stop() ;
@@ -328,11 +328,11 @@ int main(int argc, char *argv[]) {
   cpu.start() ;
   double _Complex cpu_ret_arr[ nmom*n1*n2*n3 ] = {} ;
   cpu_code( n1, n2, n3,
-	    nmom,
-	    Nev ,
 	    host_coeffs1 ,
 	    host_coeffs2 ,
 	    host_coeffs3 ,
+	    nmom,
+	    Nev ,
 	    host_mode_trip_buf ,
 	    cpu_ret_arr ) ;
   cpu.stop() ;

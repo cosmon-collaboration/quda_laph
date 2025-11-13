@@ -24,6 +24,7 @@ using namespace quda ;
 //#define VERBOSE_COMPARISON
 //#define GPU_STRESS
 #define CPUCROSSCHECK
+//#define CPU_STRESS
 
 static inline void
 evprod( const double _Complex *coeffs ,
@@ -61,10 +62,11 @@ void diq( const double _Complex *q1 ,
   Diq[2] = +q1[0]*q2[1] - q1[1]*q2[0] ;
 }
 	
-void cpu_code( const int n1, const int n2, const int n3, const int nMom,
+void cpu_code( const int n1, const int n2, const int n3,
 	       const double _Complex *host_coeffs1, 
 	       const double _Complex *host_coeffs2, 
 	       const double _Complex *host_coeffs3,
+	       const int nMom,
 	       const double _Complex *host_mom, 
 	       const int nEv,
 	       const void *const *host_evec, 
@@ -106,14 +108,27 @@ void cpu_code( const int n1, const int n2, const int n3, const int nMom,
       }
     }
   }
-  free(q1) ;
-  free(q2) ;
-  free(q3) ;
+  free(q1) ; free(q2) ; free(q3) ;
 }
 
 // cpu color cross
 static void
 cpuColorCross( void *A , void *B , void *result , const int X[4] )
+{
+  const int Nsites = X[0]*X[1]*X[2]*X[3] ;
+  std::complex<double> *ptA = (std::complex<double>*)A ;
+  std::complex<double> *ptB = (std::complex<double>*)B ;
+  std::complex<double> *ptC = (std::complex<double>*)result ;
+  for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
+    ptC[ 3*i + 0 ] =  ptA[ 3*i + 1 ]*ptB[ 3*i + 2 ] - ptA[ 3*i + 2 ]*ptB[ 3*i + 1 ] ;
+    ptC[ 3*i + 1 ] = -ptA[ 3*i + 0 ]*ptB[ 3*i + 2 ] + ptA[ 3*i + 2 ]*ptB[ 3*i + 0 ] ;
+    ptC[ 3*i + 2 ] =  ptA[ 3*i + 0 ]*ptB[ 3*i + 1 ] - ptA[ 3*i + 1 ]*ptB[ 3*i + 0 ] ;
+  }
+}
+
+// cpu color cross
+static void
+cpuColorCrossPar( void *A , void *B , void *result , const int X[4] )
 {
   const int Nsites = X[0]*X[1]*X[2]*X[3] ;
   std::complex<double> *ptA = (std::complex<double>*)A ;
@@ -135,12 +150,16 @@ cpuColorContract( void *A , void *B , void *result , const int X[4] )
   const std::complex<double> *ptA = (const std::complex<double>*)A ;
   const std::complex<double> *ptB = (const std::complex<double>*)B ;
   std::complex<double> *ptC = (std::complex<double>*)result ;
-  #pragma omp parallel for
   for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
-    // simple inner product over color A_{c}B_{c}
+    #ifdef USE_OPENBLAS
+    ptC[i] = cblas_zdotu( 3 , ptA+3*i , 1 , ptB+3*i , 1 ) ;
+    #elif (defined USE_GSL_CBLAS)
+    cblas_zdotu( 3 , ptA+3*i , 1 , ptB+3*i , 1 , ptC+i ) ;
+    #else
     ptC[i]  = ptA[0+3*i]*(ptB[0+3*i]) ;
     ptC[i] += ptA[1+3*i]*(ptB[1+3*i]) ;
     ptC[i] += ptA[2+3*i]*(ptB[2+3*i]) ;
+    #endif    
   }
 }
 
@@ -159,7 +178,6 @@ cpuColorContractTh( void *A , void *B , void *result , const int X[4] )
     #elif (defined USE_GSL_CBLAS)
     cblas_zdotu( 3 , ptA+3*i , 1 , ptB+3*i , 1 , ptC+i ) ;
     #else
-    // simple inner product over color A_{c}B_{c}
     ptC[i]  = ptA[0+3*i]*(ptB[0+3*i]) ;
     ptC[i] += ptA[1+3*i]*(ptB[1+3*i]) ;
     ptC[i] += ptA[2+3*i]*(ptB[2+3*i]) ;
@@ -167,10 +185,11 @@ cpuColorContractTh( void *A , void *B , void *result , const int X[4] )
   }  
 }
 
-void cpu_code_v1( const int n1, const int n2, const int n3, const int nMom,
+void cpu_code_v1( const int n1, const int n2, const int n3,
 		  const double _Complex *host_coeffs1, 
 		  const double _Complex *host_coeffs2, 
 		  const double _Complex *host_coeffs3,
+		  const int nMom,
 		  const double _Complex *host_mom, 
 		  const int nEv,
 		  const void *const *host_evec, 
@@ -224,10 +243,11 @@ void cpu_code_v1( const int n1, const int n2, const int n3, const int nMom,
   free(q3) ;
 }  
 
-void cpu_code_v2( const int n1, const int n2, const int n3, const int nMom,
+void cpu_code_v2( const int n1, const int n2, const int n3,
 		  const double _Complex *host_coeffs1, 
 		  const double _Complex *host_coeffs2, 
 		  const double _Complex *host_coeffs3,
+		  const int nMom,
 		  const double _Complex *host_mom, 
 		  const int nEv,
 		  const void *const *host_evec, 
@@ -250,7 +270,7 @@ void cpu_code_v2( const int n1, const int n2, const int n3, const int nMom,
   LattField Diq( FieldSiteType::ColorVector);
   for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
     for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
-      cpuColorCross( (void*)&q1[dil1*nsites*3] , (void*)&q2[dil2*nsites*3] , (void*)Diq.getDataPtr() , X ) ;
+      cpuColorCrossPar( (void*)&q1[dil1*nsites*3] , (void*)&q2[dil2*nsites*3] , (void*)Diq.getDataPtr() , X ) ;
 
       for( int dil3 = 0 ; dil3 < n3 ; dil3++ ) {
 	// parallel region here
@@ -293,10 +313,11 @@ void cpu_code_v2( const int n1, const int n2, const int n3, const int nMom,
   free(q3) ;
 }  
 
-void cpu_code_v3( const int n1, const int n2, const int n3, const int nMom,
+void cpu_code_v3( const int n1, const int n2, const int n3,
 		  const double _Complex *host_coeffs1, 
 		  const double _Complex *host_coeffs2, 
 		  const double _Complex *host_coeffs3,
+		  const int nMom,
 		  const double _Complex *host_mom, 
 		  const int nEv,
 		  const void *const *host_evec, 
@@ -321,7 +342,7 @@ void cpu_code_v3( const int n1, const int n2, const int n3, const int nMom,
   
   for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
     for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
-      cpuColorCross( (void*)&q1[dil1*nsites*3] , (void*)&q2[dil2*nsites*3] , (void*)Diq.getDataPtr() , X ) ;
+      cpuColorCrossPar( (void*)&q1[dil1*nsites*3] , (void*)&q2[dil2*nsites*3] , (void*)Diq.getDataPtr() , X ) ;
 
       for( int dil3 = 0 ; dil3 < n3 ; dil3++ ) {
 	const size_t idx = dil3 + n3*(dil2 + n2*dil1) ;
@@ -619,7 +640,7 @@ int main(int argc, char *argv[]) {
   const int Nev = 256 , n1 = 64 , n2 = 64 , n3 = 64 ;
 #else
   //const int Nev = 32 , n1 = 8 , n2 = 8 , n3 = 8 ;
-  const int Nev = 256 , n1 = 64 , n2 = 64 , n3 = 64 ;
+  const int Nev = 64 , n1 = 32 , n2 = 32 , n3 = 32 ;
 #endif
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
   std::cout<<"Constant Eigvecs"<<std::endl ;
@@ -629,7 +650,7 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 64 ;
+  const int nmom = 32 ;
   const int X[4] = {
     LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
@@ -693,17 +714,17 @@ int main(int argc, char *argv[]) {
     laphBaryonKernel(
 		     //alamode2(
 		     n1,n2,n3,
-		      nmom,
-		      coeffs1 ,
-		      coeffs2 ,
-		      coeffs3 ,
-		      host_mom ,
-		      Nev ,
-		      evList.data(),
-		      inv_param ,
-		      retGPU,
-		      blockSizeMomProj,
-		      X ) ;
+		     coeffs1 ,
+		     coeffs2 ,
+		     coeffs3 ,
+		     nmom,
+		     host_mom ,
+		     Nev ,
+		     evList.data(),
+		     inv_param ,
+		     retGPU,
+		     blockSizeMomProj,
+		     X ) ;
     
     double GPUtime ;
     printf( "blockSizeMomProj %d\n" , blockSizeMomProj ) ;
@@ -713,17 +734,17 @@ int main(int argc, char *argv[]) {
       laphBaryonKernel(
 		       //alamode2( 
 		       n1,n2,n3,
-			nmom,
-			coeffs1 ,
-			coeffs2 ,
-			coeffs3 ,
-			host_mom ,
-			Nev ,
-			evList.data(),
-			inv_param ,
-			retGPU,
-		        blockSizeMomProj,
-			X ) ;
+		       coeffs1 ,
+		       coeffs2 ,
+		       coeffs3 ,
+		       nmom,
+		       host_mom ,
+		       Nev ,
+		       evList.data(),
+		       inv_param ,
+		       retGPU,
+		       blockSizeMomProj,
+		       X ) ;
       GPU.stop() ;
       GPUtime = GPU.getTimeInSeconds() ;
       printLaph(make_strf("\nGPU baryonkernel (%d) in = %g seconds\n", 1 , GPUtime )) ;
@@ -738,11 +759,11 @@ int main(int argc, char *argv[]) {
     memset( retCPU , 0 , X[3]*n1*n2*n3*nmom*sizeof(double _Complex) ) ;
     StopWatch CPU ;
     CPU.start() ;
-    cpu_code_v1( n1 , n2 , n3 ,
-		 nmom,
+    cpu_code_v3( n1 , n2 , n3 ,
 		 coeffs1, 
 		 coeffs2, 
 		 coeffs3,
+		 nmom,
 		 host_mom, 
 		 Nev,
 		 evList.data(),
@@ -751,17 +772,17 @@ int main(int argc, char *argv[]) {
 		 X ) ;
     CPU.stop() ;
     const double CPUtime = CPU.getTimeInSeconds() ;
-    printLaph(make_strf("\nCPUv1 baryonkernel in = %g seconds\n", CPUtime)) ;
+    printLaph(make_strf("\nCPUv3 baryonkernel in = %g seconds\n", CPUtime)) ;
   }
   {
     memset( retCPU , 0 , X[3]*n1*n2*n3*nmom*sizeof(double _Complex) ) ;
     StopWatch CPU ;
     CPU.start() ;
     cpu_code_v2( n1 , n2 , n3 ,
-		 nmom,
 		 coeffs1, 
 		 coeffs2, 
 		 coeffs3,
+		 nmom,
 		 host_mom, 
 		 Nev,
 		 evList.data(),
@@ -776,37 +797,37 @@ int main(int argc, char *argv[]) {
     memset( retCPU , 0 , X[3]*n1*n2*n3*nmom*sizeof(double _Complex) ) ;
     StopWatch CPU ;
     CPU.start() ;
-    cpu_code_v1( n1 , n2 , n3 ,
-		 nmom,
-		 coeffs1, 
-		 coeffs2, 
-		 coeffs3,
-		 host_mom, 
-		 Nev,
-		 evList.data(),
-		 retCPU,
-		 blockSizeMomProj,
-		 X ) ;
+    cpu_code( n1 , n2 , n3 ,
+	      coeffs1, 
+	      coeffs2, 
+	      coeffs3,
+	      nmom,
+	      host_mom, 
+	      Nev,
+	      evList.data(),
+	      retCPU,
+	      blockSizeMomProj,
+	      X ) ;
     CPU.stop() ;
     const double CPUtime = CPU.getTimeInSeconds() ;
-    printLaph(make_strf("\nCPUv3 baryonkernel in = %g seconds\n", CPUtime)) ;
+    printLaph(make_strf("\nCPU baryonkernel in = %g seconds\n", CPUtime)) ;
   }
   #endif
   
   memset( retCPU , 0 , X[3]*n1*n2*n3*nmom*sizeof(double _Complex) ) ;
   StopWatch CPU ;
   CPU.start() ;
-  cpu_code_v3( n1 , n2 , n3 ,
-	    nmom,
-	    coeffs1, 
-	    coeffs2, 
-	    coeffs3,
-	    host_mom, 
-	    Nev,
-	    evList.data(),
-	    retCPU,
-	    blockSizeMomProj,
-	    X ) ;
+  cpu_code_v1( n1 , n2 , n3 ,
+	       coeffs1, 
+	       coeffs2, 
+	       coeffs3,
+	       nmom,
+	       host_mom, 
+	       Nev,
+	       evList.data(),
+	       retCPU,
+	       blockSizeMomProj,
+	       X ) ;
   CPU.stop() ;
   const double CPUtime = CPU.getTimeInSeconds() ;
   printLaph(make_strf("\nCPU baryonkernel in = %g seconds\n", CPUtime)) ;
