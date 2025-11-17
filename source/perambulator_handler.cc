@@ -374,7 +374,7 @@ void PerambulatorHandler::setComputationSet(const XMLHandler& xmlin)
  if ((multisrc_reply=="YES")||(multisrc_reply=="Y")||(multisrc_reply=="Yes")||(multisrc_reply=="y")){
     multisrc_reply="yes";}
  if (multisrc_reply!="yes") multisrc_reply="no";
- uint nSinkLaphBatch,nSinkQudaBatch,nEigQudaBatch;
+ uint nSinkLaphBatch,nSinkQudaBatch,nEigQudaBatch,nSinkTimes;
  xmlread(xmlrd,"NumSinksBeforeProject",nSinkLaphBatch,"LAPH_PERAMBULATORS");
  xmlread(xmlrd,"NumSinksInProjectBatch",nSinkQudaBatch,"LAPH_PERAMBULATORS"); 
  xmlread(xmlrd,"NumEigsInProjectBatch",nEigQudaBatch,"LAPH_PERAMBULATORS");
@@ -395,10 +395,16 @@ void PerambulatorHandler::setComputationSet(const XMLHandler& xmlin)
 
  list<XMLHandler> xmlcs(xmlrd.find("Computation"));
  for (list<XMLHandler>::iterator it=xmlcs.begin();it!=xmlcs.end();++it){
-    int source_time;
+    int source_time, tmin, tmax;
     xmlread(*it,"SourceTime",source_time,"LAPH_PERAMBULATORS");
+    tmin=0; tmax=Textent-1;  
+		xmlreadif(*it,"SinkMinimumTime",tmin,"LAPH_PERAMBULATORS");
+		xmlreadif(*it,"SinkMaximumTime",tmax,"LAPH_PERAMBULATORS");
     if ((source_time<0)||(source_time>=int(Textent))){
        errorLaph(make_strf("Invalid source time %d",source_time));}
+		int nSinkTimes=tmax-tmin+1; 
+    if ((tmin<=(-Textent))||(tmax>=int(Textent))||(nSinkTimes<=0)||(nSinkTimes>Textent)){
+       errorLaph(make_strf("Invalid sink tmin and tmax (%d,%d)",tmin,tmax));}
     set<int> srcev_indices;
     if (xml_tag_count(*it,"SourceLaphEigvecIndices")==1){
        vector<int> srcev_inds;
@@ -423,7 +429,7 @@ void PerambulatorHandler::setComputationSet(const XMLHandler& xmlin)
     if (srcev_indices.empty()){
        errorLaph("Empty src laph eigvec indices set");}
     perambComps.computations.push_back(
-          PerambComputation(source_time,srcev_indices));}
+          PerambComputation(source_time,tmin,tmax,srcev_indices));}
 
  printLaph("\nLAPH_PERAMBULATORS sink computations:\n");
  printLaph(make_strf("  NumSinksBeforeProject = %d",perambComps.nSinkLaphBatch));
@@ -436,6 +442,8 @@ void PerambulatorHandler::setComputationSet(const XMLHandler& xmlin)
       it!=perambComps.computations.end();count++,it++){
     XMLHandler xmlout("Computation");
     xmlout.put_child("SourceTime",make_string(it->src_time));
+    xmlout.put_child("SinkMinimumTime",make_string(it->tmin));
+    xmlout.put_child("SinkMaximumTime",make_string(it->tmax));
     string srcevindstr;
     const set<int>& indices(it->src_lapheigvec_indices);
     set<int>::const_iterator vt=indices.begin();
@@ -736,7 +744,7 @@ void PerambulatorHandler::computePerambulators(bool extra_soln_check, bool print
     printLaph(" *");
     printLaph(" *************************************************************");
 
-    computePerambulators(it->src_time,it->src_lapheigvec_indices,evList,print_coeffs,extra_soln_check,
+    computePerambulators(it->src_time,it->tmin,it->tmax,it->src_lapheigvec_indices,evList,print_coeffs,extra_soln_check,
                          report_gflops,srctime,invtime,evprojtime,writetime,perambComps.useMultiSrcInverter);
     }
 
@@ -757,7 +765,7 @@ void PerambulatorHandler::computePerambulators(bool extra_soln_check, bool print
 }
 
 
-void PerambulatorHandler::computePerambulators(int src_time, const set<int>& src_evindices,
+void PerambulatorHandler::computePerambulators(int src_time, int tmin, int tmax, const set<int>& src_evindices,
                                                const std::vector<void*>& evList, bool print_coeffs,
                                                bool extra_soln_check, bool report_gflops, 
                                                double& makesrc_time, double& inv_time,
@@ -765,10 +773,10 @@ void PerambulatorHandler::computePerambulators(int src_time, const set<int>& src
                                                bool use_multisrc_inverter)
 {
  if (use_multisrc_inverter){
-    computePerambulatorsMS(src_time,src_evindices,evList,print_coeffs,extra_soln_check,report_gflops, 
+    computePerambulatorsMS(src_time,tmin,tmax,src_evindices,evList,print_coeffs,extra_soln_check,report_gflops, 
                            makesrc_time,inv_time,evproj_time,write_time); }
  else{
-    computePerambulatorsSS(src_time,src_evindices,evList,print_coeffs,extra_soln_check,report_gflops, 
+    computePerambulatorsSS(src_time,tmin,tmax,src_evindices,evList,print_coeffs,extra_soln_check,report_gflops, 
                            makesrc_time,inv_time,evproj_time,write_time); }
 }
 
@@ -777,7 +785,7 @@ void PerambulatorHandler::computePerambulators(int src_time, const set<int>& src
     //  of source laph-eigenvector dilution indices (all source spins) 
     // VERSION which uses multi-src (MS) inverter
 
-void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& src_evindices,
+void PerambulatorHandler::computePerambulatorsMS(int src_time, int tmin, int tmax, const set<int>& src_evindices,
                                                  const std::vector<void*>& evList, bool print_coeffs,
                                                  bool extra_soln_check, bool report_gflops, 
                                                  double& makesrc_time, double& inv_time,
@@ -1017,7 +1025,7 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, const set<int>& s
     //  of source laph-eigenvector dilution indices (all source spins) 
     //  VERSION which does not use multi-src inverter, but single src (SS)
 
-void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& src_evindices,
+void PerambulatorHandler::computePerambulatorsSS(int src_time, int tmin, int tmax, const set<int>& src_evindices,
                                                  const std::vector<void*>& evList, bool print_coeffs,
                                                  bool extra_soln_check, bool report_gflops, 
                                                  double& makesrc_time, double& inv_time,
@@ -1030,8 +1038,8 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
 
  int Textent = uPtr->getTimeExtent();
  int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
- int minTime=0;
- int maxTime=Textent-1;
+ int minTime=tmin;
+ int maxTime=tmax;
  uint nSinkLaphBatch=perambComps.nSinkLaphBatch;
  uint nSinkQudaBatch=perambComps.nSinkQudaBatch;
  uint nEigQudaBatch=perambComps.nEigQudaBatch;
@@ -1157,7 +1165,8 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
 						 throw logic_error("only implemented for double precision");
 					 size_t colvec_bytes=word_bytes*FieldNcolor;
 
-					 for (int t=minTime;t<=maxTime;t++){
+					 for (int tind=minTime;tind<=maxTime;tind++){
+						 int t = (tind+Textent)%Textent;
 						 const auto& local_offsets =
 							 (*sgHandler).getGrid().getLocalGridPoints(offsets[t],t);
 						 vector<dcmplx> all_spin_quark_sink(nColor*nGridPoints*Nspin,0.0);
@@ -1210,7 +1219,8 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, const set<int>& s
 			 // rearrange data then output to file
 			 bulova.reset(); bulova.start();
 			 for (int iSink=0; iSink<nSinks; ++iSink) {
-				 for (int t=minTime;t<=maxTime;t++){
+				 for (int tind=minTime;tind<=maxTime;tind++){
+					 int t = (tind+Textent)%Textent; 
 					 for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {  
 						 vector<dcmplx> quark_sink(nEigs);
 						 for (int iEv=0; iEv<nEigs; ++iEv) {
@@ -1538,11 +1548,17 @@ void PerambulatorHandler::setChecks(const XMLHandler& xmlin)
  XMLHandler xmlrd(xmlrdr,"CheckSet");
  list<XMLHandler> xmlcs(xmlrd.find("Check"));
  for (list<XMLHandler>::iterator it=xmlcs.begin();it!=xmlcs.end();++it){
-    int source_time;
+    int source_time,tmin,tmax;
     xmlread(*it,"SourceTime",source_time,"LAPH_CHECK_PERAMBULATORS");
-    if ((source_time<0)||(source_time>=int(Textent))){
+    tmin=0; tmax=Textent-1;  
+    xmlreadif(*it,"SinkMinimumTime",tmin,"LAPH_PERAMBULATORS");
+		xmlreadif(*it,"SinkMaximumTime",tmax,"LAPH_PERAMBULATORS");
+		if ((source_time<0)||(source_time>=int(Textent))){
        errorLaph(make_strf("Invalid source time %d",source_time));}
-    set<int> srcev_indices;
+		int nSinkTimes=tmax-tmin+1;
+		if ((tmin<=(-Textent))||(tmax>=int(Textent))||(nSinkTimes<=0)||(nSinkTimes>Textent)){
+			errorLaph(make_strf("Invalid sink tmin and tmax (%d,%d)",tmin,tmax));}
+		set<int> srcev_indices;
     if (xml_tag_count(*it,"SourceLaphEigvecIndices")==1){
        vector<int> srcev_inds;
        xmlread(*it,"SourceLaphEigvecIndices",srcev_inds,"LAPH_CHECK_PERAMBULATORS");
@@ -1565,7 +1581,7 @@ void PerambulatorHandler::setChecks(const XMLHandler& xmlin)
           srcev_indices.insert(ev);}}
     if (srcev_indices.empty()){
        errorLaph("Empty src laph eigvec indices set");}
-    perambComps.computations.push_back(PerambComputation(source_time,srcev_indices));}
+    perambComps.computations.push_back(PerambComputation(source_time,tmin,tmax,srcev_indices));}
 }
 
    

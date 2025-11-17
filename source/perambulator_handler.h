@@ -219,10 +219,10 @@ class PerambulatorHandler {
    };
 
 	 struct PerambComputation {
-      int src_time;
+      int src_time, tmin, tmax;
       std::set<int> src_lapheigvec_indices;
-      PerambComputation(int in_src_time, const std::set<int>& src_evinds)
-               : src_time(in_src_time), src_lapheigvec_indices(src_evinds) {}
+      PerambComputation(int in_src_time, int in_tmin, int in_tmax, const std::set<int>& src_evinds)
+               : src_time(in_src_time), tmin(in_tmin), tmax(in_tmax), src_lapheigvec_indices(src_evinds) {}
    };
 
    struct PerambComputations {
@@ -456,20 +456,20 @@ class PerambulatorHandler {
    void disconnectGaugeConfigurationHandler();
    void disconnectQuarkSmearingHandler();
 
-   void computePerambulators(int src_time, const std::set<int>& src_evindices,
+   void computePerambulators(int src_time, int tmin, int tmax, const std::set<int>& src_evindices,
                              const std::vector<void*>& evList, bool print_coeffs,
                              bool extra_soln_check, bool report_gflops, 
                              double& makesrc_time, double& inv_time,
                              double& evproj_time, double& write_time,
                              bool use_multisrc_inverter);
 
-   void computePerambulatorsMS(int src_time, const std::set<int>& src_evindices,
+   void computePerambulatorsMS(int src_time, int tmin, int tmax, const std::set<int>& src_evindices,
                                const std::vector<void*>& evList, bool print_coeffs,
                                bool extra_soln_check, bool report_gflops, 
                                double& makesrc_time, double& inv_time,
                                double& evproj_time, double& write_time);
 
-   void computePerambulatorsSS(int src_time, const std::set<int>& src_evindices,
+   void computePerambulatorsSS(int src_time, int tmin, int tmax, const std::set<int>& src_evindices,
                                const std::vector<void*>& evList, bool print_coeffs,
                                bool extra_soln_check, bool report_gflops, 
                                double& makesrc_time, double& inv_time,
