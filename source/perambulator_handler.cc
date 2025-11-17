@@ -938,7 +938,8 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, int tmin, int tma
 							 throw logic_error("only implemented for double precision"); 
 						 size_t colvec_bytes=word_bytes*FieldNcolor;  
 
-						 for (int t=minTime;t<=maxTime;t++){
+						 for (int tind=minTime;tind<=maxTime;tind++){
+							 int t = (tind+Textent)%Textent; 
 							 const auto& local_offsets =  
 								 (*sgHandler).getGrid().getLocalGridPoints(offsets[t],t);
 							 vector<dcmplx> all_spin_quark_sink(nColor*nGridPoints*Nspin,0.0);
@@ -992,7 +993,8 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, int tmin, int tma
 	       // rearrange data then output to file
 	       bulova.reset(); bulova.start();
 	       for (int iSink=0; iSink<nSinks; ++iSink) {
-		       for (int t=minTime;t<=maxTime;t++){
+		       for (int tind=minTime;tind<=maxTime;tind++){
+						 int t = (tind+Textent)%Textent; 
 			       for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
 				       vector<dcmplx> quark_sink(nEigs);
 				       for (int iEv=0; iEv<nEigs; ++iEv) {
@@ -1034,7 +1036,7 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, int tmin, int tma
  StopWatch bulova; bulova.start();
  printLaph("\nQuark perambulator computation for one source time,");
  printLaph(" one set of source eigvec indices beginning");
- printLaph(make_strf(" Source time = %d",src_time));
+ printLaph(make_strf(" Source time = %d, min = %d, max = %d",src_time,tmin,tmax));
 
  int Textent = uPtr->getTimeExtent();
  int nEigs = qSmearPtr->getNumberOfLaplacianEigenvectors();
