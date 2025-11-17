@@ -72,6 +72,10 @@ namespace LaphEnv {
 // *            <Computation>                                                              *
 // *               <SourceTime>8</SourceTime>                                              *
 // *               <SourceLaphEigvecIndices>12 17 23 24 25</SourceLaphEigvecIndices>       *
+// *               <SinkMinimumTime>-12</SinkMinimumTime>                                  *
+// *               <SinkMaximumTime>12</SinkMaximumTime>                                   * 
+// *             (optional: restrict the output of sink times. Need 0<tmax-tmin<=Text+1)   *
+// *             (loop is over tind in [tmin,tmax], but actual time is t=(tind+Text)%Text  *
 // *            </Computation>                                                             *
 // *            <Computation>                                                              *
 // *               <SourceTime>12</SourceTime>                                             *
