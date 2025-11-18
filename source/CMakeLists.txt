@@ -93,6 +93,8 @@ target_sources(quda_laph PRIVATE
     laph_eigen_info.cc
     laph_noise.cc
     laph_noise_info.cc
+    mode_doublet_info.cc
+    mode_triplet_info.cc
     laph_stdio.cc
     latt_field.cc
     layout_info.cc
