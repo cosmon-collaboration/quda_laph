@@ -73,12 +73,9 @@ cpu_code( const int nMom,
 	  double _Complex *return_arr,
 	  const int blockSizeMomProj,
 	  const int X[4])
-{
-  printf( "In this fucker\n" ) ;
-  
+{  
   // spatial only
   const size_t nSp   = X[0]*X[1]*X[2] ;
-
   // precompute index map
   size_t idx = 0 ;
   std::vector<std::vector<std::vector< size_t >>> mapEv(nEv) ;
@@ -95,8 +92,6 @@ cpu_code( const int nMom,
       }
     }
   }
-
-  printf( "In this fucker\n" ) ;
   
 #pragma omp parallel for collapse(2)
   for( int aEv = 0 ; aEv < nEv ; aEv++ ) {
@@ -373,7 +368,7 @@ int main(int argc, char *argv[]) {
 #ifdef GPU_STRESS
   const int Nev = 96 ;
 #else
-  const int Nev = 256 ;
+  const int Nev = 128 ;
 #endif
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
 
@@ -432,11 +427,11 @@ int main(int argc, char *argv[]) {
     std::cout<<"nmom "<<nmom<<" | block "<<blockSizeMomProj<<std::endl ;
     memset( retGPU , 0.0 , X[3]*nmom*nEvChoose3*sizeof( double _Complex )) ;
 #else
-    const int blockSizeMomProj = 512 ;
+    const int blockSizeMomProj = 4096 ;
 #endif
 
-    alamode(
-	    //laphBaryonKernelComputeModeTripletA(
+    //alamode(
+    laphBaryonKernelComputeModeTripletA(
 					nmom,
 					host_mom ,
 					Nev,
@@ -449,8 +444,8 @@ int main(int argc, char *argv[]) {
     
     StopWatch gpu ;
     gpu.start() ;
-    alamode(
-	    //laphBaryonKernelComputeModeTripletA(
+    //alamode(
+    laphBaryonKernelComputeModeTripletA(
 					nmom,
 					host_mom ,
 					Nev,

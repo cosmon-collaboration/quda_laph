@@ -59,9 +59,7 @@ static void cpu_code_v2( const int nMom,
 #pragma omp parallel for collapse(2)
   for( int dil1 = 0 ; dil1 < nEv ; dil1++ ) {
     for( int dil2 = 0 ; dil2 < nEv ; dil2++ ) {
-
       double _Complex *result = (double _Complex*)calloc( V , sizeof( double _Complex ) ) ;
-      
       cpuInner( host_evec , result , X , dil1 , dil2 ) ;
       for( int p = 0 ; p < nMom ; p++ ) {
 	double _Complex *pm = (double _Complex*)host_mom + Nsp*p ;
