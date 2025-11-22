@@ -31,17 +31,81 @@ evprod( const double _Complex *coeffs ,
 {
 #pragma omp for
   for( size_t i = 0 ; i < nsites ; i++ ) {
-    const double _Complex *pt2[nEv] ;
+    const double _Complex alpha = 1. , beta = 0. ;
+    double _Complex pt2[3][nEv] ;
     for( size_t ev = 0 ; ev < nEv ; ev++ ) {
-      pt2[ev] = (double _Complex*)host_evec[ev]+3*i ; 
+      double _Complex *pt = (double _Complex*)host_evec[ev]+3*i ;
+      pt2[0][ev] = *(pt+0) ;
+      pt2[1][ev] = *(pt+1) ;
+      pt2[2][ev] = *(pt+2) ;
     }
-    for( size_t dil = 0 ; dil < n ; dil++ ) {      
+    for( size_t dil = 0 ; dil < n ; dil++ ) {
+      double _Complex *pc = (double _Complex*)coeffs+dil*nEv ;
+      // unrolled color loop should be a matvec
+      #ifdef USE_OPENBLAS
+      // unrolled inner products turn out to be faster 
+      //cblas_zgemv( CblasRowMajor , CblasNoTrans , 3 , nEv , &alpha , &pt2[0][0] , nEv , pc , 1 , &beta , q+3*(i+nsites*dil) , 1 ) ;
+      q[0+3*(i+nsites*dil)] = cblas_zdotu( nEv , pt2[0] , 1 , pc , 1 ) ;
+      q[1+3*(i+nsites*dil)] = cblas_zdotu( nEv , pt2[1] , 1 , pc , 1 ) ;
+      q[2+3*(i+nsites*dil)] = cblas_zdotu( nEv , pt2[2] , 1 , pc , 1 ) ;
+      #elif (defined USE_GSL)
+      cblas_zdotu( nEv , pt2[0] , 1 , pc , 1 , q+0+3*(i+nsites*dil)  ) ;
+      cblas_zdotu( nEv , pt2[1] , 1 , pc , 1 , q+1+3*(i+nsites*dil) ) ;
+      cblas_zdotu( nEv , pt2[2] , 1 , pc , 1 , q+2+3*(i+nsites*dil) ) ;
+      #else
       for( size_t c = 0 ; c < 3 ; c++ ) {
 	double _Complex sum = 0.0 ;
 	for( size_t ev = 0 ; ev < nEv ; ev++ ) {	  
-	  sum += (*(pt2[ev]+c) ) * coeffs[ev+dil*nEv] ;
+	  sum += pt2[c][ev]*pc[ev] ;
 	}
 	q[c+3*(i+nsites*dil)] = sum ;
+      }
+      #endif
+    }
+  }
+}
+
+static inline void
+evprodv2( const std::vector<double _Complex *>coeffs ,
+	  const void *const *host_evec ,
+	  const std::vector<size_t> ndil ,
+	  const size_t nEv ,
+	  const size_t nsites ,
+	  std::vector<double _Complex *>q )
+{
+#pragma omp for
+  for( size_t i = 0 ; i < nsites ; i++ ) {
+    const double _Complex alpha = 1. , beta = 0. ;
+    double _Complex pt2[3][nEv] ;
+    for( size_t ev = 0 ; ev < nEv ; ev++ ) {
+      double _Complex *pt = (double _Complex*)host_evec[ev]+3*i ;
+      pt2[0][ev] = *(pt+0) ;
+      pt2[1][ev] = *(pt+1) ;
+      pt2[2][ev] = *(pt+2) ;
+    }
+    for( size_t nq = 0 ; nq < q.size() ; nq++ ) {
+      for( size_t dil = 0 ; dil < ndil[nq] ; dil++ ) {
+	double _Complex *pc = (double _Complex*)coeffs[nq]+dil*nEv ;
+	// unrolled color loop should be a matvec
+        #ifdef USE_OPENBLAS
+	// unrolled inner products turn out to be faster 
+	//cblas_zgemv( CblasRowMajor , CblasNoTrans , 3 , nEv , &alpha , &pt2[0][0] , nEv , pc , 1 , &beta , q+3*(i+nsites*dil) , 1 ) ;
+	q[nq][0+3*(i+nsites*dil)] = cblas_zdotu( nEv , pt2[0] , 1 , pc , 1 ) ;
+	q[nq][1+3*(i+nsites*dil)] = cblas_zdotu( nEv , pt2[1] , 1 , pc , 1 ) ;
+	q[nq][2+3*(i+nsites*dil)] = cblas_zdotu( nEv , pt2[2] , 1 , pc , 1 ) ;
+        #elif (defined USE_GSL)
+	cblas_zdotu( nEv , pt2[0] , 1 , pc , 1 , q[nq]+0+3*(i+nsites*dil)  ) ;
+	cblas_zdotu( nEv , pt2[1] , 1 , pc , 1 , q[n1]+1+3*(i+nsites*dil) ) ;
+	cblas_zdotu( nEv , pt2[2] , 1 , pc , 1 , q[nq]+2+3*(i+nsites*dil) ) ;
+        #else
+	for( size_t c = 0 ; c < 3 ; c++ ) {
+	  double _Complex sum = 0.0 ;
+	  for( size_t ev = 0 ; ev < nEv ; ev++ ) {	  
+	    sum += pt2[c][ev]*pc[ev] ;
+	  }
+	  q[nq][c+3*(i+nsites*dil)] = sum ;
+	}
+        #endif
       }
     }
   }
@@ -72,8 +136,8 @@ static void cpu_code_v2( const int n1,
 			 const int n2,
 			 const int nMom,
 			 const int blockSizeMomProj,
-			 const double _Complex *host_coeffs1, 
-			 const double _Complex *host_coeffs2,
+			 double _Complex *host_coeffs1, 
+			 double _Complex *host_coeffs2,
 			 const int nEv,
 			 const void *const *host_evec,
 			 const double _Complex *host_mom,
@@ -85,35 +149,38 @@ static void cpu_code_v2( const int n1,
   const size_t nsites = nSp*X[3] ;
   double _Complex *q1 = (double _Complex*)calloc( n1*nsites*3 , sizeof(double _Complex) ) ;
   double _Complex *q2 = (double _Complex*)calloc( n2*nsites*3 , sizeof(double _Complex) ) ;
+  std::vector<size_t> ndil  = { n1 , n2 } ;
+  std::vector<double _Complex*> coeffs = { host_coeffs1 , host_coeffs2 } ;
+  std::vector<double _Complex*> q = { q1 , q2 } ;
+  double _Complex *rt = (double _Complex*)return_array ;
 #pragma omp parallel
   {
-    evprod( host_coeffs1 , host_evec , n1 , nEv , nsites , q1 ) ;
-    evprod( host_coeffs2 , host_evec , n2 , nEv , nsites , q2 ) ;
-  }  
-  double _Complex *rt = (double _Complex*)return_array ;
-#pragma omp parallel for collapse(2)
-  for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
-    for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
-      double _Complex *result = (double _Complex*)calloc( nsites , sizeof( double _Complex ) ) ;
-      cpuInner( q2 + dil2*3*nsites , q1 + dil1*3*nsites , result , X ) ;
-      for( int p = 0 ; p < nMom ; p++ ) {
-	double _Complex *pm = (double _Complex*)host_mom + nSp*p ;
-	for( int t = 0 ; t < X[3] ; t++ ) {
-	  double _Complex *rs = (double _Complex*)result + nSp*t ;
-	  double _Complex sum = 0. ;
-          #ifdef USE_OPENBLAS
-          sum = cblas_zdotu( nSp , pm , 1 , rs , 1 ) ;
-          #elif (defined USE_GSL_CBLAS)
-          cblas_zdotu( nSp , pm , 1 , rs , 1 , &sum ) ;
-          #else
-	  for( size_t i = 0 ; i < (size_t)nSp ; i++ ) {
-	    sum += pm[i]*rs[i] ;
+    evprodv2( coeffs , host_evec , ndil , nEv , nsites , q ) ;
+
+    #pragma omp for collapse(2)
+    for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
+      for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
+	double _Complex *result = (double _Complex*)calloc( nsites , sizeof( double _Complex ) ) ;
+	cpuInner( q2 + dil2*3*nsites , q1 + dil1*3*nsites , result , X ) ;
+	for( int p = 0 ; p < nMom ; p++ ) {
+	  double _Complex *pm = (double _Complex*)host_mom + nSp*p ;
+	  for( int t = 0 ; t < X[3] ; t++ ) {
+	    double _Complex *rs = (double _Complex*)result + nSp*t ;
+	    double _Complex sum = 0. ;
+            #ifdef USE_OPENBLAS
+	    sum = cblas_zdotu( nSp , pm , 1 , rs , 1 ) ;
+            #elif (defined USE_GSL_CBLAS)
+	    cblas_zdotu( nSp , pm , 1 , rs , 1 , &sum ) ;
+            #else
+	    for( size_t i = 0 ; i < (size_t)nSp ; i++ ) {
+	      sum += pm[i]*rs[i] ;
+	    }
+            #endif
+	    rt[ t + X[3]*( p + nMom*( dil2 + n2*dil1 )) ] = sum ;
 	  }
-	  #endif
-	  rt[ t + X[3]*( p + nMom*( dil2 + n2*dil1 )) ] = sum ;
 	}
+	free( result ) ;
       }
-      free( result ) ;
     }
   }
   free( q1 ) ; free( q2 ) ;

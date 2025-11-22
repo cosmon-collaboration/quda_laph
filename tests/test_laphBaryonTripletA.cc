@@ -51,30 +51,7 @@ cpuColorContract( void *A , void *B , void *result , const int X[4] )
   const std::complex<double> *ptA = (const std::complex<double>*)A ;
   const std::complex<double> *ptB = (const std::complex<double>*)B ;
   std::complex<double> *ptC = (std::complex<double>*)result ;
-  //#pragma omp parallel for
   for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
-    #ifdef USE_OPENBLAS
-    ptC[i] = cblas_zdotu( 3 , ptA+3*i , 1 , ptB+3*i , 1 ) ;
-    #elif (defined USE_GSL_CBLAS)
-    cblas_zdotu( 3 , ptA+3*i , 1 , ptB+3*i , 1 , ptC+i ) ;
-    #else
-    ptC[i]  = ptA[0+3*i]*(ptB[0+3*i]) ;
-    ptC[i] += ptA[1+3*i]*(ptB[1+3*i]) ;
-    ptC[i] += ptA[2+3*i]*(ptB[2+3*i]) ;
-    #endif
-  }
-}
-
-// cpu color contract to be called within a parallel region
-static inline void
-cpuColorContractTh( void *A , void *B , void *result , const int X[4] )
-{
-  const int Nsites = X[0]*X[1]*X[2]*X[3] ;
-  const std::complex<double> *ptA = (const std::complex<double>*)A ;
-  const std::complex<double> *ptB = (const std::complex<double>*)B ;
-  std::complex<double> *ptC = (std::complex<double>*)result ;
-  #pragma omp for
-  for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) { 
     #ifdef USE_OPENBLAS
     ptC[i] = cblas_zdotu( 3 , ptA+3*i , 1 , ptB+3*i , 1 ) ;
     #elif (defined USE_GSL_CBLAS)
@@ -90,31 +67,37 @@ cpuColorContractTh( void *A , void *B , void *result , const int X[4] )
 // slow loopy version
 static void
 cpu_code( const int nMom,
-	  const int nEv,
-	  const int blockSizeMomProj,
-	  void **host_evec, 
 	  const double _Complex *host_mom,
+	  const int nEv,
+	  void **host_evec, 
 	  double _Complex *return_arr,
+	  const int blockSizeMomProj,
 	  const int X[4])
-{  
+{
+  printf( "In this fucker\n" ) ;
+  
   // spatial only
   const size_t nSp   = X[0]*X[1]*X[2] ;
-  const size_t nEvC3 = nEv*(nEv-1)*(nEv-2)/6 ;
 
   // precompute index map
   size_t idx = 0 ;
-  size_t mapEv[nEv][nEv][nEv] = {} ;
+  std::vector<std::vector<std::vector< size_t >>> mapEv(nEv) ;
   for( int aEv = 0 ; aEv < nEv ; aEv++ ) {
-    for( int bEv = aEv+1 ; bEv < nEv ; bEv++ ) {
-      for( int cEv = bEv+1 ; cEv < nEv ; cEv++ ) {
-	mapEv[aEv][bEv][cEv] = idx ; idx++ ;
+    mapEv[aEv].resize( nEv ) ;
+    for( int bEv = 0 ; bEv < nEv ; bEv++ ) {
+      mapEv[aEv][bEv].resize( nEv ) ;
+      for( int cEv = 0 ; cEv < nEv ; cEv++ ) {
+	if( cEv > bEv && bEv > aEv ) {
+	  mapEv[aEv][bEv][cEv] = idx ; idx++ ;
+	} else {
+	  mapEv[aEv][bEv][cEv] = 0 ;
+	}
       }
     }
   }
-  if( idx != nEvC3 ) {
-    printf( "Fuuuuucckk\n" ) ;
-  }
 
+  printf( "In this fucker\n" ) ;
+  
 #pragma omp parallel for collapse(2)
   for( int aEv = 0 ; aEv < nEv ; aEv++ ) {
     for( int bEv = aEv+1 ; bEv < nEv ; bEv++ ) {
@@ -143,7 +126,7 @@ cpu_code( const int nMom,
 	    }
 	    #endif
 	    const size_t midx = mapEv[aEv][bEv][cEv] ; 
-	    return_arr[ T+X[3]*(midx + nEvC3*p) ] = sum ;
+	    return_arr[ T + X[3]*( p + nMom*midx ) ] = sum ;
 	  }
 	}
       }
@@ -151,168 +134,32 @@ cpu_code( const int nMom,
   }
 }
 
-// slow loopy version
-static void
-cpu_codev2( const int nMom,
-	    const int nEv,
-	    const int blockSizeMomProj,
-	    void **host_evec, 
-	    const double _Complex *host_mom,
-	    double _Complex *return_arr,
-	    const int X[4])
-{  
-  // spatial only
-  const size_t nSp    = X[0]*X[1]*X[2] ;  
-  const size_t nEvC3 = nEv*(nEv-1)*(nEv-2)/6 ;
-  memset( return_arr , 0.0 , X[3]*nEvC3*nMom*sizeof( double _Complex ) ) ;
-  LattField Diq( FieldSiteType::ColorVector);
-  size_t idx = 0 ;
-  for( int aEv = 0 ; aEv < nEv ; aEv++ ) {
-    for( int bEv = aEv+1 ; bEv < nEv ; bEv++ ) {
-      cpuColorCross( host_evec[aEv] , host_evec[bEv] , (void*)Diq.getDataPtr() , X ) ;
-      for( int cEv = bEv+1 ; cEv < nEv ; cEv++ ) {
-
-	// inline contraction and momproj
-	double _Complex sum[nMom*X[3]] ;
-	memset( sum , 0 , nMom*X[3]*sizeof(double _Complex) ) ;
-	const double _Complex *ptA = (const double _Complex*)Diq.getDataPtr() ;
-	const double _Complex *ptB = (const double _Complex*)host_evec[cEv] ;
-
-	#pragma omp parallel
-	{
-	  const double _Complex *p2 = (const double _Complex*)host_mom  ;
-          #pragma omp for reduction(+:sum[:nMom*X[3]]) collapse(2)
-	  for( int T = 0 ; T < X[3] ; T++ ) {
-	    for( size_t i = 0 ; i < (size_t)nSp ; i++ ) {
-	      const size_t idx = i + T*nSp ;
-	      // is the color contraction
-	      const double _Complex Con = \
-		ptA[0+3*idx]*(ptB[0+3*idx]) +\
-		ptA[1+3*idx]*(ptB[1+3*idx]) +\
-		ptA[2+3*idx]*(ptB[2+3*idx]) ;
-	      for( int p = 0 ; p < nMom ; p++ ) {
-		sum[T+X[3]*p] += p2[i+p*nSp]*Con ;
-	      }
-	    }
-	  }
-	}
-	// copy back
-	for( int p = 0 ; p < nMom ; p++ ) {
-	  for( int T = 0 ; T < X[3] ; T++ ) {
-	    return_arr[ T + X[3]*(idx + nEvC3*p) ] = sum[T + X[3]*p] ;
-	  }
-	}
-	idx++ ;
-      }
-    }
-  }
-}
-
-// slow loopy version
-static void
-cpu_codev3( const int nMom,
-	    const int nEv,
-	    const int blockSizeMomProj,
-	    void **host_evec, 
-	    const double _Complex *host_mom,
-	    double _Complex *return_arr,
-	    const int X[4])
+static inline void
+hostreturn( const void *d_ret ,
+	    double _Complex *return_array ,
+	    const size_t size ,
+	    const int precision )
 {
-  // spatial only
-  const size_t nSp   = X[0]*X[1]*X[2] ;  
-  const size_t nEvC3 = nEv*(nEv-1)*(nEv-2)/6 ;
-  memset( return_arr , 0.0 , X[3]*nEvC3*nMom*sizeof( double _Complex ) ) ;
-  // loop over sites is far more efficient as we are only opening a parallel region once
-#pragma omp parallel for reduction(+:return_arr[:X[3]*nEvC3*nMom]) collapse(2)
-  for( int T = 0 ; T < X[3] ; T++ ) {
-    for( size_t i = 0 ; i < nSp ; i++ ) {
-      // precache these 
-      const double _Complex *pt[ nEv ] ;
-      for( int ev = 0 ; ev < nEv ; ev++ ) {
-	pt[ ev ] = (const double _Complex*)host_evec[ev] + 3*(i+T*nSp) ;
-      }
-      size_t idx = 0 ;
-      for( int aEv = 0 ; aEv < nEv ; aEv++ ) {
-	for( int bEv = aEv+1 ; bEv < nEv ; bEv++ ) {
-	  const double _Complex Diq[3] = {
-	    +pt[aEv][1]*pt[bEv][2] - pt[aEv][2]*pt[bEv][1] ,
-	    -pt[aEv][0]*pt[bEv][2] + pt[aEv][2]*pt[bEv][0] ,	  
-	    +pt[aEv][0]*pt[bEv][1] - pt[aEv][1]*pt[bEv][0] } ;
-	  for( int cEv = bEv+1 ; cEv < nEv ; cEv++ ) {
-	    const double _Complex *p2 = (const double _Complex*)host_mom+i ;
-	    // color contraction
-	    const double _Complex Con = Diq[0]*(pt[cEv][0])+Diq[1]*(pt[cEv][1])+Diq[2]*(pt[cEv][2]) ;
-	    for( int p = 0 ; p < nMom ; p++ ) {
-	      return_arr[T+X[3]*(idx+nEvC3*p)] += p2[p*nSp]*Con ;
-	    }
-	    idx++ ;
-	  }
-	}
-      }
+  if( precision == QUDA_SINGLE_PRECISION ) {
+    float _Complex *tmp = (float _Complex*)calloc( size , sizeof( float _Complex ) ) ;
+    qudaMemcpy(tmp, d_ret, size*2*precision, qudaMemcpyDeviceToHost);
+    for( size_t i = 0 ; i < size ; i++ ) {
+      return_array[i] = (double _Complex)tmp[i] ;
     }
+    free( tmp ) ;
+  } else {
+    qudaMemcpy(return_array, d_ret, size*2*precision, qudaMemcpyDeviceToHost);  
   }
 }
-
-// slow loopy version
-static void
-cpu_codev4( const int nMom,
-	    const int nEv,
-	    const int blockSizeMomProj,
-	    void **host_evec, 
-	    const double _Complex *host_mom,
-	    double _Complex *return_arr,
-	    const int X[4])
-{  
-  // spatial only
-  const size_t nSp    = X[0]*X[1]*X[2] ;  
-  const size_t nEvC3 = nEv*(nEv-1)*(nEv-2)/6 ;
-  memset( return_arr , 0.0 , X[3]*nEvC3*nMom*sizeof( double _Complex ) ) ;
-
-  LattField Diq( FieldSiteType::ColorVector);
-  LattField tmp( FieldSiteType::Complex);
-
-  size_t idx = 0 ;
-  for( int aEv = 0 ; aEv < nEv ; aEv++ ) {
-    for( int bEv = aEv+1 ; bEv < nEv ; bEv++ ) {
-      cpuColorCross( host_evec[aEv] , host_evec[bEv] , (void*)Diq.getDataPtr() , X ) ;
-      for( int cEv = bEv+1 ; cEv < nEv ; cEv++ ) {
-	#pragma omp parallel
-	{
-	  cpuColorContractTh( (void*)Diq.getDataPtr() , host_evec[cEv] , (void*)tmp.getDataPtr() , X ) ;
-          #pragma omp for collapse(2)
-          for( int p = 0 ; p < nMom ; p++ ) {
-            for( int T = 0 ; T < X[3] ; T++ ) {
-              const double _Complex *p2 = (const double _Complex*)host_mom+p*nSp ;
-              const double _Complex *con = (const double _Complex*)tmp.getDataPtr()+T*nSp ;
-              double _Complex psum = 0. ;
-              #ifdef USE_OPENBLAS
-              psum = cblas_zdotu( nSp , p2 , 1 , con , 1 ) ;
-              #elif (defined USE_GSL_CBLAS)
-              cblas_zdotu( nSp , p2 , 1 , con , 1 , &psum ) ;
-              #else
-              for( size_t i = 0 ; i < (size_t)nSp ; i++ ) {
-                psum += p2[i]*con[i] ;
-              }
-              #endif
-              return_arr[ T + X[3]*(idx + nEvC3*p) ] = psum ;
-            }
-          }
-	}
-	idx++ ;
-      }
-    }
-  }
-}
-
 
 // so I tied an onion to my belt, which was the style at the time
 void alamode( const int nMom,
-	      const int nEv,
-	      const int blockSizeMomProj,
-	      void **host_evec, 
 	      const double _Complex *host_mom,
+	      const int nEv,
+	      void **host_evec, 
 	      QudaInvertParam inv_param,
 	      double _Complex *return_arr,
+	      const int blockSizeMomProj,
 	      const int X[4])
 {
   //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_TOTAL);
@@ -361,7 +208,7 @@ void alamode( const int nMom,
   
   // Device side temp array (complBuf in chroma_laph)
   const size_t data_tmp_bytes = blockSizeMomProj*nSites*2*precision;
-  const size_t data_ret_bytes = nEvChoose3*nMom*X[3]*2*precision;
+  const size_t data_ret_bytes = blockSizeMomProj*nMom*X[3]*2*precision;
   const size_t data_mom_bytes = nMom*nSp*2*precision;
   void *d_tmp = pool_device_malloc(data_tmp_bytes);
   void *d_ret = pool_device_malloc(data_ret_bytes);
@@ -394,14 +241,14 @@ void alamode( const int nMom,
   cublas_param_mom_sum.trans_a = QUDA_BLAS_OP_N;
   cublas_param_mom_sum.trans_b = QUDA_BLAS_OP_T;
   cublas_param_mom_sum.m = nMom ;
-  cublas_param_mom_sum.k = nSp ;
   cublas_param_mom_sum.n = X[3] ;
+  cublas_param_mom_sum.k = nSp ;
   cublas_param_mom_sum.lda = nSp ;
   cublas_param_mom_sum.ldb = nSp ;
-  cublas_param_mom_sum.ldc = X[3]*nEvChoose3;
+  cublas_param_mom_sum.ldc = X[3] ;
   cublas_param_mom_sum.a_stride = 0 ;
   cublas_param_mom_sum.b_stride = nSites ;
-  cublas_param_mom_sum.c_stride = X[3] ;
+  cublas_param_mom_sum.c_stride = X[3]*nMom ;
   cublas_param_mom_sum.batch_count = blockSizeMomProj;
   cublas_param_mom_sum.alpha = 1. ; cublas_param_mom_sum.beta = 0. ;
   cublas_param_mom_sum.data_order = QUDA_BLAS_DATAORDER_ROW;
@@ -425,9 +272,13 @@ void alamode( const int nMom,
 	if (nInBlock == blockSizeMomProj) {
 	  //getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);  
 	  blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp,
-						(char*)d_ret+X[3]*blockStart*2*precision,
+						(char*)d_ret, //+X[3]*nMom*blockStart*2*precision,
 						cublas_param_mom_sum,
 						QUDA_CUDA_FIELD_LOCATION);
+	  //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_D2H);
+	  hostreturn( d_ret , return_arr + X[3]*nMom*blockStart ,
+		      (size_t)nInBlock*X[3]*nMom , precision ) ;
+	  //getProfileBaryonKernelModeTripletsA().TPSTOP(QUDA_PROFILE_D2H);
 	  //getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);
 	  blockStart += nInBlock;
 	  nInBlock = 0;
@@ -438,25 +289,24 @@ void alamode( const int nMom,
   // overspill, code is more efficient if you avoid this
   if( nInBlock > 0 ) {
     cublas_param_mom_sum.batch_count = nInBlock;
+    //    cublas_param_mom_sum.ldc = X[3]*nInBlock ;
     blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp,
-					  (char*)d_ret+X[3]*blockStart*2*precision,
+					  (char*)d_ret,//+X[3]*nMom*blockStart*2*precision,
 					  cublas_param_mom_sum,
 					  QUDA_CUDA_FIELD_LOCATION);
+    hostreturn( d_ret , return_arr + X[3]*nMom*blockStart ,
+		(size_t)nInBlock*X[3]*nMom , precision ) ;
+
+    /*
+    */
   }
+
+  //hostreturn( d_ret , return_arr , (size_t)nEvChoose3*(size_t)(X[3]*nMom) , precision ) ;
+
 
   // Copy return array back to host
   //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_TOTAL); 
   //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_D2H);
-  if( precision == QUDA_SINGLE_PRECISION ) {
-    float _Complex *tmp = (float _Complex*)calloc( nEvChoose3*nMom*X[3] , sizeof( float _Complex ) ) ;
-    qudaMemcpy(tmp, d_ret, data_ret_bytes, qudaMemcpyDeviceToHost);
-    for( size_t i = 0 ; i < nEvChoose3*nMom*X[3] ; i++ ) {
-      return_arr[i] = (double _Complex)tmp[i] ;
-    }
-    free( tmp ) ;
-  } else {
-    qudaMemcpy(return_arr, d_ret, data_ret_bytes, qudaMemcpyDeviceToHost);  
-  }
   //getProfileBaryonKernelModeTripletsA().TPSTOP(QUDA_PROFILE_D2H);
   
   // Clean up memory allocations
@@ -523,7 +373,7 @@ int main(int argc, char *argv[]) {
 #ifdef GPU_STRESS
   const int Nev = 96 ;
 #else
-  const int Nev = 64 ;
+  const int Nev = 256 ;
 #endif
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
 
@@ -535,7 +385,7 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 40 ;
+  const int nmom = 32 ;
   const int X[4] = {
     LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
@@ -568,13 +418,13 @@ int main(int argc, char *argv[]) {
   inv_param.solution_type = QUDA_MAT_SOLUTION;
   inv_param.solve_type = QUDA_DIRECT_SOLVE;
   inv_param.cpu_prec = QUDA_DOUBLE_PRECISION;
-  inv_param.cuda_prec = QUDA_DOUBLE_PRECISION;
+  inv_param.cuda_prec = QUDA_SINGLE_PRECISION;
   inv_param.dirac_order = QUDA_DIRAC_ORDER;
   inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
   inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
   inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
 
-  const size_t nEvChoose3 = Nev*(Nev-1)*(Nev-2)/6;
+  const size_t nEvChoose3 = Nev*(size_t)(Nev-1)*(Nev-2)/6;
   double _Complex *retGPU = (double _Complex*)calloc( X[3]*nmom*nEvChoose3 , sizeof( double _Complex  ) );
 
 #ifdef GPU_STRESS
@@ -582,11 +432,11 @@ int main(int argc, char *argv[]) {
     std::cout<<"nmom "<<nmom<<" | block "<<blockSizeMomProj<<std::endl ;
     memset( retGPU , 0.0 , X[3]*nmom*nEvChoose3*sizeof( double _Complex )) ;
 #else
-    const int blockSizeMomProj = 256 ;
+    const int blockSizeMomProj = 512 ;
 #endif
 
-    //alamode(
-    laphBaryonKernelComputeModeTripletA(
+    alamode(
+	    //laphBaryonKernelComputeModeTripletA(
 					nmom,
 					host_mom ,
 					Nev,
@@ -599,8 +449,8 @@ int main(int argc, char *argv[]) {
     
     StopWatch gpu ;
     gpu.start() ;
-    //alamode(
-    laphBaryonKernelComputeModeTripletA(
+    alamode(
+	    //laphBaryonKernelComputeModeTripletA(
 					nmom,
 					host_mom ,
 					Nev,
@@ -615,12 +465,12 @@ int main(int argc, char *argv[]) {
 #ifdef GPU_STRESS
   }
 #elif (defined CPUCROSSCHECK)
-  double _Complex *retCPU = (double _Complex*)calloc( X[3]*nmom*nEvChoose3 , sizeof( double _Complex  ) );
+  double _Complex *retCPU = (double _Complex*)calloc( X[3]*nmom*(size_t)nEvChoose3 , sizeof( double _Complex  ) );
   StopWatch cpu ;
+
+  printf( "Alloc retCPU %e GB\n" , X[3]*nmom*(size_t)nEvChoose3/(1024*1024*1024.) ) ;
   cpu.start() ;
-  //cpu_code( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
-  cpu_code( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
-  //cpu_codev3( nmom, Nev, blockSizeMomProj, evList.data() , host_mom, retCPU, X ) ;
+  cpu_code( nmom, host_mom , Nev, evList.data(), retCPU, blockSizeMomProj , X ) ;
   cpu.stop() ;
   const double CPUtime = cpu.getTimeInSeconds() ;
   printLaph(make_strf("\nCPU modetripletA in = %g seconds\n", CPUtime ));
