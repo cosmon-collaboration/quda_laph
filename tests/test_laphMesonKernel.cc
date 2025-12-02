@@ -248,15 +248,15 @@ apply_noises( const std::vector<ColorSpinorField> &evec ,
 // new GPU interface with better behaviour
 static void alamode( const int n1,
 		     const int n2,
-		     const int nMom,
-		     const int blockSizeMomProj,
 		     const double _Complex *host_coeffs1, 
 		     const double _Complex *host_coeffs2,
+		     const int nMom,
+		     const double _Complex *host_mom,
 		     const int nEv,
 		     void **host_evec,
-		     const double _Complex *host_mom,
 		     QudaInvertParam inv_param,
 		     double _Complex *return_array,
+		     const int blockSizeMomProj,
 		     const int X[4])
 {
   //getProfileCurrentKernel().TPSTART(QUDA_PROFILE_TOTAL);
@@ -277,6 +277,7 @@ static void alamode( const int n1,
   const size_t nSp = X[0]*X[1]*X[2];
   const size_t nSites = nSp*X[3];
   const lat_dim_t x = { X[0] , X[1] , X[2] , X[3] } ;
+  const int nRHS = 16 ;
   ColorSpinorParam cpu_evec_param(host_evec, inv_param, x, false, QUDA_CPU_FIELD_LOCATION);
   cpu_evec_param.nSpin = 1;
   std::vector<ColorSpinorField> evec(nEv) ;
@@ -303,7 +304,7 @@ static void alamode( const int n1,
   }
   // Device array to hold the entire return array
   const size_t data_ret_bytes = nMom*X[3]*n1*n2*2*precision;
-  const size_t data_tmp_bytes = nSites*blockSizeMomProj*2*precision;
+  const size_t data_tmp_bytes = std::max( nRHS , blockSizeMomProj )*nSites*2*precision;
   const size_t data_mom_bytes = nMom*nSp*2*precision;
   void *d_ret = pool_device_malloc(data_ret_bytes);
   void *d_tmp = pool_device_malloc(data_tmp_bytes);
@@ -337,16 +338,19 @@ static void alamode( const int n1,
   // so we could do a conjugated GEMM on the lower diagonal for the mom proj - TODO
   int nInBlock = 0 , blockStart = 0 ;
   for (int dil1=0; dil1<n1; dil1++) {
-    for (int dil2=0; dil2<n2; dil2++){
+    int dil2 = 0 ;
+    while( dil2 < n2 ) { 
       //getProfileCurrentKernel().TPSTART(QUDA_PROFILE_COMPUTE);
-      innerProductQuda( quda_q[0][dil1], quda_q[1][dil2], (char*)d_tmp+nSites*nInBlock*2*precision );
+      const int blk = std::min( std::min( n2 - dil2 , nRHS ) , blockSizeMomProj-nInBlock ) ;
+      innerProductQudaV( quda_q[0][dil1], { quda_q[1].begin() + dil2 , quda_q[1].begin()+dil2+blk},
+			 (char*)d_tmp+nSites*nInBlock*2*precision );
       //getProfileCurrentKernel().TPSTOP(QUDA_PROFILE_COMPUTE);
-      nInBlock++ ;
+      nInBlock+=blk ; dil2+=blk ;
       if( nInBlock == blockSizeMomProj ) {
 	//getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);
 	blas_lapack::native::stridedBatchGEMM( d_mom, d_tmp, (char*)d_ret+blockStart*X[3]*nMom*2*precision,
 					       cublas_param_mom_sum, QUDA_CUDA_FIELD_LOCATION);
-	blockStart += nInBlock ;
+	blockStart += blockSizeMomProj ;
 	nInBlock = 0 ;
 	//getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);
       }
@@ -421,7 +425,7 @@ int main(int argc, char *argv[]) {
 #ifdef GPU_STRESS
   const int Nev = 512 , n1 = 288 , n2 = 288 ;
 #else
-  const int Nev = 256 , n1 = 64 , n2 = 64 ;
+  const int Nev = 128 , n1 = 32 , n2 = 32 ;
 #endif
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
   set_constant( laphEigvecs ) ;
@@ -431,7 +435,7 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 32 ;
+  const int nmom = 16 ;
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
@@ -488,8 +492,8 @@ int main(int argc, char *argv[]) {
     const int blockSizeMomProj = 256 ;
 #endif
 
-    //alamode(
-    laphMesonKernel(
+    alamode(
+	    //laphMesonKernel(
 	    n1,n2,
 	    coeffs1 , coeffs2 ,
 	    nmom,
@@ -506,8 +510,8 @@ int main(int argc, char *argv[]) {
     //for( int NP = 1 ; NP < nmom ; NP*=2 ) { 
       StopWatch gpu ;
       gpu.start() ;
-      //alamode(
-      laphMesonKernel(
+      alamode(
+	      //laphMesonKernel(
 		      n1,n2,
 		      coeffs1 , coeffs2 ,
 		      nmom,

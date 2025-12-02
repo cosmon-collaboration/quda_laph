@@ -96,13 +96,14 @@ gpuColorCross( void **host_evec , void *result , const int nEv , const int X[4] 
   cpu_res_param.v = result ; // point to the result
   ColorSpinorField res(cpu_res_param) ;
   ColorSpinorParam cuda_res_param(cpu_res_param, inv_param, QUDA_CUDA_FIELD_LOCATION);
-  ColorSpinorField Diq(cuda_res_param);
- 
-  // just cross 0 with 1 for now
-  colorCrossQuda( quda_evec[0] , quda_evec[1] , Diq ) ;
+  std::vector< ColorSpinorField > Diq(1) ;
+  Diq[0] = ColorSpinorField( cuda_res_param ) ;
 
-  // download the evecs
-  res = Diq ;
+  // just cross 0 with 1 for now
+  colorCrossQudaV( quda_evec[0] , { quda_evec.begin() + 1 , quda_evec.begin() + 2 } , Diq ) ;
+
+  // download
+  res = Diq[0] ;
 }
 
 static void

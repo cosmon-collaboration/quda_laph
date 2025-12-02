@@ -18,7 +18,6 @@
 using namespace LaphEnv ;
 using namespace quda ;
 
-// ok so Dean's code wanted #2 to be daggered already instead of doing the inner product, weird and perhaps wrong ...
 static void
 cpuColorContract( void **host_evec , void *result , const int nEv , const int X[4] , const int A , const int B , const int N )
 {
@@ -81,7 +80,7 @@ gpuColorContract( void **host_evec , void *result , const int nEv , const int X[
   
   // just cross 0 with 1 for now
   for( int i = 0 ; i < N ; i++ ) {
-    colorContractQuda( quda_evec[0] , quda_evec[1] , d_tmp ) ;
+    colorContractQudaV( quda_evec[0] , { quda_evec.begin() + 1 , quda_evec.begin() + 2 } , d_tmp ) ;
   }
   
   qudaMemcpy(result,d_tmp,dbytes,qudaMemcpyDeviceToHost) ;

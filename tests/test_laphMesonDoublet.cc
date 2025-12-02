@@ -148,6 +148,7 @@ static void alamode( const int nMom,
   const size_t nSp = X[0]*X[1]*X[2];
   const size_t nSites = nSp*X[3];
   const lat_dim_t x = { X[0] , X[1] , X[2] , X[3] } ;
+  const int nRHS = 16 ;
   // Create device vectors for quarks
   ColorSpinorParam cpu_quark_param(host_evec, inv_param, x, false, QUDA_CPU_FIELD_LOCATION);
   cpu_quark_param.nSpin = 1;
@@ -160,7 +161,9 @@ static void alamode( const int nMom,
   cuda_quark_param.setPrecision(inv_param.cuda_prec, inv_param.cuda_prec, true);
   // Device array to hold the entire return array
   const size_t data_ret_bytes = nMom*X[3]*nEv*nEv*2*precision;
-  const size_t data_tmp_bytes = nSites*blockSizeMomProj*2*precision;
+
+  // whichever is bigger 
+  const size_t data_tmp_bytes = std::max( nRHS , blockSizeMomProj )*nSites*2*precision ;
   const size_t data_mom_bytes = nMom*nSp*2*precision;
   void *d_ret = pool_device_malloc(data_ret_bytes);
   void *d_tmp = pool_device_malloc(data_tmp_bytes);
@@ -195,16 +198,19 @@ static void alamode( const int nMom,
   //getProfileCurrentKernel().TPSTOP(QUDA_PROFILE_H2D);
   int nInBlock = 0 , blockStart = 0 ;
   for (int dil1=0; dil1<nEv; dil1++) {
-    for (int dil2=0; dil2<nEv; dil2++){
+    int dil2 = 0 ;
+    while( dil2 < nEv ) {
+      const int blk = std::min( std::min( nEv - dil2 , nRHS ) , blockSizeMomProj - nInBlock ) ;
       //getProfileCurrentKernel().TPSTART(QUDA_PROFILE_COMPUTE);
-      innerProductQuda( quda_quark[dil1], quda_quark[dil2], (char*)d_tmp+nSites*nInBlock*2*precision );
+      innerProductQudaV( quda_quark[dil1], { quda_quark.begin()+dil2 , quda_quark.begin()+dil2+blk } ,
+					   (char*)d_tmp+nSites*nInBlock*2*precision );
+      nInBlock += blk ; dil2 += blk ;
       //getProfileCurrentKernel().TPSTOP(QUDA_PROFILE_COMPUTE);
-      nInBlock++ ;
       if( nInBlock == blockSizeMomProj ) {
 	//getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);
 	blas_lapack::native::stridedBatchGEMM( d_mom, d_tmp, (char*)d_ret+blockStart*X[3]*nMom*2*precision,
 					       cublas_param_mom_sum, QUDA_CUDA_FIELD_LOCATION);
-	blockStart += nInBlock ;
+	blockStart += blockSizeMomProj ;
 	nInBlock = 0 ;
 	//getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);
       }
@@ -276,25 +282,24 @@ int main(int argc, char *argv[]) {
   
   // call rephase here
 #ifdef GPU_STRESS
-  const int Nev = 512 , n1 = 288 , n2 = 288 ;
+  const int nEv = 512 ;
 #else
-  const int Nev = 64 , n1 = 64 , n2 = 64 ;
+  const int nEv = 32 ; 
 #endif
-  std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
+  std::vector<LattField> laphEigvecs( nEv, FieldSiteType::ColorVector);
   set_constant( laphEigvecs ) ;
 
-  std::vector<void*> evList( Nev ) ;
-  for( int i = 0 ; i < Nev ; i++ ) {
+  std::vector<void*> evList( nEv ) ;
+  for( int i = 0 ; i < nEv ; i++ ) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 128 ;
+  const int nmom = 16 ;
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
     LayoutInfo::getRankLattExtents()[3] } ;
   const int nspat  = X[0]*X[1]*X[2] ;
-  std::cout<<"n1,n2 "<< n1 << "," << n2 << " | nmom" << nmom << std::endl ;
   
   // host_mom should be complex
   double _Complex *host_mom = (double _Complex*)calloc( nmom*nspat , sizeof(double _Complex) ) ;
@@ -314,14 +319,14 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  double _Complex *GPU_ret = (double _Complex*)calloc(n1*n2*nmom*X[3],sizeof(double _Complex)) ;
+  double _Complex *GPU_ret = (double _Complex*)calloc(nEv*nEv*nmom*X[3],sizeof(double _Complex)) ;
 
   QudaInvertParam inv_param = newQudaInvertParam();
   inv_param.dslash_type = QUDA_WILSON_DSLASH;
   inv_param.solution_type = QUDA_MAT_SOLUTION;
   inv_param.solve_type = QUDA_DIRECT_SOLVE;
   inv_param.cpu_prec = QUDA_DOUBLE_PRECISION;
-  inv_param.cuda_prec = QUDA_DOUBLE_PRECISION;
+  inv_param.cuda_prec = QUDA_SINGLE_PRECISION;
   inv_param.dirac_order = QUDA_DIRAC_ORDER;
   inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
   inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
@@ -330,16 +335,16 @@ int main(int argc, char *argv[]) {
 #ifdef GPU_STRESS
   for( int blockSizeMomProj = 2 ; blockSizeMomProj < 8192 ; blockSizeMomProj *= 2 ) {
     std::cout<< "block " << blockSizeMomProj << std::endl ;
-    memset( GPU_ret , 0.0 , n1*n2*nmom*X[3]*sizeof(double _Complex));
+    memset( GPU_ret , 0.0 , nEv*nEv*nmom*X[3]*sizeof(double _Complex));
 #else
-    const int blockSizeMomProj = 512 ;
+    const int blockSizeMomProj = 9 ;
 #endif
 
-    //alamode(
-    laphMesonKernelComputeModeDoublet(
+    alamode(
+	    //laphMesonKernelComputeModeDoublet(
 				      nmom,
 				      host_mom,
-				      Nev,
+				      nEv,
 				      evList.data(),
 				      inv_param,
 				      GPU_ret,
@@ -351,11 +356,11 @@ int main(int argc, char *argv[]) {
     //for( int NP = 1 ; NP < nmom ; NP*=2 ) { 
       StopWatch gpu ;
       gpu.start() ;
-      //alamode(
-      laphMesonKernelComputeModeDoublet(
+      alamode(
+	      //laphMesonKernelComputeModeDoublet(
 	    nmom,
 	    host_mom,
-	    Nev,
+	    nEv,
 	    evList.data(),
 	    inv_param,
 	    GPU_ret,
@@ -369,7 +374,7 @@ int main(int argc, char *argv[]) {
 #ifdef GPU_STRESS
   }
 #else
-  double _Complex *CPU_ret = (double _Complex*)calloc(n1*n2*nmom*X[3],sizeof(double _Complex)) ;
+  double _Complex *CPU_ret = (double _Complex*)calloc(nEv*nEv*nmom*X[3],sizeof(double _Complex)) ;
   // CPU version
   double CPUtime = 0. ;
   //for( int NP = 1 ; NP <= nmom ; NP*=2 ) { 
@@ -378,7 +383,7 @@ int main(int argc, char *argv[]) {
     cpu_code_v2(
 	    nmom,
 	    host_mom,
-	    Nev,
+	    nEv,
 	    evList.data(),
 	    inv_param,
 	    CPU_ret,
@@ -393,8 +398,8 @@ int main(int argc, char *argv[]) {
   printf( "*************************************\n\n" ) ;
   for( int p = 0 ; p < nmom ; p++ ) {
     double sum = 0.0 ;
-    for( int dil1 = 0 ; dil1 < n1 ; dil1++ ) {
-      for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
+    for( int dil1 = 0 ; dil1 < nEv ; dil1++ ) {
+      for( int dil2 = 0 ; dil2 < nEv ; dil2++ ) {
 	#ifdef VERBOSE_COMPARISON
 	printf( "(di1,dil2,p) %d,%d,%d\n" , dil1, dil2, p) ;
 	#endif
@@ -407,11 +412,11 @@ int main(int argc, char *argv[]) {
 		  cimag( GPU_ret[t+X[3]*(p+nmom*(dil2+n2*dil1) )] )
 		  ) ;
 	  #endif
-	  sum += cabs( (CPU_ret[t+X[3]*(p+nmom*(dil2+n2*dil1) )] - GPU_ret[t+X[3]*(p+nmom*(dil2+n2*dil1) )])/CPU_ret[t+X[3]*(p+nmom*(dil2+n2*dil1) )] ) ; 
+	  sum += cabs( (CPU_ret[t+X[3]*(p+nmom*(dil2+nEv*dil1) )] - GPU_ret[t+X[3]*(p+nmom*(dil2+nEv*dil1) )])/CPU_ret[t+X[3]*(p+nmom*(dil2+nEv*dil1) )] ) ; 
 	}
       }
     }
-    printf( "diff %e\n" , sum/(n1*n2*nmom*X[3]) ) ;
+    printf( "diff %e\n" , sum/(nEv*nEv*nmom*X[3]) ) ;
   }
   free( CPU_ret ) ;
 #endif

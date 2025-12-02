@@ -162,6 +162,8 @@ void alamode( const int nMom,
   const size_t nSp    = X[0]*X[1]*X[2];
   const size_t nSites = nSp*X[3] ;
   const size_t nEvChoose3 = nEv*(nEv-1)/2*(nEv-2)/3;
+  // these are hard-coded do not change
+  const int nRHS = 16 , nDiq = 8 ;
   
   // appropriate checks and balances
   //if (sizeof(Complex) != sizeof(double _Complex)) {
@@ -196,13 +198,9 @@ void alamode( const int nMom,
     quda_evec[i] = ColorSpinorField(cuda_evec_param) ;
     quda_evec[i] = evec[i] ; // CPU -> GPU
   }
-  
-  // Create device diquark vector
-  ColorSpinorParam cuda_diq_param(cpu_evec_param,inv_param,QUDA_CUDA_FIELD_LOCATION);
-  ColorSpinorField quda_diq(cuda_diq_param) ;
-  
+    
   // Device side temp array (complBuf in chroma_laph)
-  const size_t data_tmp_bytes = blockSizeMomProj*nSites*2*precision;
+  const size_t data_tmp_bytes = std::max( nRHS , blockSizeMomProj )*nSites*2*precision;
   const size_t data_ret_bytes = blockSizeMomProj*nMom*X[3]*2*precision;
   const size_t data_mom_bytes = nMom*nSp*2*precision;
   void *d_tmp = pool_device_malloc(data_tmp_bytes);
@@ -252,52 +250,63 @@ void alamode( const int nMom,
 
   //getProfileBaryonKernelModeTripletsA().TPSTOP(QUDA_PROFILE_TOTAL);
 
+  // Create device diquark vector
+  ColorSpinorParam cuda_diq_param(cpu_evec_param,inv_param,QUDA_CUDA_FIELD_LOCATION);
+  std::vector< ColorSpinorField > quda_diq( nDiq ) ;
+  for( size_t i = 0 ; i < quda_diq.size() ; i++ ) {
+    quda_diq[i] = ColorSpinorField( cuda_diq_param ) ;
+  }
+
   int nInBlock = 0, blockStart = 0;
   for (int aEv=0; aEv<nEv; aEv++) {
-    for (int bEv=aEv+1; bEv<nEv; bEv++) {
+    // block colorCross too
+    int bEv = aEv+1 ;
+    while( bEv < nEv ) {
+      const int diqBlk = std::min( nEv - bEv , nDiq ) ;
       //getProfileColorCross().TPSTART(QUDA_PROFILE_COMPUTE);
-      colorCrossQuda(quda_evec[aEv], quda_evec[bEv], quda_diq);
+      colorCrossQudaV( quda_evec[aEv],
+		       { quda_evec.begin() + bEv , quda_evec.begin() + bEv + diqBlk } ,
+		       { quda_diq.begin() , quda_diq.begin()+diqBlk } ) ;
       //getProfileColorCross().TPSTOP(QUDA_PROFILE_COMPUTE);
-      for (int cEv=bEv+1; cEv<nEv; cEv++) {
-	//getProfileColorContract().TPSTART(QUDA_PROFILE_COMPUTE);
-	colorContractQuda(quda_diq, quda_evec[cEv],(char*)d_tmp + nSites*nInBlock*2*precision);
-	//getProfileColorContract().TPSTOP(QUDA_PROFILE_COMPUTE);
-	nInBlock++;
-	// eh todo this can be cleaned up
-	if (nInBlock == blockSizeMomProj) {
-	  //getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);  
-	  blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp,
-						(char*)d_ret, //+X[3]*nMom*blockStart*2*precision,
-						cublas_param_mom_sum,
-						QUDA_CUDA_FIELD_LOCATION);
-	  //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_D2H);
-	  hostreturn( d_ret , return_arr + X[3]*nMom*blockStart ,
-		      (size_t)nInBlock*X[3]*nMom , precision ) ;
-	  //getProfileBaryonKernelModeTripletsA().TPSTOP(QUDA_PROFILE_D2H);
-	  //getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);
-	  blockStart += nInBlock;
-	  nInBlock = 0;
+      for( int b = 0 ; b < diqBlk ; b++ ) {
+	int cEv = bEv+1+b ;
+	while( cEv < nEv ) {
+	  const int blk = std::min( std::min( nEv - cEv , nRHS ) , (blockSizeMomProj-nInBlock ) ) ;
+	  //getProfileColorContract().TPSTART(QUDA_PROFILE_COMPUTE);
+	  colorContractQudaV( quda_diq[b], { quda_evec.begin() + cEv , quda_evec.begin() + cEv + blk } ,
+			      (char*)d_tmp + nSites*nInBlock*2*precision);
+	  //getProfileColorContract().TPSTOP(QUDA_PROFILE_COMPUTE);
+	  nInBlock+=blk ; cEv += blk ;
+	  // eh todo this can be cleaned up
+	  if (nInBlock == blockSizeMomProj) {
+	    //getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);  
+	    blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp,
+						  (char*)d_ret,
+						  cublas_param_mom_sum,
+						  QUDA_CUDA_FIELD_LOCATION);
+	    //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_D2H);
+	    hostreturn( d_ret , return_arr + X[3]*nMom*blockStart ,
+			(size_t)nInBlock*X[3]*nMom , precision ) ;
+	    //getProfileBaryonKernelModeTripletsA().TPSTOP(QUDA_PROFILE_D2H);
+	    //getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);
+	    blockStart += nInBlock;
+	    nInBlock = 0;
+	  }
 	}
-      }
+      }// diqBlk
+      bEv += diqBlk ;
     }
   }
   // overspill, code is more efficient if you avoid this
   if( nInBlock > 0 ) {
     cublas_param_mom_sum.batch_count = nInBlock;
-    //    cublas_param_mom_sum.ldc = X[3]*nInBlock ;
     blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp,
-					  (char*)d_ret,//+X[3]*nMom*blockStart*2*precision,
+					  (char*)d_ret,
 					  cublas_param_mom_sum,
 					  QUDA_CUDA_FIELD_LOCATION);
     hostreturn( d_ret , return_arr + X[3]*nMom*blockStart ,
 		(size_t)nInBlock*X[3]*nMom , precision ) ;
-
-    /*
-    */
   }
-
-  //hostreturn( d_ret , return_arr , (size_t)nEvChoose3*(size_t)(X[3]*nMom) , precision ) ;
-
 
   // Copy return array back to host
   //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_TOTAL); 
@@ -368,7 +377,7 @@ int main(int argc, char *argv[]) {
 #ifdef GPU_STRESS
   const int Nev = 96 ;
 #else
-  const int Nev = 128 ;
+  const int Nev = 32 ;
 #endif
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
 
@@ -427,7 +436,7 @@ int main(int argc, char *argv[]) {
     std::cout<<"nmom "<<nmom<<" | block "<<blockSizeMomProj<<std::endl ;
     memset( retGPU , 0.0 , X[3]*nmom*nEvChoose3*sizeof( double _Complex )) ;
 #else
-    const int blockSizeMomProj = 4096 ;
+    const int blockSizeMomProj = 2048 ;
 #endif
 
     //alamode(
