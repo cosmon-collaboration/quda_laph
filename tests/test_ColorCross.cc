@@ -149,17 +149,17 @@ gpuColorCrossStress( void **host_evec , void *result , const int nEv , const int
   cpu_res_param.v = result ; // point to the result
   ColorSpinorField res(cpu_res_param) ;
   ColorSpinorParam cuda_res_param(cpu_res_param, inv_param, QUDA_CUDA_FIELD_LOCATION);
-  ColorSpinorField Diq(cuda_res_param);
+  std::vector< ColorSpinorField > Diq(1) ;
+  Diq[0] = ColorSpinorField(cuda_res_param);
  
   // cross color products over NeV
   for( int i = 0 ; i < nEv ; i++ ) {
     for( int j = 0 ; j < nEv ; j++ ) {
-      colorCrossQuda( quda_evec[i] , quda_evec[j] , Diq ) ;
+      colorCrossQudaV( quda_evec[i] , { quda_evec.begin()+j , quda_evec.begin()+j+1 } , Diq ) ;
     }
   }
-  
-  // download the evecs
-  res = Diq ;
+  // download 
+  res = Diq[0] ;
 }
 
 static void

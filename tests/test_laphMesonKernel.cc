@@ -20,6 +20,7 @@ using namespace LaphEnv ;
 
 //#define VERBOSE_COMPARISON
 //#define GPU_STRESS
+#define CPU_CROSSCHECK
 
 static inline void
 evprod( const double _Complex *coeffs ,
@@ -425,7 +426,7 @@ int main(int argc, char *argv[]) {
 #ifdef GPU_STRESS
   const int Nev = 512 , n1 = 288 , n2 = 288 ;
 #else
-  const int Nev = 128 , n1 = 32 , n2 = 32 ;
+  const int Nev = 64 , n1 = 32 , n2 = 32 ;
 #endif
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
   set_constant( laphEigvecs ) ;
@@ -435,7 +436,7 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 16 ;
+  const int nmom = 32 ;
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
@@ -489,11 +490,11 @@ int main(int argc, char *argv[]) {
     std::cout<< "block " << blockSizeMomProj << std::endl ;
     memset( GPU_ret , 0.0 , n1*n2*nmom*X[3]*sizeof(double _Complex));
 #else
-    const int blockSizeMomProj = 256 ;
+    const int blockSizeMomProj = 512 ;
 #endif
 
-    alamode(
-	    //laphMesonKernel(
+    //alamode(
+    laphMesonKernel(
 	    n1,n2,
 	    coeffs1 , coeffs2 ,
 	    nmom,
@@ -510,8 +511,8 @@ int main(int argc, char *argv[]) {
     //for( int NP = 1 ; NP < nmom ; NP*=2 ) { 
       StopWatch gpu ;
       gpu.start() ;
-      alamode(
-	      //laphMesonKernel(
+      //alamode(
+      laphMesonKernel(
 		      n1,n2,
 		      coeffs1 , coeffs2 ,
 		      nmom,
@@ -528,6 +529,7 @@ int main(int argc, char *argv[]) {
 #ifdef GPU_STRESS
   }
 #else
+  #ifdef CPU_CROSSCHECK
   double _Complex *CPU_ret = (double _Complex*)calloc(n1*n2*nmom*X[3],sizeof(double _Complex)) ;
   // CPU version
   double CPUtime = 0. ;
@@ -572,6 +574,7 @@ int main(int argc, char *argv[]) {
     printf( "diff %e\n" , sum/(n1*n2*nmom*X[3]) ) ;
   }
   free( CPU_ret ) ;
+  #endif
 #endif
   free( host_mom ) ;
   free( GPU_ret ) ;

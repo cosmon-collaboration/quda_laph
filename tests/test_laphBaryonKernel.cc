@@ -559,8 +559,8 @@ int main(int argc, char *argv[]) {
     const int blockSizeMomProj = 2048 ;
 #endif
 
-    //laphBaryonKernel(
-    alamode2(
+    laphBaryonKernel(
+		     //alamode2(
 		     n1,n2,n3,
 		     coeffs1 ,
 		     coeffs2 ,
@@ -579,8 +579,8 @@ int main(int argc, char *argv[]) {
     //for( int Np = 1 ; Np <= 512 ; Np *=2 ) {
       StopWatch GPU ;
       GPU.start() ;
-      //laphBaryonKernel(
-      alamode2( 
+      laphBaryonKernel(
+      //alamode2( 
 		       n1,n2,n3,
 		       coeffs1 ,
 		       coeffs2 ,

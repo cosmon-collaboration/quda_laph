@@ -377,7 +377,7 @@ int main(int argc, char *argv[]) {
 #ifdef GPU_STRESS
   const int Nev = 96 ;
 #else
-  const int Nev = 32 ;
+  const int Nev = 64 ;
 #endif
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
 
