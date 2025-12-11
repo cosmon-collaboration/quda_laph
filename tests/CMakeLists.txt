@@ -45,3 +45,11 @@ target_link_libraries(TestBatchGEMM PUBLIC ${LiveLaphLibs} gputoolkitlib quda Qu
 add_executable(TestMesonKernel test_laphMesonKernel.cc)
 target_include_directories(TestMesonKernel PUBLIC include)
 target_link_libraries(TestMesonKernel PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
+
+add_executable(TestQuartet test_laphQuartet.cc)
+target_include_directories(TestQuartet PUBLIC include)
+target_link_libraries(TestQuartet PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
+
+add_executable(TestQuartetKernel test_laphQuartetKernel.cc)
+target_include_directories(TestQuartetKernel PUBLIC include)
+target_link_libraries(TestQuartetKernel PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
