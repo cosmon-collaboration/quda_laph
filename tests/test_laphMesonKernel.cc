@@ -135,15 +135,15 @@ cpuInner( const double _Complex *host_quark , const double _Complex *host_quark_
 
 static void cpu_code_v2( const int n1,
 			 const int n2,
-			 const int nMom,
-			 const int blockSizeMomProj,
 			 double _Complex *host_coeffs1, 
 			 double _Complex *host_coeffs2,
+			 const int nMom,
+			 const double _Complex *host_mom,
 			 const int nEv,
 			 const void *const *host_evec,
-			 const double _Complex *host_mom,
 			 QudaInvertParam inv_param,
 			 double _Complex *return_array,
+			 const int blockSizeMomProj,
 			 const int X[4])
 {
   const size_t nSp = X[0]*X[1]*X[2] ;
@@ -241,7 +241,6 @@ apply_noises( const std::vector<ColorSpinorField> &evec ,
       const size_t n1 = q[n].size() ;
       blas::block::caxpy( {coeffs[n].begin()+n1*i,coeffs[n].begin()+n1*(i+1)},
 			  {quda_evec[0]}, {q[n].begin(),q[n].end()} ) ;
-
     }
   }
 }
@@ -436,7 +435,7 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 32 ;
+  const int nmom = 64 ;
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
@@ -490,41 +489,44 @@ int main(int argc, char *argv[]) {
     std::cout<< "block " << blockSizeMomProj << std::endl ;
     memset( GPU_ret , 0.0 , n1*n2*nmom*X[3]*sizeof(double _Complex));
 #else
-    const int blockSizeMomProj = 512 ;
+    const int blockSizeMomProj = 1024 ; //std::min( 512 , n1*n2 ) ;
 #endif
+    const size_t ndil[2] = { n1 , n2 } ;
+    const double _Complex *host[2] = { coeffs1, coeffs2 } ;
 
     //alamode(
-    laphMesonKernel(
-	    n1,n2,
-	    coeffs1 , coeffs2 ,
+    nKernel(
+	    ndil, host,
 	    nmom,
 	    host_mom ,
 	    Nev, evList.data() , 
 	    inv_param ,
 	    GPU_ret ,
 	    blockSizeMomProj,
-	    X ) ;
-
+	    X , 2 ) ;
+    printf( "Done tune1\n" ) ;
     
     // GPU version
     double GPUtime = 0 ;
-    //for( int NP = 1 ; NP < nmom ; NP*=2 ) { 
+    int NP = nmom ;
+    //for( NP = 1 ; NP <= Nev ; NP*=2 ) {
+      memset( GPU_ret , 0.0 , n1*n2*nmom*X[3]*sizeof(double _Complex));
       StopWatch gpu ;
       gpu.start() ;
       //alamode(
-      laphMesonKernel(
-		      n1,n2,
-		      coeffs1 , coeffs2 ,
-		      nmom,
-		      host_mom ,
-		      Nev, evList.data() , 
-		      inv_param ,
-		      GPU_ret ,
-		      blockSizeMomProj,
-		      X ) ;
+      nKernel(
+	      ndil,
+	      host,
+	      nmom,
+	      host_mom ,
+	      Nev, evList.data() , 
+	      inv_param ,
+	      GPU_ret ,
+	      blockSizeMomProj,
+	      X ,2 ) ;
       gpu.stop();
       GPUtime = gpu.getTimeInSeconds();
-      printLaph(make_strf("\nGPU (NP%d) current kernel in = %g seconds\n", 1 , GPUtime)) ;
+      printLaph(make_strf("\nGPU current kernel in = %d %g seconds\n", NP , GPUtime)) ;
       //}
 #ifdef GPU_STRESS
   }
@@ -533,21 +535,23 @@ int main(int argc, char *argv[]) {
   double _Complex *CPU_ret = (double _Complex*)calloc(n1*n2*nmom*X[3],sizeof(double _Complex)) ;
   // CPU version
   double CPUtime = 0. ;
-  //for( int NP = 1 ; NP <= nmom ; NP*=2 ) { 
+  //for( int NP = 1 ; NP <= nmom ; NP*=2 ) {
+    memset( CPU_ret , 0.0 , n1*n2*nmom*X[3]*sizeof(double _Complex));
     StopWatch cpu ;
     cpu.start() ;
     cpu_code_v2(
-	      n1,n2, nmom, blockSizeMomProj,
+	      n1,n2,
 	      coeffs1 , coeffs2 ,
+	      nmom , host_mom,
 	      Nev, evList.data() , 
-	      host_mom ,
 	      inv_param ,
 	      CPU_ret ,
+	      blockSizeMomProj,
 	      X ) ;
     cpu.stop() ;
     CPUtime = cpu.getTimeInSeconds() ;
-    printLaph(make_strf("\nCPU current (NP%d) kernel in = %g seconds\n", 1 , CPUtime));
-    //  }
+    printLaph(make_strf("\nCPU current kernel in = %d %g seconds\n", NP , CPUtime));
+    //}
   printf( "\n*************************************\n" ) ;
   printf( "-----> GPU speedup factor %gx\n" , CPUtime/GPUtime ) ;
   printf( "*************************************\n\n" ) ;
@@ -571,7 +575,7 @@ int main(int argc, char *argv[]) {
 	}
       }
     }
-    printf( "diff %e\n" , sum/(n1*n2*nmom*X[3]) ) ;
+    printf( "diff %e\n\n" , sum/(n1*n2*nmom*X[3]) ) ;
   }
   free( CPU_ret ) ;
   #endif

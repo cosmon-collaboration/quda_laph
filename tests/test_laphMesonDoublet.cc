@@ -342,7 +342,7 @@ int main(int argc, char *argv[]) {
 #endif
 
     //alamode(
-    laphMesonKernelComputeModeDoublet(
+    modeNlet(
 				      nmom,
 				      host_mom,
 				      nEv,
@@ -350,7 +350,7 @@ int main(int argc, char *argv[]) {
 				      inv_param,
 				      GPU_ret,
 				      blockSizeMomProj,
-				      X ) ;
+				      X , 2 ) ;
     
     // GPU version
     double GPUtime = 0 ;
@@ -358,7 +358,7 @@ int main(int argc, char *argv[]) {
       StopWatch gpu ;
       gpu.start() ;
       //alamode(
-      laphMesonKernelComputeModeDoublet(
+      modeNlet( 
 	    nmom,
 	    host_mom,
 	    nEv,
@@ -366,7 +366,7 @@ int main(int argc, char *argv[]) {
 	    inv_param,
 	    GPU_ret,
 	    blockSizeMomProj,
-	    X ) ;
+	    X , 2 ) ;
 			    
       gpu.stop();
       GPUtime = gpu.getTimeInSeconds();

@@ -446,7 +446,8 @@ int main(int argc, char *argv[]) {
     const int blockSizeMomProj = 1024 ;
 #endif
 
-    alamode(
+    //alamode(
+    modeNlet(
 					nmom,
 					host_mom ,
 					Nev,
@@ -454,7 +455,7 @@ int main(int argc, char *argv[]) {
 					inv_param,
 					retGPU,
 					blockSizeMomProj,
-					X ) ;
+					X , 4 ) ;
 
     double GPUtime = 0 ;
     int NP = nmom ;
@@ -462,16 +463,16 @@ int main(int argc, char *argv[]) {
       StopWatch gpu ;
       gpu.start() ;
       
-    alamode(
-      //laphBaryonKernelComputeModeTripletA(
-				        nmom,
-					host_mom ,
-					Nev,
-					evList.data() ,
-					inv_param,
-					retGPU,
-					blockSizeMomProj,
-					X ) ;
+      //    alamode(
+      modeNlet(
+	       nmom,
+	       host_mom ,
+	       Nev,
+	       evList.data() ,
+	       inv_param,
+	       retGPU,
+	       blockSizeMomProj,
+	       X , 4 ) ;
     gpu.stop() ;
     GPUtime = gpu.getTimeInSeconds() ;
     printLaph(make_strf("\nGPU modetripletA in = %d %g seconds\n", NP , GPUtime )) ;

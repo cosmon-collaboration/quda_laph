@@ -559,40 +559,34 @@ int main(int argc, char *argv[]) {
     const int blockSizeMomProj = 2048 ;
 #endif
 
-    laphBaryonKernel(
-		     //alamode2(
-		     n1,n2,n3,
-		     coeffs1 ,
-		     coeffs2 ,
-		     coeffs3 ,
-		     nmom,
-		     host_mom ,
-		     Nev ,
-		     evList.data(),
-		     inv_param ,
-		     retGPU,
-		     blockSizeMomProj,
-		     X ) ;
+    const size_t ndil[3] = { n1 , n2 , n3 } ;
+    const double _Complex *host[3] = { coeffs1, coeffs2 , coeffs3 } ;
+    nKernel(
+	    ndil , host,
+	    nmom,
+	    host_mom ,
+	    Nev ,
+	    evList.data(),
+	    inv_param ,
+	    retGPU,
+	    blockSizeMomProj,
+	    X , 3 ) ;
     
     double GPUtime ;
     printf( "blockSizeMomProj %d\n" , blockSizeMomProj ) ;
     //for( int Np = 1 ; Np <= 512 ; Np *=2 ) {
       StopWatch GPU ;
       GPU.start() ;
-      laphBaryonKernel(
-      //alamode2( 
-		       n1,n2,n3,
-		       coeffs1 ,
-		       coeffs2 ,
-		       coeffs3 ,
-		       nmom,
-		       host_mom ,
-		       Nev ,
-		       evList.data(),
-		       inv_param ,
-		       retGPU,
-		       blockSizeMomProj,
-		       X ) ;
+      nKernel(
+	      ndil , host ,
+	      nmom,
+	      host_mom ,
+	      Nev ,
+	      evList.data(),
+	      inv_param ,
+	      retGPU,
+	      blockSizeMomProj,
+	      X , 3 ) ;
       GPU.stop() ;
       GPUtime = GPU.getTimeInSeconds() ;
       printLaph(make_strf("\nGPU baryonkernel (%d) in = %g seconds\n", 1 , GPUtime )) ;

@@ -503,7 +503,7 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 4 ;
+  const int nmom = 64 ;
   const int X[4] = {
     LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
@@ -539,15 +539,13 @@ int main(int argc, char *argv[]) {
   for( size_t i = 0 ; i < Nev*nDil[1] ; i++ ) coeffs2[i] = unif(mt) + I*unif(mt) ;
   for( size_t i = 0 ; i < Nev*nDil[2] ; i++ ) coeffs3[i] = unif(mt) + I*unif(mt) ;
   for( size_t i = 0 ; i < Nev*nDil[3] ; i++ ) coeffs4[i] = unif(mt) + I*unif(mt) ;
-  
-  const std::vector<const double _Complex* > host_coeffs = { coeffs1 , coeffs2 , coeffs3 , coeffs4 } ;
 
   QudaInvertParam inv_param = newQudaInvertParam();
   inv_param.dslash_type = QUDA_WILSON_DSLASH;
   inv_param.solution_type = QUDA_MAT_SOLUTION;
   inv_param.solve_type = QUDA_DIRECT_SOLVE;
   inv_param.cpu_prec = QUDA_DOUBLE_PRECISION;
-  inv_param.cuda_prec = QUDA_SINGLE_PRECISION;
+  inv_param.cuda_prec = QUDA_DOUBLE_PRECISION;
   inv_param.dirac_order = QUDA_DIRAC_ORDER;
   inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
   inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
@@ -563,8 +561,12 @@ int main(int argc, char *argv[]) {
     const int blockSizeMomProj = 1024 ;
 #endif
 
-    alamode(
-	    nDil , host_coeffs,
+    //alamode(
+    const size_t ndil[4] = { nDil[0] , nDil[1] , nDil[2] , nDil[3] } ;
+    const double _Complex *host[4] = { coeffs1, coeffs2 , coeffs3 , coeffs4 } ;
+
+    nKernel(
+	    ndil , host,
 	    nmom,
 	    host_mom ,
 	    Nev,
@@ -572,7 +574,7 @@ int main(int argc, char *argv[]) {
 	    inv_param,
 	    retGPU,
 	    blockSizeMomProj,
-	    X ) ;
+	    X , 4 ) ;
 
     double GPUtime = 0 ;
     int NP = nmom ;
@@ -580,17 +582,16 @@ int main(int argc, char *argv[]) {
       StopWatch gpu ;
       gpu.start() ;
       
-    alamode(
-      //laphBaryonKernelComputeModeTripletA(
-	    nDil , host_coeffs ,
-	    nmom,
-	    host_mom ,
-	    Nev,
-	    evList.data() ,
-	    inv_param,
-	    retGPU,
-	    blockSizeMomProj,
-	    X ) ;
+      nKernel(
+	      ndil , host ,
+	      nmom,
+	      host_mom ,
+	      Nev,
+	      evList.data() ,
+	      inv_param,
+	      retGPU,
+	      blockSizeMomProj,
+	      X ,4 ) ;
     gpu.stop() ;
     GPUtime = gpu.getTimeInSeconds() ;
     printLaph(make_strf("\nGPU modetripletA in = %d %g seconds\n", NP , GPUtime )) ;
@@ -603,6 +604,7 @@ int main(int argc, char *argv[]) {
 
   printf( "Alloc retCPU %e GB\n" , X[3]*nmom*(size_t)nDil[0]*nDil[1]*nDil[2]*nDil[3]/(1024*1024*1024.) ) ;
   cpu.start() ;
+  const std::vector<const double _Complex*> host_coeffs = { coeffs1 , coeffs2 , coeffs3 , coeffs4 } ;
   cpu_code( nDil , host_coeffs, nmom, host_mom , Nev, evList.data(), retCPU, blockSizeMomProj , X ) ;
   cpu.stop() ;
   const double CPUtime = cpu.getTimeInSeconds() ;

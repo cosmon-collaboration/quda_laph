@@ -422,7 +422,7 @@ int main(int argc, char *argv[]) {
   inv_param.solution_type = QUDA_MAT_SOLUTION;
   inv_param.solve_type = QUDA_DIRECT_SOLVE;
   inv_param.cpu_prec = QUDA_DOUBLE_PRECISION;
-  inv_param.cuda_prec = QUDA_SINGLE_PRECISION;
+  inv_param.cuda_prec = QUDA_DOUBLE_PRECISION;
   inv_param.dirac_order = QUDA_DIRAC_ORDER;
   inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
   inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
@@ -440,32 +440,37 @@ int main(int argc, char *argv[]) {
 #endif
 
     //alamode(
-    laphBaryonKernelComputeModeTripletA(
-					nmom,
-					host_mom ,
-					Nev,
-					evList.data() ,
-					inv_param,
-					retGPU,
-					blockSizeMomProj,
-					X ) ;
+    modeNlet( nmom,
+	      host_mom ,
+	      Nev ,
+	      evList.data(),
+	      inv_param,
+	      retGPU ,
+	      blockSizeMomProj,
+	      X ,
+	      3 ) ;
 
-    
-    StopWatch gpu ;
-    gpu.start() ;
+    double GPUtime = 0 ;
+    int NP = nmom ;
+    //for( int NP = 1 ; NP <= 4096 ; NP*=2 ) {
+      StopWatch gpu ;
+      gpu.start() ;
+      
     //alamode(
-    laphBaryonKernelComputeModeTripletA(
-					nmom,
-					host_mom ,
-					Nev,
-					evList.data() ,
-					inv_param,
-					retGPU,
-					blockSizeMomProj,
-					X ) ;
+      modeNlet( nmom,
+		host_mom ,
+		Nev ,
+		evList.data(),
+		inv_param,
+		retGPU ,
+		blockSizeMomProj,
+		X ,
+		3 ) ;
+
     gpu.stop() ;
-    const double GPUtime = gpu.getTimeInSeconds() ;
-    printLaph(make_strf("\nGPU modetripletA in = %g seconds\n", GPUtime )) ;
+    GPUtime = gpu.getTimeInSeconds() ;
+    printLaph(make_strf("\nGPU modetripletA in = %d %g seconds\n", NP , GPUtime )) ;
+    //}
 #ifdef GPU_STRESS
   }
 #elif (defined CPUCROSSCHECK)

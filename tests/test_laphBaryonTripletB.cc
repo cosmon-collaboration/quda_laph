@@ -106,11 +106,11 @@ static void
 alamode( const int n1,
 	 const int n2,
 	 const int n3,
-	 const int nMom,
-	 const int nEv,
 	 const double _Complex *host_coeffs1,
 	 const double _Complex *host_coeffs2,
 	 const double _Complex *host_coeffs3,
+	 const int nMom,
+	 const int nEv,
 	 const double _Complex *host_mode_trip_buf,
 	 double _Complex *return_array )
 {
@@ -310,8 +310,8 @@ int main(int argc, char *argv[]) {
   double _Complex host_ret_arr[ nmom*n1*n2*n3 ] = {} ;
   StopWatch gpu;
   gpu.start() ;
-  //alamode
-  laphBaryonKernelComputeModeTripletB
+  alamode
+    //laphBaryonKernelComputeModeTripletB
       ( n1, n2, n3,
 	host_coeffs1 ,
 	host_coeffs2 ,
