@@ -1,0 +1,27 @@
+<QudaLaph>
+  <EchoXML/>
+  <LatticeLayoutInfo>
+     <XYZTExtents>8 8 8 16</XYZTExtents>
+  </LatticeLayoutInfo>
+  <QudaInfo>
+     <CPUPrecision>double</CPUPrecision>
+     <CUDAPrecision>double</CUDAPrecision>
+     <CUDASloppyPrecision>single</CUDASloppyPrecision>
+  </QudaInfo>
+  <Verbosity>none</Verbosity>
+  <Task>
+     <Name>SMEAR_GAUGE_FIELD</Name>
+     <GaugeConfigurationInfo>
+        <EnsembleName>TEST</EnsembleName>
+        <FileFormat>CERN</FileFormat>
+        <ConfigType>WilsonImproved</ConfigType>
+        <FileName>ckn.100</FileName>
+        <ConfigNumber>100</ConfigNumber>
+     </GaugeConfigurationInfo>
+     <GluonStoutSmearingInfo>
+        <LinkIterations>8</LinkIterations>
+        <LinkStapleWeight>0.125</LinkStapleWeight>
+     </GluonStoutSmearingInfo>
+     <SmearedGaugeFileName>NOM_smeared_gauge_field</SmearedGaugeFileName>
+  </Task>
+</QudaLaph>

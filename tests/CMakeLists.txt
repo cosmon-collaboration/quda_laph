@@ -53,3 +53,7 @@ target_link_libraries(TestQuartet PUBLIC ${LiveLaphLibs} gputoolkitlib quda Quda
 add_executable(TestQuartetKernel test_laphQuartetKernel.cc)
 target_include_directories(TestQuartetKernel PUBLIC include)
 target_link_libraries(TestQuartetKernel PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
+
+add_executable(TestDWF test_DWF.cc)
+target_include_directories(TestDWF PUBLIC include)
+target_link_libraries(TestDWF PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
