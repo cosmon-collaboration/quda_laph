@@ -62,21 +62,25 @@ static void cpu_code_v2( const int nMom,
     for( int dil2 = 0 ; dil2 < nEv ; dil2++ ) {
       double _Complex *result = (double _Complex*)calloc( V , sizeof( double _Complex ) ) ;
       cpuInner( host_evec , result , X , dil1 , dil2 ) ;
-      for( int p = 0 ; p < nMom ; p++ ) {
-	double _Complex *pm = (double _Complex*)host_mom + Nsp*p ;
-	for( int t = 0 ; t < X[3] ; t++ ) {
-	  double _Complex *rs = (double _Complex*)result + Nsp*t ;
-	  double _Complex sum = 0. ;
-          #ifdef USE_OPENBLAS
-	  sum = cblas_zdotu( Nsp , pm , 1 , rs , 1 ) ;
-          #elif (defined USE_GSL_CBLAS)
-	  cblas_zdotu( 3 , pm , 1 , rs , 1 , &sum ) ;
-          #else
-	  for( size_t i = 0 ; i < (size_t)Nsp ; i++ ) {
-	    sum += pm[i]*rs[i] ;
+
+      // loop checkerboard
+      for( int cb = 0 ; cb < 2 ; cb++ ) {
+	for( int p = 0 ; p < nMom ; p++ ) {
+	  double _Complex *pm = (double _Complex*)host_mom + Nsp*p + cb*Nsp/2 ;
+	  for( int t = 0 ; t < X[3] ; t++ ) {
+	    double _Complex *rs = (double _Complex*)result + Nsp*t + cb*Nsp/2 ;
+	    double _Complex sum = 0. ;
+            #ifdef USE_OPENBLAS
+	    sum = cblas_zdotu( Nsp/2 , pm , 1 , rs , 1 ) ;
+            #elif (defined USE_GSL_CBLAS)
+	    cblas_zdotu( Nsp/2 , pm , 1 , rs , 1 , &sum ) ;
+            #else
+	    for( size_t i = 0 ; i < (size_t)Nsp/2 ; i++ ) {
+	      sum += pm[i]*rs[i] ;
+	    }
+            #endif
+	    rt[ t + X[3]*( p + nMom*( dil2 + nEv*dil1 )) ] += sum ;
 	  }
-	  #endif
-	  rt[ t + X[3]*( p + nMom*( dil2 + nEv*dil1 )) ] = sum ;
 	}
       }
       free( result ) ;
@@ -121,15 +125,66 @@ hostreturn( const void *d_ret ,
   }
 }
 
+// compute the DFT
+static inline void
+doBlasReturn( QudaBLASParam cublas_dft ,
+	      void *d_tmp , void *d_ret , void *d_mom , 
+	      double _Complex *return_array ,
+	      size_t &nInBlock , size_t &blockStart ,
+	      const size_t nMom , const int X[4] , const int precision )
+{
+  const size_t nSp = X[0]*X[1]*X[2] ;
+  cublas_dft.batch_count = (int)nInBlock;
+  //getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);  
+  blas_lapack::native::stridedBatchGEMM( d_mom, d_tmp,
+					 (char*)d_ret,
+					 cublas_dft, QUDA_CUDA_FIELD_LOCATION);
+  cublas_dft.beta = 1.0;
+  blas_lapack::native::stridedBatchGEMM( (char*)d_mom + nSp*precision,
+					 (char*)d_tmp + nSp*precision,
+					 (char*)d_ret,
+					 cublas_dft, QUDA_CUDA_FIELD_LOCATION); 
+  //getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);
+  hostreturn( d_ret , return_array + X[3]*nMom*blockStart , nInBlock*X[3]*nMom , precision ) ;
+  blockStart += nInBlock; nInBlock = 0;
+}
+
+static QudaBLASParam
+default_BLAS( const size_t nMom , const int X[4] , const int blockSizeMomProj , const int precision , const bool bDag = false )
+{
+  const int nSp = X[0]*X[1]*X[2] ;
+  const int nSites = nSp*X[3] ;
+  QudaBLASParam cublas_param = newQudaBLASParam() ;
+  cublas_param.trans_a = QUDA_BLAS_OP_N;
+  cublas_param.trans_b = bDag ? QUDA_BLAS_OP_C : QUDA_BLAS_OP_T;
+  cublas_param.m = (int)nMom ;
+  cublas_param.n = X[3] ;
+  cublas_param.k = nSp/2 ;
+  cublas_param.lda = nSp ;
+  cublas_param.ldb = nSp ;
+  cublas_param.ldc = X[3] ;
+  cublas_param.a_stride = 0 ;
+  cublas_param.b_stride = nSites ;
+  cublas_param.c_stride = X[3]*(int)nMom ;
+  cublas_param.batch_count = blockSizeMomProj;
+  cublas_param.alpha = 1. ; cublas_param.beta = 0. ;
+  cublas_param.data_order = QUDA_BLAS_DATAORDER_ROW;
+  cublas_param.data_type = ( precision == QUDA_SINGLE_PRECISION ) ? \
+    QUDA_BLAS_DATATYPE_C : QUDA_BLAS_DATATYPE_Z;
+  cublas_param.blas_type = QUDA_BLAS_GEMM ;
+  return cublas_param ;
+}
+
 // new GPU interface with better behaviour
 static void alamode( const int nMom,
 		     const double _Complex *host_mom,
-		     const int nEv,
+		     const size_t nEv,
 		     void **host_evec,
 		     QudaInvertParam inv_param,
 		     double _Complex *return_array,
-		     const int blockSizeMomProj,
-		     const int X[4])
+		     const size_t blockSizeMomProj,
+		     const int X[4] ,
+		     const int N )
 {
   //getProfileCurrentKernel().TPSTART(QUDA_PROFILE_TOTAL);
   //getProfileCurrentKernel().TPSTART(QUDA_PROFILE_INIT);  
@@ -138,7 +193,7 @@ static void alamode( const int nMom,
   //  errorQuda("Irreconcilable difference between interface and internal complex number conventions");
   //}
   if( blockSizeMomProj > (nEv*nEv) ) {
-    errorQuda("block_size_mom_proj %d > (nEv*nEv) %d" , blockSizeMomProj, nEv*nEv ) ;
+    errorQuda("block_size_mom_proj %zu > (nEv*nEv) %zu" , blockSizeMomProj, nEv*nEv ) ;
   }
   if( inv_param.cuda_prec != QUDA_DOUBLE_PRECISION &&
       inv_param.cuda_prec != QUDA_SINGLE_PRECISION ) {
@@ -149,19 +204,19 @@ static void alamode( const int nMom,
   const size_t nSp = X[0]*X[1]*X[2];
   const size_t nSites = nSp*X[3];
   const lat_dim_t x = { X[0] , X[1] , X[2] , X[3] } ;
-  const int nRHS = 16 ;
+  const size_t nRHS = 16 ;
   // Create device vectors for quarks
   ColorSpinorParam cpu_quark_param(host_evec, inv_param, x, false, QUDA_CPU_FIELD_LOCATION);
   cpu_quark_param.nSpin = 1;
   std::vector<ColorSpinorField> quark(nEv) ;
-  for( int dil2 = 0 ; dil2 < nEv ; dil2++ ) {
+  for( size_t dil2 = 0 ; dil2 < nEv ; dil2++ ) {
     cpu_quark_param.v = host_evec[dil2] ;
     quark[dil2] = ColorSpinorField(cpu_quark_param) ;
   }
   ColorSpinorParam cuda_quark_param(cpu_quark_param,inv_param,QUDA_CUDA_FIELD_LOCATION);
   cuda_quark_param.setPrecision(inv_param.cuda_prec, inv_param.cuda_prec, true);
   // Device array to hold the entire return array
-  const size_t data_ret_bytes = nMom*X[3]*nEv*nEv*2*precision;
+  const size_t data_ret_bytes = nMom*X[3]*blockSizeMomProj*2*precision;
 
   // whichever is bigger 
   const size_t data_tmp_bytes = std::max( nRHS , blockSizeMomProj )*nSites*2*precision ;
@@ -169,62 +224,41 @@ static void alamode( const int nMom,
   void *d_ret = pool_device_malloc(data_ret_bytes);
   void *d_tmp = pool_device_malloc(data_tmp_bytes);
   void *d_mom = pool_device_malloc(data_mom_bytes);
-  // momentum contractions are a batched strided BLAS
-  QudaBLASParam cublas_param_mom_sum = newQudaBLASParam();
-  cublas_param_mom_sum.trans_a = QUDA_BLAS_OP_N;
-  cublas_param_mom_sum.trans_b = QUDA_BLAS_OP_T;
-  cublas_param_mom_sum.m = nMom ;
-  cublas_param_mom_sum.n = X[3] ;
-  cublas_param_mom_sum.k   = nSp ;
-  cublas_param_mom_sum.lda = nSp ;
-  cublas_param_mom_sum.ldb = nSp ;
-  cublas_param_mom_sum.ldc = X[3] ;
-  cublas_param_mom_sum.a_stride = 0 ; // mom stays the same
-  cublas_param_mom_sum.b_stride = nSp*X[3] ;
-  cublas_param_mom_sum.c_stride = X[3]*nMom ;
-  cublas_param_mom_sum.batch_count = blockSizeMomProj ;
-  cublas_param_mom_sum.alpha = 1.0; cublas_param_mom_sum.beta = 0.0;
-  cublas_param_mom_sum.data_order = QUDA_BLAS_DATAORDER_ROW;
-  cublas_param_mom_sum.data_type = (inv_param.cuda_prec == QUDA_SINGLE_PRECISION) ? \
-    QUDA_BLAS_DATATYPE_C : QUDA_BLAS_DATATYPE_Z ;
+
+  QudaBLASParam cublas_dft = default_BLAS( nMom , X , blockSizeMomProj , precision , false ) ;
+
   //getProfileCurrentKernel().TPSTOP(QUDA_PROFILE_INIT);
   //getProfileCurrentKernel().TPSTART(QUDA_PROFILE_H2D);
   // Copy host data to device for q2, q1 is done as we want
   std::vector<ColorSpinorField> quda_quark(nEv) ;
-  for (int dil2=0; dil2<nEv; dil2++) {
+  for ( size_t dil2=0; dil2<nEv; dil2++) {
     quda_quark[dil2] = ColorSpinorField(cuda_quark_param) ;
     quda_quark[dil2] = quark[dil2] ;
   }
   device_hostmom( host_mom , d_mom , nMom*nSp , precision ) ;
   //getProfileCurrentKernel().TPSTOP(QUDA_PROFILE_H2D);
-  int nInBlock = 0 , blockStart = 0 ;
-  for (int dil1=0; dil1<nEv; dil1++) {
-    int dil2 = 0 ;
+  size_t nInBlock = 0 , blockStart = 0 ;
+  for( size_t dil1=0; dil1<nEv; dil1++) {
+    size_t dil2 = 0 ;
     while( dil2 < nEv ) {
       const int blk = std::min( std::min( nEv - dil2 , nRHS ) , blockSizeMomProj - nInBlock ) ;
       //getProfileCurrentKernel().TPSTART(QUDA_PROFILE_COMPUTE);
       innerProductQudaV( quda_quark[dil1], { quda_quark.begin()+dil2 , quda_quark.begin()+dil2+blk } ,
-					   (char*)d_tmp+nSites*nInBlock*2*precision );
+			 (char*)d_tmp+nSites*nInBlock*2*precision );
       nInBlock += blk ; dil2 += blk ;
       //getProfileCurrentKernel().TPSTOP(QUDA_PROFILE_COMPUTE);
       if( nInBlock == blockSizeMomProj ) {
-	//getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);
-	blas_lapack::native::stridedBatchGEMM( d_mom, d_tmp, (char*)d_ret+blockStart*X[3]*nMom*2*precision,
-					       cublas_param_mom_sum, QUDA_CUDA_FIELD_LOCATION);
-	blockStart += blockSizeMomProj ;
-	nInBlock = 0 ;
-	//getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);
+	doBlasReturn( cublas_dft , d_tmp , d_ret , d_mom , return_array ,
+		      nInBlock , blockStart , nMom , X , precision ) ;
       }
     }
   }
   if( nInBlock > 0 ) {
-    cublas_param_mom_sum.batch_count = nInBlock ;
-    blas_lapack::native::stridedBatchGEMM( d_mom, d_tmp, (char*)d_ret+blockStart*X[3]*nMom*2*precision,
-					   cublas_param_mom_sum, QUDA_CUDA_FIELD_LOCATION);
+    doBlasReturn( cublas_dft , d_tmp , d_ret , d_mom , return_array ,
+		  nInBlock , blockStart , nMom , X , precision ) ;
   }
   // Copy device data back to host
   //getProfileCurrentKernel().TPSTART(QUDA_PROFILE_D2H);
-  hostreturn( d_ret , return_array , nMom*X[3]*nEv*nEv , precision ) ;
   //getProfileCurrentKernel().TPSTOP(QUDA_PROFILE_D2H);
   // Clean up memory allocations
   //getProfileCurrentKernel().TPSTART(QUDA_PROFILE_FREE);
@@ -295,7 +329,7 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 32 ;
+  const int nmom = 64 ;
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
@@ -338,11 +372,11 @@ int main(int argc, char *argv[]) {
     std::cout<< "block " << blockSizeMomProj << std::endl ;
     memset( GPU_ret , 0.0 , nEv*nEv*nmom*X[3]*sizeof(double _Complex));
 #else
-    const int blockSizeMomProj = 512 ;
+    const int blockSizeMomProj = 4 ;
 #endif
 
     //alamode(
-    modeNlet(
+	    modeNlet(
 				      nmom,
 				      host_mom,
 				      nEv,
@@ -399,6 +433,7 @@ int main(int argc, char *argv[]) {
   printf( "\n*************************************\n" ) ;
   printf( "-----> GPU speedup factor %gx\n" , CPUtime/GPUtime ) ;
   printf( "*************************************\n\n" ) ;
+  printf( "CPU == GPU\n" ) ;
   for( int p = 0 ; p < nmom ; p++ ) {
     double sum = 0.0 ;
     for( int dil1 = 0 ; dil1 < nEv ; dil1++ ) {
@@ -409,10 +444,10 @@ int main(int argc, char *argv[]) {
 	for( int t = 0 ; t < X[3] ; t++ ) {
 	  #ifdef VERBOSE_COMPARISON
 	  printf( "(%f %f) == (%f %f)\n" ,
-		  creal( CPU_ret[t+X[3]*(p+nmom*(dil2+n2*dil1) )] ) ,
-		  cimag( CPU_ret[t+X[3]*(p+nmom*(dil2+n2*dil1) )] ) ,
-		  creal( GPU_ret[t+X[3]*(p+nmom*(dil2+n2*dil1) )] ) ,
-		  cimag( GPU_ret[t+X[3]*(p+nmom*(dil2+n2*dil1) )] )
+		  creal( CPU_ret[t+X[3]*(p+nmom*(dil2+nEv*dil1) )] ) ,
+		  cimag( CPU_ret[t+X[3]*(p+nmom*(dil2+nEv*dil1) )] ) ,
+		  creal( GPU_ret[t+X[3]*(p+nmom*(dil2+nEv*dil1) )] ) ,
+		  cimag( GPU_ret[t+X[3]*(p+nmom*(dil2+nEv*dil1) )] )
 		  ) ;
 	  #endif
 	  sum += cabs( (CPU_ret[t+X[3]*(p+nmom*(dil2+nEv*dil1) )] - GPU_ret[t+X[3]*(p+nmom*(dil2+nEv*dil1) )])/CPU_ret[t+X[3]*(p+nmom*(dil2+nEv*dil1) )] ) ; 

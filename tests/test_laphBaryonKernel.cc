@@ -172,22 +172,24 @@ void cpu_code_v1( const int n1, const int n2, const int n3,
       cpuColorCross( (void*)&q1[dil1*nsites*3] , (void*)&q2[dil2*nsites*3] , (void*)Diq.getDataPtr() , X ) ;
       for( int dil3 = 0 ; dil3 < n3 ; dil3++ ) {
 	cpuColorContract( (void*)Diq.getDataPtr() , (void*)&q3[dil3*nsites*3] , (void*)tmp.getDataPtr() , X ) ;
-	// Matrix mul here
-	for( int p = 0 ; p < nMom ; p++ ) {
-	  const double _Complex *p2 = (const double _Complex*)host_mom+nSp*p ;
-	  for( int T = 0 ; T < X[3] ; T++ ) {
-	    const double _Complex *p1 = (const double _Complex*)tmp.getDataPtr() + nSp*T ;
-	    double _Complex sum = 0.0 ;
+	// DFT
+	for( int cb = 0 ; cb < 2 ; cb++ ) {
+	  for( int p = 0 ; p < nMom ; p++ ) {
+	    const double _Complex *p2 = (const double _Complex*)host_mom+nSp*p+cb*nSp/2 ;
+	    for( int T = 0 ; T < X[3] ; T++ ) {
+	      const double _Complex *p1 = (const double _Complex*)tmp.getDataPtr() + nSp*T + cb*nSp/2;
+	      double _Complex sum = 0.0 ;
             #ifdef USE_OPENBLAS
-            sum = cblas_zdotu( nSp , p2 , 1 , p1 , 1 ) ;
+	      sum = cblas_zdotu( nSp/2 , p2 , 1 , p1 , 1 ) ;
             #elif (defined USE_GSL_CBLAS)
-	    cblas_zdotu( nSp , p2 , 1 , p1 , 1 , &sum ) ;
+	      cblas_zdotu( nSp/2 , p2 , 1 , p1 , 1 , &sum ) ;
             #else
-	    for( size_t i = 0 ; i < nSp ; i++ ) {
-	      sum += p2[i]*p1[i] ;
-	    }
+	      for( size_t i = 0 ; i < nSp/2 ; i++ ) {
+		sum += p2[i]*p1[i] ;
+	      }
 	    #endif
-	    return_array[ T + X[3]*( p + nMom*(size_t)( dil3 + n3*( dil2 + n2*dil1 ) )) ] = sum ;
+	      return_array[ T + X[3]*( p + nMom*(size_t)( dil3 + n3*( dil2 + n2*dil1 ) )) ] += sum ;
+	    }
 	  }
 	}
       }

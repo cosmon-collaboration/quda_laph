@@ -153,22 +153,24 @@ cpu_code( const std::vector<size_t> &nDil,
 	    cpuInnerProduct( Diq1.getDataPtr() , Diq2.getDataPtr() , tmp.getDataPtr() , X ) ;
 	    
 	    // Matrix mul here mom*d_tmp -> d_ret
-	    for( int p = 0 ; p < nMom ; p++ ) {
-	      const double _Complex *p2 = (const double _Complex*)host_mom+nSp*p ;
-	      for( int T = 0 ; T < X[3] ; T++ ) {
-		const double _Complex *p1 = (const double _Complex*)tmp.getDataPtr() + nSp*T ;
-		double _Complex sum = 0.0 ;
+	    for( int cb = 0 ; cb < 2 ; cb++ ) {
+	      for( int p = 0 ; p < nMom ; p++ ) {
+		const double _Complex *p2 = (const double _Complex*)host_mom+nSp*p+cb*nSp/2 ;
+		for( int T = 0 ; T < X[3] ; T++ ) {
+		  const double _Complex *p1 = (const double _Complex*)tmp.getDataPtr() + nSp*T + cb*nSp/2 ;
+		  double _Complex sum = 0.0 ;
                 #ifdef USE_OPENBLAS
-		sum = cblas_zdotc( nSp , p1 , 1 , p2 , 1 ) ;
+		  sum = cblas_zdotc( nSp/2 , p1 , 1 , p2 , 1 ) ;
                 #elif (defined USE_GSL_CBLAS)
-		cblas_zdotc( nSp , p1 , 1 , p2 , 1 , &sum ) ;
+		  cblas_zdotc( nSp/2 , p1 , 1 , p2 , 1 , &sum ) ;
                 #else
-		for( size_t i = 0 ; i < nSp ; i++ ) {
-		  sum += conj(p2[i])*p1[i] ;
-		}
+		  for( size_t i = 0 ; i < nSp/2 ; i++ ) {
+		    sum += conj(p2[i])*p1[i] ;
+		  }
                 #endif
-		const size_t midx = dEv + nDil[3]*( cEv + nDil[2]*( bEv + nDil[1]*aEv ) ) ;
-		return_arr[ T + X[3]*( p + nMom*midx ) ] = sum ;
+		  const size_t midx = dEv + nDil[3]*( cEv + nDil[2]*( bEv + nDil[1]*aEv ) ) ;
+		  return_arr[ T + X[3]*( p + nMom*midx ) ] += sum ;
+		}
 	      }
 	    }
 	  }

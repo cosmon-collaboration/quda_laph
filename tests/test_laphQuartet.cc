@@ -113,22 +113,24 @@ cpu_code( const int nMom,
 	  cpuInnerProduct( Diq1.getDataPtr() , Diq2.getDataPtr() , tmp.getDataPtr() , X ) ;
 
 	  // Matrix mul here mom*d_tmp -> d_ret
-	  for( int p = 0 ; p < nMom ; p++ ) {
-	    const double _Complex *p2 = (const double _Complex*)host_mom+nSp*p ;
-	    for( int T = 0 ; T < X[3] ; T++ ) {
-	      const double _Complex *p1 = (const double _Complex*)tmp.getDataPtr() + nSp*T ;
-	      double _Complex sum = 0.0 ;
-              #ifdef USE_OPENBLAS
-	      sum = cblas_zdotc( nSp , p1 , 1 , p2 , 1 ) ;
-              #elif (defined USE_GSL_CBLAS)
-	      cblas_zdotc( nSp , p1 , 1 , p2 , 1 , &sum ) ;
-              #else
-	      for( size_t i = 0 ; i < nSp ; i++ ) {
-		sum += conj(p2[i])*p1[i] ;
+	  for( int cb = 0 ; cb < 2 ; cb++ ) {
+	    for( int p = 0 ; p < nMom ; p++ ) {
+	      const double _Complex *p2 = (const double _Complex*)host_mom+nSp*p+cb*nSp/2 ;
+	      for( int T = 0 ; T < X[3] ; T++ ) {
+		const double _Complex *p1 = (const double _Complex*)tmp.getDataPtr() + nSp*T + cb*nSp/2 ;
+		double _Complex sum = 0.0 ;
+                #ifdef USE_OPENBLAS
+		sum = cblas_zdotc( nSp/2 , p1 , 1 , p2 , 1 ) ;
+                #elif (defined USE_GSL_CBLAS)
+		cblas_zdotc( nSp/2 , p1 , 1 , p2 , 1 , &sum ) ;
+                #else
+		for( size_t i = 0 ; i < nSp/2 ; i++ ) {
+		  sum += conj(p2[i])*p1[i] ;
+		}
+                #endif
+		const size_t midx = mapEv[aEv][bEv][cEv][dEv] ; 
+		return_arr[ T + X[3]*( p + nMom*midx ) ] += sum ;
 	      }
-              #endif
-	      const size_t midx = mapEv[aEv][bEv][cEv][dEv] ; 
-	      return_arr[ T + X[3]*( p + nMom*midx ) ] = sum ;
 	    }
 	  }
 	}
@@ -171,7 +173,7 @@ void alamode( const int nMom,
   const size_t nSites = nSp*X[3] ;
   const size_t nEvChoose4 = nEv*(nEv-1)/2*(nEv-2)/3*(nEv-3)/4;
   // these are hard-coded do not change
-  const int nDiq = 8 ;
+  const int nDiq = 16 ;
   
   // appropriate checks and balances
   //if (sizeof(Complex) != sizeof(double _Complex)) {
@@ -260,19 +262,21 @@ void alamode( const int nMom,
 
   // Create device diquark vector
   ColorSpinorParam cuda_diq_param(cpu_evec_param,inv_param,QUDA_CUDA_FIELD_LOCATION);
-  std::vector< ColorSpinorField > quda_diq1( nDiq ) , quda_diq2( nDiq ) ;
+  std::vector< ColorSpinorField > quda_diq1( 1 ) , quda_diq2( nDiq ) ;
   for( size_t i = 0 ; i < quda_diq1.size() ; i++ ) {
     quda_diq1[i] = ColorSpinorField( cuda_diq_param ) ;
+  }
+  for( size_t i = 0 ; i < quda_diq2.size() ; i++ ) {
     quda_diq2[i] = ColorSpinorField( cuda_diq_param ) ;
   }
 
   int nInBlock = 0, blockStart = 0;
   for (int aEv=0; aEv<nEv; aEv++) {
-    for( int bEv=aEv+1; bEv<nEv; bEv++ ) {
+    for( int bEv=aEv+1; bEv<nEv ; bEv++ ) {
       const int diqBlk1 = 1 ;
       colorCrossQudaV( quda_evec[aEv],
 		       { quda_evec.begin() + bEv , quda_evec.begin() + bEv + diqBlk1 } ,
-		       { quda_diq1.begin() , quda_diq1.begin()+diqBlk1 } ) ;      
+		       { quda_diq1.begin() , quda_diq1.begin()+diqBlk1 } ) ;
       for( int cEv=bEv+1; cEv<nEv; cEv++ ) {
 	int dEv = cEv+1 ;
 	while( dEv < nEv ) {
@@ -281,16 +285,16 @@ void alamode( const int nMom,
 	  colorCrossQudaV( quda_evec[cEv],
 			   { quda_evec.begin() + dEv , quda_evec.begin() + dEv + diqBlk2 } ,
 			   { quda_diq2.begin() , quda_diq2.begin()+diqBlk2 } ) ;      
-
+	  
 	  innerProductQudaV( quda_diq1[0], { quda_diq2.begin() , quda_diq2.begin()+diqBlk2 } ,
 			     (char*)d_tmp+nSites*nInBlock*2*precision );
 	  nInBlock+=diqBlk2 ; dEv += diqBlk2 ;
-
+	  
 	  if (nInBlock == blockSizeMomProj) {
 	    //getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);  
 	    blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp,
 						  (char*)d_ret,
-						  cublas_param_mom_sum,
+						    cublas_param_mom_sum,
 						  QUDA_CUDA_FIELD_LOCATION);
 	    //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_D2H);
 	    hostreturn( d_ret , return_arr + X[3]*nMom*blockStart ,
@@ -396,7 +400,7 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 16 ;
+  const int nmom = 32 ;
   const int X[4] = {
     LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
@@ -429,7 +433,7 @@ int main(int argc, char *argv[]) {
   inv_param.solution_type = QUDA_MAT_SOLUTION;
   inv_param.solve_type = QUDA_DIRECT_SOLVE;
   inv_param.cpu_prec = QUDA_DOUBLE_PRECISION;
-  inv_param.cuda_prec = QUDA_DOUBLE_PRECISION;
+  inv_param.cuda_prec = QUDA_SINGLE_PRECISION;
   inv_param.dirac_order = QUDA_DIRAC_ORDER;
   inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
   inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
@@ -443,11 +447,11 @@ int main(int argc, char *argv[]) {
     std::cout<<"nmom "<<nmom<<" | block "<<blockSizeMomProj<<std::endl ;
     memset( retGPU , 0.0 , X[3]*nmom*nEvChoose4*sizeof( double _Complex )) ;
 #else
-    const int blockSizeMomProj = 1024 ;
+    const int blockSizeMomProj = 2048 ;
 #endif
 
     //alamode(
-    modeNlet(
+	    modeNlet(
 					nmom,
 					host_mom ,
 					Nev,
@@ -455,7 +459,9 @@ int main(int argc, char *argv[]) {
 					inv_param,
 					retGPU,
 					blockSizeMomProj,
-					X , 4 ) ;
+					X
+									, 4
+	    ) ;
 
     double GPUtime = 0 ;
     int NP = nmom ;
@@ -463,7 +469,7 @@ int main(int argc, char *argv[]) {
       StopWatch gpu ;
       gpu.start() ;
       
-      //    alamode(
+      //alamode(
       modeNlet(
 	       nmom,
 	       host_mom ,
@@ -472,7 +478,9 @@ int main(int argc, char *argv[]) {
 	       inv_param,
 	       retGPU,
 	       blockSizeMomProj,
-	       X , 4 ) ;
+	       X
+	       , 4
+	      ) ;
     gpu.stop() ;
     GPUtime = gpu.getTimeInSeconds() ;
     printLaph(make_strf("\nGPU modetripletA in = %d %g seconds\n", NP , GPUtime )) ;

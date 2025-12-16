@@ -163,21 +163,23 @@ static void cpu_code_v2( const int n1,
       for( int dil2 = 0 ; dil2 < n2 ; dil2++ ) {
 	double _Complex *result = (double _Complex*)calloc( nsites , sizeof( double _Complex ) ) ;
 	cpuInner( q2 + dil2*3*nsites , q1 + dil1*3*nsites , result , X ) ;
-	for( int p = 0 ; p < nMom ; p++ ) {
-	  double _Complex *pm = (double _Complex*)host_mom + nSp*p ;
-	  for( int t = 0 ; t < X[3] ; t++ ) {
-	    double _Complex *rs = (double _Complex*)result + nSp*t ;
-	    double _Complex sum = 0. ;
-            #ifdef USE_OPENBLAS
-	    sum = cblas_zdotu( nSp , pm , 1 , rs , 1 ) ;
-            #elif (defined USE_GSL_CBLAS)
-	    cblas_zdotu( nSp , pm , 1 , rs , 1 , &sum ) ;
-            #else
-	    for( size_t i = 0 ; i < (size_t)nSp ; i++ ) {
-	      sum += pm[i]*rs[i] ;
+	for( int cb = 0 ; cb < 2 ; cb++ ) {
+	  for( int p = 0 ; p < nMom ; p++ ) {
+	    double _Complex *pm = (double _Complex*)host_mom + nSp*p + cb*nSp/2 ;
+	    for( int t = 0 ; t < X[3] ; t++ ) {
+	      double _Complex *rs = (double _Complex*)result + nSp*t + cb*nSp/2 ;
+	      double _Complex sum = 0. ;
+              #ifdef USE_OPENBLAS
+	      sum = cblas_zdotu( nSp/2 , pm , 1 , rs , 1 ) ;
+              #elif (defined USE_GSL_CBLAS)
+	      cblas_zdotu( nSp/2 , pm , 1 , rs , 1 , &sum ) ;
+              #else
+	      for( size_t i = 0 ; i < (size_t)nSp/2 ; i++ ) {
+		sum += pm[i]*rs[i] ;
+	      }
+              #endif
+	      rt[ t + X[3]*( p + nMom*( dil2 + n2*dil1 )) ] += sum ;
 	    }
-            #endif
-	    rt[ t + X[3]*( p + nMom*( dil2 + n2*dil1 )) ] = sum ;
 	  }
 	}
 	free( result ) ;
