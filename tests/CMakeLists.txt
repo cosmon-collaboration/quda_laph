@@ -57,3 +57,7 @@ target_link_libraries(TestQuartetKernel PUBLIC ${LiveLaphLibs} gputoolkitlib qud
 add_executable(TestDWF test_DWF.cc)
 target_include_directories(TestDWF PUBLIC include)
 target_link_libraries(TestDWF PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
+
+add_executable(TestMesonContract test_mesonContract.cc)
+target_include_directories(TestMesonContract PUBLIC include)
+target_link_libraries(TestMesonContract PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
