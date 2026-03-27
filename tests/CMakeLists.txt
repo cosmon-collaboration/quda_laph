@@ -61,3 +61,7 @@ target_link_libraries(TestDWF PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph
 add_executable(TestMesonContract test_mesonContract.cc)
 target_include_directories(TestMesonContract PUBLIC include)
 target_link_libraries(TestMesonContract PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)
+
+add_executable(TestBaryonContract test_baryonContract.cc)
+target_include_directories(TestBaryonContract PUBLIC include)
+target_link_libraries(TestBaryonContract PUBLIC ${LiveLaphLibs} gputoolkitlib quda QudaLaph)

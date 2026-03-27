@@ -127,7 +127,7 @@ compute_Mbwd1( const double _Complex *phi ,
   }
 }
 
-// trace of the product of ev indices Tr[ B.C
+// trace of the product of ev indices Tr[ B.C ]
 static inline double _Complex
 ev_traceprod( const double _Complex *B ,
 	      const double _Complex *C ,

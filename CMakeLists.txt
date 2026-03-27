@@ -48,6 +48,9 @@ add_compile_options(-march=native -Wall)
 
 if(OPENMP)
   find_Package(OpenMP)
+  if(OpenMP_CXX_FOUND)
+    add_compile_definitions(OPENMP)
+  endif()
 endif()
 
 if(PARALLEL_BUILD)
