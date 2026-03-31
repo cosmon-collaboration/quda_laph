@@ -32,7 +32,7 @@ using namespace LaphEnv ;
 // Quda interface
 
 //#define GPU_STRESS
-//#define CPU_CROSSCHECK
+#define CPU_CROSSCHECK
 //#define VERBOSE_COMPARISON
 //#define SLOW_CPU
 
@@ -151,6 +151,36 @@ Tcontract7( double _Complex *sum ,
 // B_{i'j'k}D_{kk'} -> A_{i'j'k'}
 // T_{i'j'k'}(t) C_{i'j'k'} = sum
 
+static void
+H2Dwrap( void *d_buf , const double _Complex *buf , const size_t arr_size , const int precision )
+{
+  if( precision == QUDA_SINGLE_PRECISION ) {
+    float _Complex *fbuf = (float _Complex*)malloc( 2*arr_size*precision ) ;
+    for( size_t i = 0 ; i < arr_size ; i++ ) {
+      fbuf[i] = (float _Complex)buf[i] ;
+    }
+    qudaMemcpy(d_buf, fbuf, 2*arr_size*precision, qudaMemcpyHostToDevice);
+    free( fbuf ) ;
+  } else {
+    qudaMemcpy(d_buf, buf , 2*arr_size*precision, qudaMemcpyHostToDevice);
+  }
+}
+
+static void
+D2Hwrap( double _Complex *buf , const void *d_buf , const size_t arr_size , const int precision )
+{
+  if( precision == QUDA_SINGLE_PRECISION ) {
+    float _Complex *fbuf = (float _Complex*)malloc( 2*arr_size*precision ) ;
+    qudaMemcpy(fbuf, d_buf, 2*arr_size*precision, qudaMemcpyDeviceToHost);
+    for( size_t i = 0 ; i < arr_size ; i++ ) {
+      buf[i] = (double _Complex)fbuf[i] ;
+    }
+    free( fbuf ) ;
+  } else {
+    qudaMemcpy(buf, d_buf , 2*arr_size*precision, qudaMemcpyDeviceToHost);
+  }
+}
+
 // GPU code
 // does TL_{ijk}(T) S1_{ii'}(t) S2_{jj'}(t) S3_{kk'}(t) TR_{i'j'k'}(t)
 static void
@@ -161,19 +191,20 @@ TcontractGPU3( double _Complex *sum ,
 	       const size_t nEv ,
 	       const size_t nmom ,
 	       const bartype btype ,
-	       const std::array<const std::array<int,2> , 3> &spin_idx )
+	       const std::vector< std::array<const std::array<int,2> , 3>> &sidx ,
+	       const int precision = QUDA_DOUBLE_PRECISION )
 {
   // device "T" object
-  const size_t sbytes = 16*LT*nEv*nEv*2*sizeof(double) ;
+  const size_t sbytes = LT*nEv*nEv*2*precision ;
   void *d_buf0 = pool_device_malloc( sbytes ) ;
 
   // device buffers for perambulators
-  const size_t tbytes = LT*nmom*nEv*nEv*nEv*2*sizeof(double) ;
+  const size_t tbytes = LT*nmom*nEv*nEv*nEv*2*precision ;
   void *d_T = pool_device_malloc( tbytes ) ;
   void *d_A = pool_device_malloc( tbytes ) ;
   void *d_B = pool_device_malloc( tbytes ) ;
 
-  const size_t retbytes = LT*nmom*nmom*2*sizeof(double) ;
+  const size_t retbytes = LT*nmom*nmom*2*precision ;
   void *d_ret = pool_device_malloc( retbytes ) ;
 
   const double OneGB = 1024.*1024.*1024. ;
@@ -182,21 +213,31 @@ TcontractGPU3( double _Complex *sum ,
 
   StopWatch Mem ; Mem.start() ;
  
-  // quda memcpys
-  qudaMemcpy(d_T,    T   , tbytes, qudaMemcpyHostToDevice);
-  for( int t = 0 ; t < LT ; t++ ) {
-    qudaMemcpy( (double _Complex*)d_buf0 + nEv*nEv*t ,
-		S[0] + nEv*nEv*( spin_idx[0][1] + 4*(spin_idx[0][0] + 4*t ) ) ,
-		nEv*nEv*sizeof(double _Complex) , qudaMemcpyHostToDevice);
-  }
-  
+  // quda memcpy the whole baryon kernel to the device once only as it is expensive
+  H2Dwrap(d_T, T, LT*nmom*nEv*nEv*nEv, precision) ;
+
   Mem.stop() ;
   double Memtime = Mem.getTimeInSeconds() ;
   printLaph( make_strf( "\n Mem in %g seconds\n" , Memtime ) ) ;
 
-  StopWatch MMuls ; MMuls.start() ;
+  printfQuda( "Picking %zu spin indices\n" , sidx.size() ) ;
   
-  for( size_t psrc = 0 ; psrc < nmom ; psrc++ ) {
+  for( size_t nspin = 0 ; nspin < sidx.size() ; nspin++ ) {
+
+    const std::array<const std::array<int,2> , 3> spin_idx = sidx[nspin] ;
+
+    printfQuda( "Contracting tau_0^{%d%d} tau_1^{%d%d} tau_2^{%d%d}\n" ,
+		spin_idx[0][0] , spin_idx[0][1] ,
+		spin_idx[1][0] , spin_idx[1][1] ,
+		spin_idx[2][0] , spin_idx[2][1] ) ;
+    
+    for( size_t t = 0 ; t < LT ; t++ ) {
+      H2Dwrap( (char*)d_buf0 + nEv*nEv*t*2*precision ,
+	       S[0] + nEv*nEv*( spin_idx[0][1] + 4*(spin_idx[0][0] + 4*t ) ) ,
+	       nEv*nEv, precision) ;
+    }
+      
+    StopWatch MMuls ; MMuls.start() ;
     QudaBLASParam cublas_param1 = newQudaBLASParam();
     cublas_param1.trans_a = QUDA_BLAS_OP_T ;
     cublas_param1.trans_b = QUDA_BLAS_OP_N ;
@@ -207,31 +248,29 @@ TcontractGPU3( double _Complex *sum ,
     cublas_param1.ldb = nEv*nEv;
     cublas_param1.ldc = nEv*nEv;
     cublas_param1.a_stride = nEv*nEv ;
-    cublas_param1.b_stride = 0 ; //nEv*nEv*nEv*nmom ;
+    cublas_param1.b_stride = 0 ;
     cublas_param1.c_stride = nEv*nEv*nEv*nmom ;
     cublas_param1.batch_count = LT ; // do "T" batches
     cublas_param1.alpha = 1.0 ; cublas_param1.beta = 0.0 ;
     cublas_param1.data_order = QUDA_BLAS_DATAORDER_ROW;
-    cublas_param1.data_type = QUDA_BLAS_DATATYPE_Z;
-
-    // checked and is ok
-    blas_lapack::native::stridedBatchGEMM( d_buf0,
-					   (double _Complex*)d_T + nEv*nEv*nEv*psrc ,
-					   (double _Complex*)d_A + nEv*nEv*nEv*psrc ,
-					   cublas_param1, QUDA_CUDA_FIELD_LOCATION);
-  }
-  
-  // second part break up into t i' batches
-  //qudaMemcpy(d_buf0, S[1] + spin_idx[1][1] + 4*spin_idx[1][0], sbytes, qudaMemcpyHostToDevice);  
-  for( int t = 0 ; t < LT ; t++ ) {
-    qudaMemcpy( (double _Complex*)d_buf0 + nEv*nEv*t ,
-		S[1] + nEv*nEv*( spin_idx[1][1] + 4*(spin_idx[1][0] + 4*t ) ) ,
-		nEv*nEv*sizeof(double _Complex) , qudaMemcpyHostToDevice);
-  }
-
-  // D_{jj'}^T(t) A_{i'jk}(t,p) -> B_{i'j'k}(t,p)
-  for( size_t t = 0 ; t < LT ; t++ ) {
+    cublas_param1.data_type = ( precision == QUDA_SINGLE_PRECISION ) ?	\
+      QUDA_BLAS_DATATYPE_C : QUDA_BLAS_DATATYPE_Z;
+    for( size_t psrc = 0 ; psrc < nmom ; psrc++ ) {      
+      // checked and is ok
+      blas_lapack::native::stridedBatchGEMM( d_buf0,
+					     (char*)d_T + 2*precision*nEv*nEv*nEv*psrc ,
+					     (char*)d_A + 2*precision*nEv*nEv*nEv*psrc ,
+					     cublas_param1, QUDA_CUDA_FIELD_LOCATION);
+    }
     
+    // second part break up into t i' batches
+    for( size_t t = 0 ; t < LT ; t++ ) {
+      H2Dwrap( (char*)d_buf0 + nEv*nEv*t*2*precision ,
+	       S[1] + nEv*nEv*( spin_idx[1][1] + 4*(spin_idx[1][0] + 4*t ) ) ,
+	       nEv*nEv, precision) ;
+    }
+    
+    // D_{jj'}^T(t) A_{i'jk}(t,p) -> B_{i'j'k}(t,p)
     QudaBLASParam cublas_param2 = newQudaBLASParam();
     cublas_param2.trans_a = QUDA_BLAS_OP_T ;
     cublas_param2.trans_b = QUDA_BLAS_OP_N ;
@@ -247,25 +286,24 @@ TcontractGPU3( double _Complex *sum ,
     cublas_param2.batch_count = nEv ; // do "nEv" batches
     cublas_param2.alpha = 1.0 ; cublas_param2.beta = 0.0 ;
     cublas_param2.data_order = QUDA_BLAS_DATAORDER_ROW;
-    cublas_param2.data_type = QUDA_BLAS_DATATYPE_Z;
-
-    for( size_t psrc = 0 ; psrc < nmom ; psrc++ ) {
-      blas_lapack::native::stridedBatchGEMM( (double _Complex*)d_buf0 + nEv*nEv*t ,
-					     (double _Complex*)d_A + nEv*nEv*nEv*(psrc + nmom*t),
-					     (double _Complex*)d_B + nEv*nEv*nEv*(psrc + nmom*t),
-					     cublas_param2, QUDA_CUDA_FIELD_LOCATION);
+    cublas_param2.data_type = ( precision == QUDA_SINGLE_PRECISION ) ?	\
+      QUDA_BLAS_DATATYPE_C : QUDA_BLAS_DATATYPE_Z;
+    for( size_t t = 0 ; t < LT ; t++ ) {      
+      for( size_t psrc = 0 ; psrc < nmom ; psrc++ ) {
+	blas_lapack::native::stridedBatchGEMM( (char*)d_buf0 + nEv*nEv*t*2*precision ,
+					       (char*)d_A + 2*precision*nEv*nEv*nEv*(psrc + nmom*t),
+					       (char*)d_B + 2*precision*nEv*nEv*nEv*(psrc + nmom*t),
+					       cublas_param2, QUDA_CUDA_FIELD_LOCATION);
+      }
     }
-  }
+    
+    // third product
+    for( size_t t = 0 ; t < LT ; t++ ) {
+      H2Dwrap( (char*)d_buf0 + nEv*nEv*t*2*precision ,
+	       S[2] + nEv*nEv*( spin_idx[2][1] + 4*(spin_idx[2][0] + 4*t ) ) ,
+	       nEv*nEv, precision) ;
+    }
 
-  // third product
-  for( int t = 0 ; t < LT ; t++ ) {
-    qudaMemcpy( (double _Complex*)d_buf0 + nEv*nEv*t ,
-		S[2] + nEv*nEv*( spin_idx[2][1] + 4*(spin_idx[2][0] + 4*t ) ) ,
-		nEv*nEv*sizeof(double _Complex) , qudaMemcpyHostToDevice);
-  }
-
-  //qudaMemcpy(d_buf0, S[2] + spin_idx[2][1] + 4*spin_idx[2][0] , sbytes, qudaMemcpyHostToDevice);
-  for( size_t psrc = 0 ; psrc < nmom ; psrc++ ) {
     // A_{i'jk'}(t,p) = B_{i'j'k}(t,p)D_{kk'}(t)
     QudaBLASParam cublas_param3 = newQudaBLASParam();
     cublas_param3.trans_a = QUDA_BLAS_OP_N ;
@@ -282,51 +320,50 @@ TcontractGPU3( double _Complex *sum ,
     cublas_param3.batch_count = LT ; // do "T" batches
     cublas_param3.alpha = 1.0 ; cublas_param3.beta = 0.0 ;
     cublas_param3.data_order = QUDA_BLAS_DATAORDER_ROW;
-    cublas_param3.data_type = QUDA_BLAS_DATATYPE_Z;
+    cublas_param3.data_type = ( precision == QUDA_SINGLE_PRECISION ) ?	\
+      QUDA_BLAS_DATATYPE_C : QUDA_BLAS_DATATYPE_Z;
+    for( size_t psrc = 0 ; psrc < nmom ; psrc++ ) {     
+      blas_lapack::native::stridedBatchGEMM( (char*)d_B + nEv*nEv*nEv*psrc*2*precision ,
+					     d_buf0 ,
+					     (char*)d_A + nEv*nEv*nEv*psrc*2*precision ,
+					     cublas_param3, QUDA_CUDA_FIELD_LOCATION);
+    }
     
-    // checked and is ok
-    blas_lapack::native::stridedBatchGEMM( (double _Complex*)d_B + nEv*nEv*nEv*psrc ,
-					   d_buf0 ,
-					   (double _Complex*)d_A + nEv*nEv*nEv*psrc ,
-					   cublas_param3, QUDA_CUDA_FIELD_LOCATION);
+    MMuls.stop() ;
+    double MMulstime = MMuls.getTimeInSeconds() ;
+    printLaph( make_strf( "\n MMULs in %g seconds\n" , MMulstime ) ) ;
+    
+    StopWatch Inner ; Inner.start() ;
+
+    // pinner
+    QudaBLASParam cublas_param4 = newQudaBLASParam();
+    cublas_param4.trans_a = QUDA_BLAS_OP_N ;
+    cublas_param4.trans_b = QUDA_BLAS_OP_T ;
+    cublas_param4.m = nmom ;
+    cublas_param4.n = nmom ;
+    cublas_param4.k = nEv*nEv*nEv ;
+    cublas_param4.lda = nEv*nEv*nEv;
+    cublas_param4.ldb = nEv*nEv*nEv;
+    cublas_param4.ldc = nmom;
+    cublas_param4.a_stride = nmom*nEv*nEv*nEv ;
+    cublas_param4.b_stride = nmom*nEv*nEv*nEv ;
+    cublas_param4.c_stride = nmom*nmom ;
+    cublas_param4.batch_count = LT ;
+    cublas_param4.alpha = 1.0 ; cublas_param4.beta = 0.0 ;
+    cublas_param4.data_order = QUDA_BLAS_DATAORDER_ROW;
+    cublas_param4.data_type = ( precision == QUDA_SINGLE_PRECISION ) ?	\
+      QUDA_BLAS_DATATYPE_C : QUDA_BLAS_DATATYPE_Z;
+    blas_lapack::native::stridedBatchGEMM( d_A, d_T, d_ret,
+					   cublas_param4, QUDA_CUDA_FIELD_LOCATION);
+    
+    Inner.stop() ;
+    double Innertime = Inner.getTimeInSeconds() ;
+    printLaph( make_strf( "\n Inner in %g seconds\n" , Innertime ) ) ;
+    
+    // copy back to host
+    D2Hwrap( sum + nmom*nmom*LT*nspin , d_ret , nmom*nmom*LT , precision ) ;
   }
   
-  MMuls.stop() ;
-  double MMulstime = MMuls.getTimeInSeconds() ;
-  printLaph( make_strf( "\n MMULs in %g seconds\n" , MMulstime ) ) ;
-
-  StopWatch Inner ; Inner.start() ;
-
-  // pinner
-  QudaBLASParam cublas_param4 = newQudaBLASParam();
-  cublas_param4.trans_a = QUDA_BLAS_OP_N ;
-  cublas_param4.trans_b = QUDA_BLAS_OP_T ;
-  cublas_param4.m = nmom ;
-  cublas_param4.n = nmom ;
-  cublas_param4.k = nEv*nEv*nEv ;
-  cublas_param4.lda = nEv*nEv*nEv;
-  cublas_param4.ldb = nEv*nEv*nEv;
-  cublas_param4.ldc = nmom; // is this right? I think so
-  cublas_param4.a_stride = nmom*nEv*nEv*nEv ;
-  cublas_param4.b_stride = nmom*nEv*nEv*nEv ;
-  cublas_param4.c_stride = nmom*nmom ;
-  cublas_param4.batch_count = LT ;
-  cublas_param4.alpha = 1.0 ; cublas_param4.beta = 0.0 ;
-  cublas_param4.data_order = QUDA_BLAS_DATAORDER_ROW;
-  cublas_param4.data_type = QUDA_BLAS_DATATYPE_Z;   
-  
-  blas_lapack::native::stridedBatchGEMM( (double _Complex*)d_A,
-					 (double _Complex*)d_T,
-					 (double _Complex*)d_ret,
-					 cublas_param4, QUDA_CUDA_FIELD_LOCATION);
-  
-  Inner.stop() ;
-  double Innertime = Inner.getTimeInSeconds() ;
-  printLaph( make_strf( "\n Inner in %g seconds\n" , Innertime ) ) ;
-    
-  // return function
-  qudaMemcpy( sum, d_ret , retbytes, qudaMemcpyDeviceToHost);
-
   pool_device_free( d_buf0 ) ;
   pool_device_free( d_ret ) ;
   pool_device_free( d_A ) ;
@@ -351,14 +388,14 @@ int main(int argc, char *argv[]) {
   setVerbosityQuda(QUDA_VERBOSE, "#" , stdout ) ;
 
   // test for this many EVs
-  const size_t nEv = 96 ;
-  const size_t nmom = 32 ;
+  const size_t nEv = 42 ;
+  const size_t nmom = 24 ;
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
     LayoutInfo::getRankLattExtents()[3] } ;
 
-  printf( "nEv %d | nmom %d | LT %d\n" , nEv , nmom , X[3] ) ;
+  printf( "nEv %zu | nmom %zu | LT %d\n" , nEv , nmom , X[3] ) ;
   
   // create a "perambulator" - tau - of noise with these indices
   double _Complex *tau = (double _Complex*)malloc( X[3]*4*4*nEv*nEv*sizeof(double _Complex));
@@ -423,7 +460,6 @@ int main(int argc, char *argv[]) {
       for( size_t t = 0 ; t < (size_t)X[3] ; t++ ) {
 	const double _Complex a = C[ psnk + nmom*( psrc + nmom*t) ] ;	
 	const double _Complex b = C2[ psnk + nmom*( psrc + nmom*t) ] ;
-
 	printf( "DIFF CPU2-CPU :: (%zu,%zu,%zu) ( %e , %e ) || ( %e %e ) :: %e \n" ,
 		psrc, psnk , t ,
 		creal( a ) , cimag( a ) ,
@@ -434,36 +470,55 @@ int main(int argc, char *argv[]) {
   }
 #endif
 #endif
-  double _Complex C3[ nmom*nmom*X[3] ] ;
+
+  // so many parentheses it's like I'm programming in LISP
+  const std::vector< std::array<const std::array<int,2> , 3>> sidx = { {{{0,0},{0,0},{0,0}}} ,
+								       {{{1,1},{1,1},{1,1}}} ,
+								       {{{2,2},{2,2},{2,2}}} ,
+								       {{{3,3},{3,3},{3,3}}} } ;
+  double _Complex C3[ nmom*nmom*X[3]*sidx.size() ] ;
+  TcontractGPU3( C3 ,  T , per , X[3] , nEv , nmom , ijk , sidx , QUDA_SINGLE_PRECISION ) ;
   
-  TcontractGPU3( C3 ,  T , per , X[3] , nEv , nmom , ijk , {{ {0,0},{0,0},{0,0}} } ) ;
-  
-  memset( C3 , 0. , nmom*nmom*X[3]*sizeof(double _Complex));
+  memset( C3 , 0. , sidx.size()*nmom*nmom*X[3]*sizeof(double _Complex));
   StopWatch GPU ; GPU.start() ;
-  TcontractGPU3( C3 ,  T , per , X[3] , nEv , nmom , ijk , {{ {0,0},{0,0},{0,0}} } ) ;
+  TcontractGPU3( C3 ,  T , per , X[3] , nEv , nmom , ijk , sidx , QUDA_SINGLE_PRECISION ) ;
   GPU.stop() ;
   double GPUtime = GPU.getTimeInSeconds() ;
   printLaph( make_strf( "\n GPU contraction time in %g seconds\n" , GPUtime ) ) ;
 
 #ifdef CPU_CROSSCHECK
-  printLaph( make_strf( "\nGPU speedup factor %gx\n" , CPUtime/GPUtime )  ) ;
+  printLaph( make_strf( "\nGPU speedup factor %gx\n" , sidx.size()*CPUtime/GPUtime )  ) ;
 
   #ifdef VERBOSE_COMPARISON
   for( size_t psrc = 0 ; psrc < nmom ; psrc++ ) {
     for( size_t psnk = 0 ; psnk < nmom ; psnk++ ) {
       for( size_t t = 0 ; t < (size_t)X[3] ; t++ ) {
+	const double nrm = cabs( C2[ psnk + nmom*( psrc + nmom*t) ] ) ;
 	const double _Complex a = C3[ psnk + nmom*( psrc + nmom*t) ] ;	
 	// tfastest
 	const double _Complex b = C2[ psnk + nmom*( psrc + nmom*t) ] ; //C2[t + X[3]*( psnk + nmom*psrc )] ; 
-	printf( "DIFF GPU-CPU :: (%d,%d,%zu) ( %e , %e ) || ( %e %e ) :: %e \n" ,
+	printf( "DIFF GPU-CPU :: (%zu,%zu,%zu) ( %e , %e ) || ( %e %e ) :: %e \n" ,
 		psrc , psnk , t ,
 		creal( a ) , cimag( a ) ,
 		creal( b ) , cimag( b ) ,
-		cabs( a - b ) ) ; 
+		cabs( a - b )/nrm ) ; 
       }
     }
   }
-#endif
+  #else
+  for( size_t t = 0 ; t < (size_t)X[3] ; t++ ) {
+    double sum = 0. ;
+    for( size_t psrc = 0 ; psrc < nmom ; psrc++ ) {
+      for( size_t psnk = 0 ; psnk < nmom ; psnk++ ) {
+	const double nrm = cabs( C2[ psnk + nmom*( psrc + nmom*t) ] ) ;
+	const double _Complex a = C3[ psnk + nmom*( psrc + nmom*t) ] ;	
+	const double _Complex b = C2[ psnk + nmom*( psrc + nmom*t) ] ;
+	sum += cabs( a - b )/nrm ;
+      }
+    }
+    printf( "Relative dev CPU-GPU %zu %e \n" , t , sum/(nmom*nmom) ) ;
+  }
+  #endif
 #endif
   
   free( tau ) ;
