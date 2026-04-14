@@ -32,7 +32,7 @@ using namespace LaphEnv ;
 // Quda interface
 
 //#define GPU_STRESS
-#define CPU_CROSSCHECK
+//#define CPU_CROSSCHECK
 //#define VERBOSE_COMPARISON
 //#define SLOW_CPU
 
@@ -195,7 +195,7 @@ TcontractGPU3( double _Complex *sum ,
 	       const int precision = QUDA_DOUBLE_PRECISION )
 {
   // device "T" object
-  const size_t sbytes = LT*nEv*nEv*2*precision ;
+  const size_t sbytes = nmom*LT*nEv*nEv*2*precision ;
   void *d_buf0 = pool_device_malloc( sbytes ) ;
 
   // device buffers for perambulators
@@ -232,7 +232,7 @@ TcontractGPU3( double _Complex *sum ,
 		spin_idx[2][0] , spin_idx[2][1] ) ;
     
     for( size_t t = 0 ; t < LT ; t++ ) {
-      H2Dwrap( (char*)d_buf0 + nEv*nEv*t*2*precision ,
+      H2Dwrap( (char*)d_buf0 + nEv*nEv*2*precision*t,
 	       S[0] + nEv*nEv*( spin_idx[0][1] + 4*(spin_idx[0][0] + 4*t ) ) ,
 	       nEv*nEv, precision) ;
     }
@@ -241,7 +241,7 @@ TcontractGPU3( double _Complex *sum ,
     QudaBLASParam cublas_param1 = newQudaBLASParam();
     cublas_param1.trans_a = QUDA_BLAS_OP_T ;
     cublas_param1.trans_b = QUDA_BLAS_OP_N ;
-    cublas_param1.m = nEv ;
+    cublas_param1.m = nEv;
     cublas_param1.n = nEv*nEv ;
     cublas_param1.k = nEv ;
     cublas_param1.lda = nEv;
@@ -255,6 +255,7 @@ TcontractGPU3( double _Complex *sum ,
     cublas_param1.data_order = QUDA_BLAS_DATAORDER_ROW;
     cublas_param1.data_type = ( precision == QUDA_SINGLE_PRECISION ) ?	\
       QUDA_BLAS_DATATYPE_C : QUDA_BLAS_DATATYPE_Z;
+    // checked and is ok
     for( size_t psrc = 0 ; psrc < nmom ; psrc++ ) {      
       // checked and is ok
       blas_lapack::native::stridedBatchGEMM( d_buf0,
@@ -263,13 +264,18 @@ TcontractGPU3( double _Complex *sum ,
 					     cublas_param1, QUDA_CUDA_FIELD_LOCATION);
     }
     
-    // second part break up into t i' batches
+    // second part break up into t * nmom batches
     for( size_t t = 0 ; t < LT ; t++ ) {
-      H2Dwrap( (char*)d_buf0 + nEv*nEv*t*2*precision ,
+      H2Dwrap( (char*)d_buf0 + 2*precision*nEv*nEv*nmom*t ,
 	       S[1] + nEv*nEv*( spin_idx[1][1] + 4*(spin_idx[1][0] + 4*t ) ) ,
 	       nEv*nEv, precision) ;
+      // memcpy for each p on device
+      for( size_t psrc = 0 ; psrc < nmom ; psrc++ ) {
+	qudaMemcpy( (char*)d_buf0 + 2*precision*nEv*nEv*( psrc + nmom*t ) ,
+		    (char*)d_buf0 + 2*precision*nEv*nEv*nmom*t ,
+		    2*precision*nEv*nEv , qudaMemcpyDeviceToDevice);
+      }
     }
-    
     // D_{jj'}^T(t) A_{i'jk}(t,p) -> B_{i'j'k}(t,p)
     QudaBLASParam cublas_param2 = newQudaBLASParam();
     cublas_param2.trans_a = QUDA_BLAS_OP_T ;
@@ -280,21 +286,19 @@ TcontractGPU3( double _Complex *sum ,
     cublas_param2.lda = nEv;
     cublas_param2.ldb = nEv;
     cublas_param2.ldc = nEv;
-    cublas_param2.a_stride = 0 ;
-    cublas_param2.b_stride = nEv*nEv ;
-    cublas_param2.c_stride = nEv*nEv ;
-    cublas_param2.batch_count = nEv ; // do "nEv" batches
+    cublas_param2.a_stride = nEv*nEv ;
+    cublas_param2.b_stride = nEv*nEv*nEv ;
+    cublas_param2.c_stride = nEv*nEv*nEv ;
+    cublas_param2.batch_count = LT*nmom ; // do nmom*LT batches
     cublas_param2.alpha = 1.0 ; cublas_param2.beta = 0.0 ;
     cublas_param2.data_order = QUDA_BLAS_DATAORDER_ROW;
     cublas_param2.data_type = ( precision == QUDA_SINGLE_PRECISION ) ?	\
       QUDA_BLAS_DATATYPE_C : QUDA_BLAS_DATATYPE_Z;
-    for( size_t t = 0 ; t < LT ; t++ ) {      
-      for( size_t psrc = 0 ; psrc < nmom ; psrc++ ) {
-	blas_lapack::native::stridedBatchGEMM( (char*)d_buf0 + nEv*nEv*t*2*precision ,
-					       (char*)d_A + 2*precision*nEv*nEv*nEv*(psrc + nmom*t),
-					       (char*)d_B + 2*precision*nEv*nEv*nEv*(psrc + nmom*t),
-					       cublas_param2, QUDA_CUDA_FIELD_LOCATION);
-      }
+    for( size_t ip = 0 ; ip < nEv ; ip++ ) {
+      blas_lapack::native::stridedBatchGEMM( (char*)d_buf0 ,
+					     (char*)d_A + 2*precision*ip*nEv*nEv,
+					     (char*)d_B + 2*precision*ip*nEv*nEv,
+					     cublas_param2, QUDA_CUDA_FIELD_LOCATION);
     }
     
     // third product
@@ -303,7 +307,6 @@ TcontractGPU3( double _Complex *sum ,
 	       S[2] + nEv*nEv*( spin_idx[2][1] + 4*(spin_idx[2][0] + 4*t ) ) ,
 	       nEv*nEv, precision) ;
     }
-
     // A_{i'jk'}(t,p) = B_{i'j'k}(t,p)D_{kk'}(t)
     QudaBLASParam cublas_param3 = newQudaBLASParam();
     cublas_param3.trans_a = QUDA_BLAS_OP_N ;
@@ -388,8 +391,13 @@ int main(int argc, char *argv[]) {
   setVerbosityQuda(QUDA_VERBOSE, "#" , stdout ) ;
 
   // test for this many EVs
-  const size_t nEv = 42 ;
+#ifdef CPU_CROSSCHECK
+  const size_t nEv = 8 ;
+  const size_t nmom = 8 ;
+#else
+  const size_t nEv = 48 ;
   const size_t nmom = 24 ;
+#endif
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
