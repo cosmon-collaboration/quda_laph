@@ -41,6 +41,13 @@ using namespace LaphEnv ;
 // Cpu code
 #define BLASFUNCS
 
+// Quda interface
+
+//#define VERBOSE_COMPARISON
+//#define GPU_STRESS
+#define CPU_CROSSCHECK
+//#define VERBOSE_CPU
+
 static inline
 double _Complex getfac( const Z4 z4 )
 {
@@ -197,12 +204,12 @@ basic_contraction( double _Complex *C ,
 	for( size_t t = 0 ; t < LT ; t++ ) {
 	  for( size_t ab = 0 ; ab < 16 ; ab++ ) {
 	    // Does Msnk^{\alpha\beta}_{ij}(p,t) = phi_{ik}(p,t) Gl^{\alpha\kappa}\tau^{\kappa\beta}_{kj}(t)
-	    const double _Complex *PhiP = phi + nEv*nEv*( t + LT*p ) ;
+	    const double _Complex *PhiP = phi + nEv*nEv*( p + nmom*t ) ;
 	    const double _Complex *Tp = buf1 + nEv*nEv*( ab + 16*t ) ;
 	    double _Complex *Mp = Msnk + nEv*nEv*( ab + 16*( p + nmom*t ) ) ;
 	    innerevprod( PhiP , Tp , nEv , Mp ) ;
 	    // Does Msrc^{\alpha\beta}_{ij}(p,t) = ( phi_{ik}(p,t) Gl^{\alpha\kappa}(\gamma_5 \tau^* \gamma_5 )^{\kappa\beta}_{jk}(t) )
-	    PhiP = phi + nEv*nEv*( tsrc + LT*p ) ;
+	    PhiP = phi + nEv*nEv*( p + nmom*tsrc ) ;
 	    Tp = buf2 + nEv*nEv*( ab + 16*t ) ;
 	    Mp = Msrc + nEv*nEv*( ab + 16*( p + nmom*t ) ) ;
 	    innerevprod_dag( PhiP , Tp , nEv , Mp ) ;
@@ -227,12 +234,6 @@ basic_contraction( double _Complex *C ,
 
   free( Msnk ) ; free( Msrc ) ; free( buf1 ) ; free( buf2 ) ;
 }
-
-// Quda interface
-
-//#define VERBOSE_COMPARISON
-//#define GPU_STRESS
-#define CPU_CROSSCHECK
 
 static void
 H2Dwrap( void *d_buf , const double _Complex *buf , const size_t arr_size , const int precision )
@@ -277,29 +278,38 @@ McontractGPU( double _Complex *sum ,
 	      const int precision = QUDA_DOUBLE_PRECISION )
 {
   const NRgamma g5( Gamma_5 ) ;
-  
-  // sbytes
-  const size_t sbytes = LT*4*4*nEv*nEv*2*precision ;
-  void *d_S = pool_device_malloc( sbytes ) ;
-  
-  // compute the fwd "elemental"
-  const size_t mbytes = LT*nmom*nEv*nEv*16*2*precision ;
-  void *d_fwd = pool_device_malloc( mbytes ) ;
-  void *d_bwd = pool_device_malloc( mbytes ) ;
 
-  // device return bytes
-  const size_t rbytes = LT*nmom*nmom*2*precision ;
-  void *d_ret = pool_device_malloc( rbytes ) ;
-  
-  // tbytes
-  const size_t tbytes = LT*nmom*nEv*nEv*2*precision ;
-  void *d_T = pool_device_malloc( tbytes ) ;
-  H2Dwrap( d_T , T , LT*nmom*nEv*nEv , precision ) ;
-
+  // host gamma'd versions of the perambulators
   double _Complex *gtmp1 = (double _Complex*)malloc( LT*4*4*nEv*nEv*sizeof( double _Complex ) ) ;
   double _Complex *gtmp2 = (double _Complex*)malloc( LT*4*4*nEv*nEv*sizeof( double _Complex ) ) ;
 
-  // loop gammas
+  const size_t mbytes = LT*nmom*nEv*nEv*16*2*precision ;
+  const size_t rbytes = LT*nmom*nmom*2*precision ;
+  const size_t tbytes = LT*nmom*nEv*nEv*2*precision ;
+  if( getVerbosity() >= QUDA_SUMMARIZE ) {
+    const size_t OneGB = 1024*1024*1024;
+    const size_t total_bytes = 2*mbytes + rbytes + 2*tbytes ;
+    printfQuda("d_ret %fGB | dT %fGB | dT2 %fGB| d_fwd %fGB | d_bwd %fGB | total = %fGB\n",
+	       (double)rbytes/(OneGB) , (double)tbytes/(OneGB), (double)tbytes/OneGB ,
+	       (double)mbytes/(OneGB), (double)mbytes/(OneGB) , (double)total_bytes/(OneGB)); 
+  }
+  void *d_fwd = pool_device_malloc( mbytes ) ;
+  void *d_bwd = pool_device_malloc( mbytes ) ;
+  void *d_ret = pool_device_malloc( rbytes ) ;
+  void *d_T  = pool_device_malloc( tbytes ) ;
+  void *d_T2 = pool_device_malloc( tbytes ) ;
+  
+  // copy "T" to device
+  H2Dwrap( d_T , T , LT*nmom*nEv*nEv , precision ) ;
+
+  const int tsrc = 0 ;
+  for( size_t t = 0 ; t < LT ; t++ ) {
+    qudaMemcpy( (char*)d_T2 + 2*precision*nEv*nEv*nmom*t,
+		(char*)d_T  + 2*precision*nEv*nEv*nmom*tsrc ,
+		2*precision*nEv*nEv*nmom , qudaMemcpyDeviceToDevice);
+  }
+  
+  // loop gamma src and sink combinations
   for( size_t g = 0 ; g < GlGr.size() ; g++ ) {
   
     // fwd is T_{ij}(0,p) S_{jk}^{\alpha\beta}(t)
@@ -309,9 +319,14 @@ McontractGPU( double _Complex *sum ,
       gamLR( gtmp2 , GlGr[g][1]*g5 , S[1] , g5 , nEv , LT ) ;
     }
     for( size_t t = 0 ; t < LT ; t++ ) {
-      H2Dwrap( (char*)d_S + nEv*nEv*16*t*2*precision ,
+      H2Dwrap( (char*)d_fwd + 2*precision*nEv*nEv*16*nmom*t ,
 	       gtmp1 + nEv*nEv*16*t ,
 	       nEv*nEv*16, precision) ;
+      for( size_t p = 1 ; p < nmom ; p++ ) {
+      	qudaMemcpy( (char*)d_fwd + 2*precision*16*nEv*nEv*( p + nmom*t ) ,
+		    (char*)d_fwd + 2*precision*16*nEv*nEv*nmom*t ,
+		    2*precision*16*nEv*nEv , qudaMemcpyDeviceToDevice);
+      }
     }
 
     // BLAS function1 creating fwd elemental - CPU GPU agree
@@ -328,65 +343,29 @@ McontractGPU( double _Complex *sum ,
       cublas_param1.ldc = nEv ;
       cublas_param1.a_stride = nEv*nEv ;
       cublas_param1.b_stride = nEv*nEv*16 ;
-      cublas_param1.c_stride = nEv*nEv*16*nmom ; // tslowest
-      cublas_param1.batch_count = LT ; // do "T" batches
+      cublas_param1.c_stride = nEv*nEv*16 ; // tslowest
+      cublas_param1.batch_count = LT*nmom ; // do "T" batches
       cublas_param1.alpha = 1.0 ; cublas_param1.beta = 0.0 ;
       cublas_param1.data_order = QUDA_BLAS_DATAORDER_ROW;
       cublas_param1.data_type = ( precision == QUDA_SINGLE_PRECISION ) ? \
 	QUDA_BLAS_DATATYPE_C : QUDA_BLAS_DATATYPE_Z;
-      
-      for( size_t psnk = 0 ; psnk < nmom ; psnk++ ) {
-	blas_lapack::native::stridedBatchGEMM( (char*)d_T + 2*precision*nEv*nEv*LT*psnk ,
-					       (char*)d_S + 2*precision*nEv*nEv*ab ,
-					       (char*)d_fwd + 2*precision*nEv*nEv*( ab + 16*psnk) ,
-					       cublas_param1, QUDA_CUDA_FIELD_LOCATION);
-      }
+      blas_lapack::native::stridedBatchGEMM( (char*)d_T ,
+					     (char*)d_fwd + 2*precision*nEv*nEv*ab ,
+					     (char*)d_fwd + 2*precision*nEv*nEv*ab ,
+					     cublas_param1, QUDA_CUDA_FIELD_LOCATION);
     }
-
-    #if 0
-    // do a check
-    double _Complex *Msnk = (double _Complex*)malloc( 16*nmom*LT*nEv*nEv*sizeof( double _Complex ) ) ;
-    double _Complex *FWD  = (double _Complex*)malloc( 16*nmom*LT*nEv*nEv*sizeof( double _Complex ) ) ;
-
-    double _Complex *Msrc = (double _Complex*)malloc( 16*nmom*LT*nEv*nEv*sizeof( double _Complex ) ) ;
-    double _Complex *BWD  = (double _Complex*)malloc( 16*nmom*LT*nEv*nEv*sizeof( double _Complex ) ) ;
     
-    D2Hwrap( FWD , d_fwd , 16*nmom*LT*nEv*nEv , precision) ;
-
-    for( size_t p = 0 ; p < nmom ; p++ ) {
-      for( size_t t = 0 ; t < LT ; t++ ) {
-	for( size_t ab = 0 ; ab < 16 ; ab++ ) {
-	  // Does Msnk^{\alpha\beta}_{ij}(p,t) = phi_{ik}(p,t) Gl^{\alpha\kappa}\tau^{\kappa\beta}_{kj}(t)
-	  const double _Complex *PhiP = T + nEv*nEv*( t + LT*p ) ;
-	  const double _Complex *Tp = gtmp + nEv*nEv*( ab + 16*t ) ;
-	  double _Complex *Mp = Msnk + nEv*nEv*( ab + 16*( p + nmom*t ) ) ;
-	  innerevprod( PhiP , Tp , nEv , Mp ) ;
-	  
-	  // compare
-	  for( int i = 0 ; i < nEv ; i++ ) {
-	    for( int j = 0 ; j < nEv ; j++ ) {
-
-	      double _Complex z1 = Msnk[ j + nEv*( i + nEv*( ab + 16*( p + nmom*t ) ) ) ] ;
-	      double _Complex z2 = FWD[ j + nEv*( i + nEv*( ab + 16*( p + nmom*t ) ) ) ] ;
-	      if( cabs( z1 - z2 ) > 1E-14 ) {
-		printf( "FWD problem" ) ;
-		printf( "%zu %zu %zu %d %d | (%g %g) vs (%g %g)) %e\n" ,
-			p , t , ab , i , j , 
-			creal( z1 ) , cimag( z1 ) ,
-			creal( z2 ) , cimag( z2 ) , cabs( z1-z2 ) ) ;
-	      }
-	    }
-	  }
-	}
-      }
-    }
-#endif
-    
-    // bwd is S2_{jk}^{\alpha\beta}(t) T_{t,p,k,i}
+    // bwd
+    const int tsrc = 0 ;
     for( size_t t = 0 ; t < LT ; t++ ) {
-      H2Dwrap( (char*)d_S + nEv*nEv*16*t*2*precision ,
+      H2Dwrap( (char*)d_bwd + nEv*nEv*16*t*nmom*2*precision ,
 	       gtmp2 + nEv*nEv*16*t ,
 	       nEv*nEv*16, precision) ;
+      for( size_t p = 1 ; p < nmom ; p++ ) {
+      	qudaMemcpy( (char*)d_bwd + 2*precision*16*nEv*nEv*( p + nmom*t ) ,
+		    (char*)d_bwd + 2*precision*16*nEv*nEv*nmom*t ,
+		    2*precision*16*nEv*nEv , qudaMemcpyDeviceToDevice);
+      }
     }
 
     // BLAS function2 creating second elemental
@@ -401,55 +380,19 @@ McontractGPU( double _Complex *sum ,
       cublas_param1.lda = nEv ;
       cublas_param1.ldb = nEv ;
       cublas_param1.ldc = nEv ;
-      cublas_param1.a_stride = 0 ;
+      cublas_param1.a_stride = nEv*nEv ;
       cublas_param1.b_stride = nEv*nEv*16 ;
-      cublas_param1.c_stride = nEv*nEv*16*nmom ; // tslowest
-      cublas_param1.batch_count = LT ; // do "T" batches for now
+      cublas_param1.c_stride = nEv*nEv*16 ; // tslowest
+      cublas_param1.batch_count = LT*nmom ; // do "T" batches for now
       cublas_param1.alpha = 1.0 ; cublas_param1.beta = 0.0 ;
       cublas_param1.data_order = QUDA_BLAS_DATAORDER_ROW;
       cublas_param1.data_type = ( precision == QUDA_SINGLE_PRECISION ) ? \
 	QUDA_BLAS_DATATYPE_C : QUDA_BLAS_DATATYPE_Z;
-      
-      for( size_t psrc = 0 ; psrc < nmom ; psrc++ ) {
-	blas_lapack::native::stridedBatchGEMM( (char*)d_T + 2*precision*nEv*nEv*LT*psrc ,
-					       (char*)d_S + 2*precision*nEv*nEv*ab ,
-					       (char*)d_bwd + 2*precision*nEv*nEv*( ab + 16*psrc) ,
-					       cublas_param1, QUDA_CUDA_FIELD_LOCATION);
-      }
+      blas_lapack::native::stridedBatchGEMM( (char*)d_T2 ,
+					     (char*)d_bwd + 2*precision*nEv*nEv*ab ,
+					     (char*)d_bwd + 2*precision*nEv*nEv*ab ,
+					     cublas_param1, QUDA_CUDA_FIELD_LOCATION);
     }
-    printf( "Bwd done \n") ;
-
-#if 0
-    D2Hwrap( BWD , d_bwd , 16*nmom*LT*nEv*nEv , precision) ;
-
-    for( size_t t = 0 ; t < LT ; t++ ) {
-      for( size_t p = 0 ; p < nmom ; p++ ) {
-	for( size_t ab = 0 ; ab < 16 ; ab++ ) {
-	  // Does Msnk^{\alpha\beta}_{ij}(p,t) = phi_{ik}(p,t) Gl^{\alpha\kappa}\tau^{\kappa\beta}_{kj}(t)
-	  const double _Complex *PhiP = T + nEv*nEv*( 0 + LT*p ) ;
-	  const double _Complex *Tp = gtmp + nEv*nEv*( ab + 16*t ) ;
-	  double _Complex *Mp = Msrc + nEv*nEv*( ab + 16*( p + nmom*t ) ) ;
-	  innerevprod_dag( PhiP , Tp , nEv , Mp ) ;
-
-	  // compare
-	  for( int i = 0 ; i < nEv ; i++ ) {
-	    for( int j = 0 ; j < nEv ; j++ ) {
-	      double _Complex z1 = Msrc[ j + nEv*( i + nEv*( ab + 16*( p + nmom*t ) ) ) ] ;
-	      double _Complex z2 = BWD[ j + nEv*( i + nEv*( ab + 16*( p + nmom*t ) ) ) ] ;
-	      if( cabs( z1 - z2 ) > 1E-14 ) {
-		printf( "BWD problem" ) ;
-
-		printf( "%zu %zu %zu %d %d | (%g %g) vs (%g %g)) %e\n" ,
-			p , t , ab , i , j , 
-			creal( z1 ) , cimag( z1 ) ,
-			creal( z2 ) , cimag( z2 ) , cabs( z1-z2 ) ) ;
-	      }
-	    }
-	  }
-	}
-      }
-    }    
-#endif
     
     // innerproduct trace over all psrc psnk
     // fwd_{t,psrc,alpha,beta,i,j} bwd_{t,psnk,beta,alpha,j,i}
@@ -470,10 +413,9 @@ McontractGPU( double _Complex *sum ,
     cublas_param3.data_order = QUDA_BLAS_DATAORDER_ROW;
     cublas_param3.data_type = ( precision == QUDA_SINGLE_PRECISION ) ?	\
       QUDA_BLAS_DATATYPE_C : QUDA_BLAS_DATATYPE_Z;
-    
     blas_lapack::native::stridedBatchGEMM( d_bwd, d_fwd, d_ret, cublas_param3,
 					   QUDA_CUDA_FIELD_LOCATION);
-    
+    // copy back to "sum" on the host
     D2Hwrap( sum + g*nmom*nmom*LT , d_ret , nmom*nmom*LT , precision ) ;
   }
   
@@ -482,7 +424,6 @@ McontractGPU( double _Complex *sum ,
   pool_device_free( d_ret ) ;
   pool_device_free( d_fwd ) ;
   pool_device_free( d_bwd ) ;
-  pool_device_free( d_S ) ;
   pool_device_free( d_T ) ;
 }
 
@@ -501,8 +442,8 @@ int main(int argc, char *argv[]) {
   setVerbosityQuda(QUDA_VERBOSE, "#" , stdout ) ;
 
   // test for this many EVs
-  const int nEv = 48 ;
-  const int nmom = 24 ;
+  const size_t nEv = 96 ;
+  const size_t nmom = 42 ;
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
@@ -518,8 +459,8 @@ int main(int argc, char *argv[]) {
   }
 
   // create our "phi" matrix out of noise too
-  double _Complex *phi = (double _Complex*)malloc( nmom*X[3]*nEv*nEv*sizeof(double _Complex));
-  for( size_t i = 0 ; i < nmom*X[3]*nEv*nEv ; i++ ) {
+  double _Complex *phi = (double _Complex*)malloc( X[3]*nmom*nEv*nEv*sizeof(double _Complex));
+  for( size_t i = 0 ; i < X[3]*nmom*nEv*nEv ; i++ ) {
     const std::complex z( unif(mt) , unif(mt) ) ;
     phi[i] = z.real() + I*z.imag() ;
   }
@@ -528,10 +469,12 @@ int main(int argc, char *argv[]) {
 
   Gbasis g( false ) ;
   std::vector<std::array< NRgamma, 2>> GlGr = { { g.G[Gamma_5] , g.G[Gamma_5].dagger() } ,
-						{ g.G[Gamma_X] , g.G[Gamma_X].dagger() } } ;
+						{ g.G[Gamma_X] , g.G[Gamma_X].dagger() } ,
+						{ g.G[Gamma_Y] , g.G[Gamma_Y].dagger() } ,
+						{ g.G[Gamma_Z] , g.G[Gamma_Z].dagger() } } ;
     
 
-  double _Complex C1[ GlGr.size()*nmom*nmom*X[3] ] ;
+  double _Complex *C1 = (double _Complex*)calloc( GlGr.size()*nmom*nmom*X[3] , sizeof( double _Complex) ) ;
 
   StopWatch CPU ; CPU.start() ;
   basic_contraction( C1 , phi , per , GlGr , nEv , nmom , 0 , X[3] ) ;
@@ -540,7 +483,7 @@ int main(int argc, char *argv[]) {
   printLaph( make_strf( "\n CPU in %g seconds\n" , CPUtime ) ) ;
 
   // GPU
-  double _Complex C2[ GlGr.size()*nmom*nmom*X[3] ] ;
+  double _Complex *C2 = (double _Complex*)calloc( GlGr.size()*nmom*nmom*X[3] , sizeof( double _Complex) ) ;
   McontractGPU( C2 , phi , per , GlGr , X[3] , nEv , nmom , QUDA_SINGLE_PRECISION ) ;
 
   StopWatch GPU ; GPU.start() ;
@@ -554,21 +497,23 @@ int main(int argc, char *argv[]) {
 #ifdef VERBOSE_CPU
   for( size_t ng = 0 ; ng < GlGr.size() ; ng++ ) {
     GlGr[ng][0].print() ; GlGr[ng][1].print() ;
-    for( int psrc = 0 ; psrc < nmom ; psrc++ ) {
-      for( int psnk = 0 ; psnk < nmom ; psnk++ ) {
+    for( size_t psrc = 0 ; psrc < nmom ; psrc++ ) {
+      for( size_t psnk = 0 ; psnk < nmom ; psnk++ ) {
 	for( size_t t = 0 ; t < X[3] ; t++ ) {
 	  const double _Complex z1 = C1[ psnk + nmom*( psrc + nmom*(t + X[3]*ng) ) ] ;
 	  const double _Complex z2 = C2[ psnk + nmom*( psrc + nmom*(t + X[3]*ng) ) ] ;
 	  printf( "Psrc,Psnk,t : (%zu %zu %zu) [%e,%e] [%e,%e] :: %e \n" , psrc , psnk , t ,
 		  creal( z1 ) , cimag( z1 ) ,
 		  creal( z2 ) , cimag( z2 ) ,
-		  cabs( z1 - z2 ) ) ;
+		  cabs( z1 - z2 )/cabs(z1) ) ;
 	}
       }
     }
   }
 #endif
 
+  free( phi ) ; free( tau ) ;
+  free( C2 ) ; free( C1 ) ;
   
   finalize( ) ;
   return 0;
