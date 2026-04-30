@@ -32,7 +32,7 @@ using namespace LaphEnv ;
 // Quda interface
 
 //#define GPU_STRESS
-//#define CPU_CROSSCHECK
+#define CPU_CROSSCHECK
 //#define VERBOSE_COMPARISON
 //#define SLOW_CPU
 
@@ -392,8 +392,8 @@ int main(int argc, char *argv[]) {
 
   // test for this many EVs
 #ifdef CPU_CROSSCHECK
-  const size_t nEv = 8 ;
-  const size_t nmom = 8 ;
+  const size_t nEv = 48 ;
+  const size_t nmom = 24 ;
 #else
   const size_t nEv = 48 ;
   const size_t nmom = 24 ;
