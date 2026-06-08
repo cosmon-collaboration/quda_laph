@@ -403,8 +403,8 @@ void PerambulatorHandler::setComputationSet(const XMLHandler& xmlin)
     if ((source_time<0)||(source_time>=int(Textent))){
        errorLaph(make_strf("Invalid source time %d",source_time));}
 		int nSinkTimes=tmax-tmin+1; 
-    if ((tmin<=(-Textent))||(tmax>=int(Textent))||(nSinkTimes<=0)||(nSinkTimes>Textent)){
-       errorLaph(make_strf("Invalid sink tmin and tmax (%d,%d)",tmin,tmax));}
+    if ((tmin<=(-(int(Textent))))||(tmax>=int(Textent))||(nSinkTimes<=0)||(nSinkTimes>int(Textent))){
+       errorLaph(make_strf("Invalid sink tmin, tmax, nSinkTimes, Textent (%d,%d,%d,%d)",tmin,tmax,nSinkTimes,Textent));}
     set<int> srcev_indices;
     if (xml_tag_count(*it,"SourceLaphEigvecIndices")==1){
        vector<int> srcev_inds;
