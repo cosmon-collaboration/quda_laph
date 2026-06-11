@@ -25,7 +25,7 @@ using namespace quda ;
 //#define PSEUDOCONSTANT
 //#define VERBOSE_COMPARISON
 //#define GPU_STRESS
-#define CPUCROSSCHECK
+//#define CPUCROSSCHECK
 
 // cpu color cross
 static void
@@ -50,7 +50,7 @@ cpuColorContract( void *A , void *B , void *result , const int X[4] )
   const int Nsites = X[0]*X[1]*X[2]*X[3] ;
   const std::complex<double> *ptA = (const std::complex<double>*)A ;
   const std::complex<double> *ptB = (const std::complex<double>*)B ;
-  std::complex<double> *ptC = (std::complex<double>*)result ;
+  double _Complex *ptC = (double _Complex*)result ;
   for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
     #ifdef USE_OPENBLAS
     ptC[i] = cblas_zdotu( 3 , ptA+3*i , 1 , ptB+3*i , 1 ) ;
@@ -131,32 +131,37 @@ cpu_code( const int nMom,
   }
 }
 
-static inline void
+static void
 hostreturn( const void *d_ret ,
 	    double _Complex *return_array ,
 	    const size_t size ,
 	    const int precision )
 {
+  //qudaDeviceSynchronize();
+  if( size == 0 ) return ;
   if( precision == QUDA_SINGLE_PRECISION ) {
-    float _Complex *tmp = (float _Complex*)calloc( size , sizeof( float _Complex ) ) ;
+    void *tmp = host_pinned_malloc( size*2*precision );
+    //float _Complex *tmp = (float _Complex*)calloc( size , sizeof( float _Complex ) ) ;
     qudaMemcpy(tmp, d_ret, size*2*precision, qudaMemcpyDeviceToHost);
+    float _Complex *tp = (float _Complex*)tmp ;
     for( size_t i = 0 ; i < size ; i++ ) {
-      return_array[i] = (double _Complex)tmp[i] ;
+      return_array[i] = (double _Complex)tp[i] ;
     }
-    free( tmp ) ;
+    host_free( tmp ) ;
+    //free( tmp ) ;
   } else {
     qudaMemcpy(return_array, d_ret, size*2*precision, qudaMemcpyDeviceToHost);  
   }
 }
 
 // so I tied an onion to my belt, which was the style at the time
-void alamode( const int nMom,
+void alamode( const size_t nMom,
 	      const double _Complex *host_mom,
-	      const int nEv,
+	      const size_t nEv,
 	      void **host_evec, 
 	      QudaInvertParam inv_param,
 	      double _Complex *return_arr,
-	      const int blockSizeMomProj,
+	      const size_t blockSizeMomProj,
 	      const int X[4])
 {
   //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_TOTAL);
@@ -165,7 +170,7 @@ void alamode( const int nMom,
   const size_t nSites = nSp*X[3] ;
   const size_t nEvChoose3 = nEv*(nEv-1)/2*(nEv-2)/3;
   // these are hard-coded do not change
-  const int nRHS = 16 , nDiq = 8 ;
+  const size_t nRHS = 16 , nDiq = 8 ;
   
   // appropriate checks and balances
   //if (sizeof(Complex) != sizeof(double _Complex)) {
@@ -219,6 +224,7 @@ void alamode( const int nMom,
 
   // Copy host data to device
   //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_H2D);
+  std::cout<<"memcpy?"<<std::endl ;
   if( precision == QUDA_SINGLE_PRECISION ) {
     float _Complex *tmp = (float _Complex*)calloc( nMom*nSp , sizeof(float _Complex) ) ;
     for( size_t i = 0 ; i < nMom*nSp ; i++ ) {
@@ -253,13 +259,15 @@ void alamode( const int nMom,
   //getProfileBaryonKernelModeTripletsA().TPSTOP(QUDA_PROFILE_TOTAL);
 
   // Create device diquark vector
+  std::cout<<"Diq?"<<std::endl ;
   ColorSpinorParam cuda_diq_param(cpu_evec_param,inv_param,QUDA_CUDA_FIELD_LOCATION);
   std::vector< ColorSpinorField > quda_diq( nDiq ) ;
   for( size_t i = 0 ; i < quda_diq.size() ; i++ ) {
     quda_diq[i] = ColorSpinorField( cuda_diq_param ) ;
   }
 
-  int nInBlock = 0, blockStart = 0;
+  std::cout<<"Loops"<<std::endl ;
+  size_t nInBlock = 0, blockStart = 0;
   for (int aEv=0; aEv<nEv; aEv++) {
     // block colorCross too
     int bEv = aEv+1 ;
@@ -275,20 +283,29 @@ void alamode( const int nMom,
 	while( cEv < nEv ) {
 	  const int blk = std::min( std::min( nEv - cEv , nRHS ) , (blockSizeMomProj-nInBlock ) ) ;
 	  //getProfileColorContract().TPSTART(QUDA_PROFILE_COMPUTE);
-	  colorContractQudaV( quda_diq[b], { quda_evec.begin() + cEv , quda_evec.begin() + cEv + blk } ,
+	  colorContractQudaV( quda_diq[b],
+			      { quda_evec.begin() + cEv , quda_evec.begin() + cEv + blk } ,
 			      (char*)d_tmp + nSites*nInBlock*2*precision);
+
 	  //getProfileColorContract().TPSTOP(QUDA_PROFILE_COMPUTE);
 	  nInBlock+=blk ; cEv += blk ;
 	  // eh todo this can be cleaned up
 	  if (nInBlock == blockSizeMomProj) {
+	    /*
+	     */
 	    //getProfileBLAS().TPSTART(QUDA_PROFILE_COMPUTE);  
 	    blas_lapack::native::stridedBatchGEMM(d_mom, d_tmp,
 						  (char*)d_ret,
 						  cublas_param_mom_sum,
 						  QUDA_CUDA_FIELD_LOCATION);
+	    
+
+	    
 	    //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_D2H);
-	    hostreturn( d_ret , return_arr + X[3]*nMom*blockStart ,
-			(size_t)nInBlock*X[3]*nMom , precision ) ;
+	    hostreturn( d_ret ,
+			return_arr + (size_t)X[3]*nMom*blockStart ,
+			(size_t)nInBlock*X[3]*nMom ,
+			precision ) ;
 	    //getProfileBaryonKernelModeTripletsA().TPSTOP(QUDA_PROFILE_D2H);
 	    //getProfileBLAS().TPSTOP(QUDA_PROFILE_COMPUTE);
 	    blockStart += nInBlock;
@@ -299,6 +316,9 @@ void alamode( const int nMom,
       bEv += diqBlk ;
     }
   }
+
+  std::cout<<"Overspill?"<<std::endl ;
+  
   // overspill, code is more efficient if you avoid this
   if( nInBlock > 0 ) {
     cublas_param_mom_sum.batch_count = nInBlock;
@@ -306,7 +326,7 @@ void alamode( const int nMom,
 					  (char*)d_ret,
 					  cublas_param_mom_sum,
 					  QUDA_CUDA_FIELD_LOCATION);
-    hostreturn( d_ret , return_arr + X[3]*nMom*blockStart ,
+    hostreturn( d_ret , return_arr + (size_t)X[3]*nMom*blockStart ,
 		(size_t)nInBlock*X[3]*nMom , precision ) ;
   }
 
@@ -318,6 +338,7 @@ void alamode( const int nMom,
   // Clean up memory allocations
   //getProfileBaryonKernelModeTripletsA().TPSTART(QUDA_PROFILE_FREE);
 
+  std::cout<<"Cleanup?"<<std::endl ;
   pool_device_free(d_tmp);
   pool_device_free(d_mom);
   pool_device_free(d_ret);
@@ -367,7 +388,11 @@ int main(int argc, char *argv[]) {
     exit(1) ;
   }
 
+#ifdef OPENMP
   const int max_threads = omp_get_max_threads() ;
+#else
+  const int max_threads = 1 ;
+#endif
   std::cout<< "Max threads here" << max_threads << std::endl ;
 
   int global = 1 ;
@@ -377,9 +402,9 @@ int main(int argc, char *argv[]) {
   setVerbosityQuda(QUDA_VERBOSE, "#" , stdout ) ;
   
 #ifdef GPU_STRESS
-  const int Nev = 96 ;
+  const size_t Nev = 96 ;
 #else
-  const int Nev = 64 ;
+  const size_t Nev = 768 ;
 #endif
   std::vector<LattField> laphEigvecs( Nev, FieldSiteType::ColorVector);
 
@@ -391,13 +416,13 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 32 ;
+  const size_t nmom = 42 ;
   const int X[4] = {
     LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
     LayoutInfo::getRankLattExtents()[3] } ;
-  const int nspat  = X[0]*X[1]*X[2] ;
+  const size_t nspat  = X[0]*X[1]*X[2] ;
   std::cout<<"nmom "<<nmom<<" | nEv "<<Nev<<std::endl ;
   
   double _Complex *host_mom = (double _Complex*)calloc( nmom*nspat , sizeof( double _Complex ) ) ;
@@ -424,50 +449,55 @@ int main(int argc, char *argv[]) {
   inv_param.solution_type = QUDA_MAT_SOLUTION;
   inv_param.solve_type = QUDA_DIRECT_SOLVE;
   inv_param.cpu_prec = QUDA_DOUBLE_PRECISION;
-  inv_param.cuda_prec = QUDA_DOUBLE_PRECISION;
+  //inv_param.cuda_prec = QUDA_DOUBLE_PRECISION;
+  inv_param.cuda_prec = QUDA_SINGLE_PRECISION;
   inv_param.dirac_order = QUDA_DIRAC_ORDER;
   inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
   inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
   inv_param.output_location = QUDA_CPU_FIELD_LOCATION;
 
-  const size_t nEvChoose3 = Nev*(size_t)(Nev-1)*(Nev-2)/6;
-  double _Complex *retGPU = (double _Complex*)calloc( X[3]*nmom*nEvChoose3 , sizeof( double _Complex  ) );
+  const size_t nEvChoose3 = (Nev*(size_t)(Nev-1)*(Nev-2))/6;
+  //double _Complex *retGPU = (double _Complex*)calloc( X[3]*nmom*nEvChoose3 , sizeof( double _Complex  ) );
+  void *retGPU = host_pinned_malloc( X[3]*nmom*nEvChoose3*sizeof( double _Complex  ) ) ;
 
 #ifdef GPU_STRESS
   for( int blockSizeMomProj = 2 ; blockSizeMomProj < 8192 ; blockSizeMomProj *= 2 ) {
     std::cout<<"nmom "<<nmom<<" | block "<<blockSizeMomProj<<std::endl ;
     memset( retGPU , 0.0 , X[3]*nmom*nEvChoose3*sizeof( double _Complex )) ;
 #else
-    const int blockSizeMomProj = 2048 ;
+    const size_t blockSizeMomProj = 2048 ;
 #endif
 
-    //alamode(
-    modeNlet( nmom,
+    /*
+    modeNlet(
+	     nmom,
 	      host_mom ,
 	      Nev ,
 	      evList.data(),
 	      inv_param,
-	      retGPU ,
+	     (double _Complex*)retGPU ,
 	      blockSizeMomProj,
-	      X ,
-	      3 ) ;
-
+	     X , 3 ) ;
+    */
     double GPUtime = 0 ;
     int NP = nmom ;
     //for( int NP = 1 ; NP <= 4096 ; NP*=2 ) {
       StopWatch gpu ;
       gpu.start() ;
       
-    //alamode(
-      modeNlet( nmom,
+      //alamode(
+      modeNlet(
+	      nmom,
 		host_mom ,
 		Nev ,
 		evList.data(),
 		inv_param,
-		retGPU ,
+	      (double _Complex*)retGPU ,
 		blockSizeMomProj,
-		X ,
-		3 ) ;
+	      X,
+	      3
+	      ) ;
+      //3 ) ;
 
     gpu.stop() ;
     GPUtime = gpu.getTimeInSeconds() ;
@@ -509,7 +539,7 @@ int main(int argc, char *argv[]) {
   }
   free( retCPU ) ;
 #endif
-  free( retGPU ) ;
+  host_free( retGPU ) ;
   
   finalize();
 

@@ -48,9 +48,9 @@ static void
 cpuInnerProduct( void *A , void *B , void *result , const int X[4] )
 {
   const int Nsites = X[0]*X[1]*X[2]*X[3] ;
-  const std::complex<double> *ptA = (const std::complex<double>*)A ;
-  const std::complex<double> *ptB = (const std::complex<double>*)B ;
-  std::complex<double> *ptC = (std::complex<double>*)result ;
+  const double _Complex *ptA = (const double _Complex*)A ;
+  const double _Complex *ptB = (const double _Complex*)B ;
+  double _Complex *ptC = (double _Complex*)result ;
   for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
     #ifdef USE_OPENBLAS
     ptC[i] = cblas_zdotc( 3 , ptA+3*i , 1 , ptB+3*i , 1 ) ;
@@ -480,7 +480,11 @@ int main(int argc, char *argv[]) {
     exit(1) ;
   }
 
+#ifdef OPENMP
   const int max_threads = omp_get_max_threads() ;
+#else
+  const int max_threads = 1 ;
+#endif
   std::cout<< "Max threads here" << max_threads << std::endl ;
 
   int global = 1 ;
@@ -533,8 +537,8 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  double _Complex coeffs1[ Nev*nDil[0] ] = {} , coeffs2[ Nev*nDil[1] ] = {} ;
-  double _Complex coeffs3[ Nev*nDil[2] ] = {} , coeffs4[ Nev*nDil[3] ] = {} ;
+  double _Complex coeffs1[ Nev*nDil[0] ] , coeffs2[ Nev*nDil[1] ] ;
+  double _Complex coeffs3[ Nev*nDil[2] ] , coeffs4[ Nev*nDil[3] ] ;
   static std::uniform_real_distribution<double> unif(0.0,1.0) ;
   std::mt19937 mt ;
   for( size_t i = 0 ; i < Nev*nDil[0] ; i++ ) coeffs1[i] = unif(mt) + I*unif(mt) ;

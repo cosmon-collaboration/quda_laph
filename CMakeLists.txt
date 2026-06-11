@@ -97,7 +97,7 @@ elseif(HOSTCBLAS STREQUAL "OPENBLAS")
    string(APPEND LiveLaphLibs "-lopenblas")
 else()
    message( FATAL_ERROR "Must define HOSTCBLAS to be ${VALID_BLAS_LIBS}")
- endif()
+endif()
  
 add_executable(quda_laph quda_laph.cc)
 

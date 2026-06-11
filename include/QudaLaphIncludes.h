@@ -5,7 +5,7 @@
 #include <complex>
 
 #ifdef ARCH_PARALLEL
-#include <mpi.h>
+  #include <mpi.h>
 #endif
 
 #ifdef OPENMP

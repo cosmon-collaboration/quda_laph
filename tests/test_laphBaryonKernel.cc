@@ -122,7 +122,8 @@ cpuColorContract( void *A , void *B , void *result , const int X[4] )
   const int Nsites = X[0]*X[1]*X[2]*X[3] ;
   const std::complex<double> *ptA = (const std::complex<double>*)A ;
   const std::complex<double> *ptB = (const std::complex<double>*)B ;
-  std::complex<double> *ptC = (std::complex<double>*)result ;
+  //std::complex<double> *ptC = (std::complex<double>*)result ;
+  double _Complex *ptC = (double _Complex*)result ;
   for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
     #ifdef USE_OPENBLAS
     ptC[i] = cblas_zdotu( 3 , ptA+3*i , 1 , ptB+3*i , 1 ) ;

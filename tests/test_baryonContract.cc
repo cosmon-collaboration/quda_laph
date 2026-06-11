@@ -22,17 +22,13 @@
 #include <color_spinor_field.h>
 #include <contract_quda.h>
 
-#include <cuComplex.h>
-#include <cublas_v2.h>
-#include <cuda_runtime.h>
-
 using namespace quda ;
 using namespace LaphEnv ;
 
 // Quda interface
 
 //#define GPU_STRESS
-#define CPU_CROSSCHECK
+//#define CPU_CROSSCHECK
 //#define VERBOSE_COMPARISON
 //#define SLOW_CPU
 
@@ -395,7 +391,7 @@ int main(int argc, char *argv[]) {
   const size_t nEv = 48 ;
   const size_t nmom = 24 ;
 #else
-  const size_t nEv = 48 ;
+  const size_t nEv = 288 ;
   const size_t nmom = 24 ;
 #endif
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
@@ -481,9 +477,10 @@ int main(int argc, char *argv[]) {
 
   // so many parentheses it's like I'm programming in LISP
   const std::vector< std::array<const std::array<int,2> , 3>> sidx = { {{{0,0},{0,0},{0,0}}} ,
-								       {{{1,1},{1,1},{1,1}}} ,
-								       {{{2,2},{2,2},{2,2}}} ,
-								       {{{3,3},{3,3},{3,3}}} } ;
+								       {{{1,1},{1,1},{1,1}}} } ;
+  //{{{2,2},{2,2},{2,2}}} ,
+  //{{{3,3},{3,3},{3,3}}} } ;
+  
   double _Complex C3[ nmom*nmom*X[3]*sidx.size() ] ;
   TcontractGPU3( C3 ,  T , per , X[3] , nEv , nmom , ijk , sidx , QUDA_SINGLE_PRECISION ) ;
   

@@ -45,7 +45,7 @@ using namespace LaphEnv ;
 
 //#define VERBOSE_COMPARISON
 //#define GPU_STRESS
-#define CPU_CROSSCHECK
+//#define CPU_CROSSCHECK
 //#define VERBOSE_CPU
 
 static inline
@@ -442,7 +442,7 @@ int main(int argc, char *argv[]) {
   setVerbosityQuda(QUDA_VERBOSE, "#" , stdout ) ;
 
   // test for this many EVs
-  const size_t nEv = 96 ;
+  const size_t nEv = 288 ;
   const size_t nmom = 42 ;
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
@@ -476,12 +476,14 @@ int main(int argc, char *argv[]) {
 
   double _Complex *C1 = (double _Complex*)calloc( GlGr.size()*nmom*nmom*X[3] , sizeof( double _Complex) ) ;
 
+#ifdef CPU_CROSSCHECK
   StopWatch CPU ; CPU.start() ;
   basic_contraction( C1 , phi , per , GlGr , nEv , nmom , 0 , X[3] ) ;
   CPU.stop() ;
   const double CPUtime = CPU.getTimeInSeconds() ;
   printLaph( make_strf( "\n CPU in %g seconds\n" , CPUtime ) ) ;
-
+#endif
+  
   // GPU
   double _Complex *C2 = (double _Complex*)calloc( GlGr.size()*nmom*nmom*X[3] , sizeof( double _Complex) ) ;
   McontractGPU( C2 , phi , per , GlGr , X[3] , nEv , nmom , QUDA_SINGLE_PRECISION ) ;
@@ -492,9 +494,8 @@ int main(int argc, char *argv[]) {
   double GPUtime = GPU.getTimeInSeconds() ;
   printLaph( make_strf( "\n GPU in %g seconds\n" , GPUtime ) ) ;
 
+#if (defined CPU_CROSSCHECK) && (defined VERBOSE_CPU)
   printLaph( make_strf( "GPU supremacy %gx\n" , CPUtime/GPUtime ) ) ;
-
-#ifdef VERBOSE_CPU
   for( size_t ng = 0 ; ng < GlGr.size() ; ng++ ) {
     GlGr[ng][0].print() ; GlGr[ng][1].print() ;
     for( size_t psrc = 0 ; psrc < nmom ; psrc++ ) {

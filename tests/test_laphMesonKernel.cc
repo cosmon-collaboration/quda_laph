@@ -116,9 +116,9 @@ static void
 cpuInner( const double _Complex *host_quark , const double _Complex *host_quark_bar , void *result , const int X[4] )
 {
   const int Nsites = X[0]*X[1]*X[2]*X[3] ;
-  const std::complex<double> *ptA = (const std::complex<double>*)host_quark_bar ;
-  const std::complex<double> *ptB = (const std::complex<double>*)host_quark ;
-  std::complex<double> *ptC = (std::complex<double>*)result ;  
+  const double _Complex *ptA = (const double _Complex*)host_quark_bar ;
+  const double _Complex *ptB = (const double _Complex*)host_quark ;
+  double _Complex *ptC = (double _Complex*)result ;  
   //#pragma omp parallel for
   for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
     #ifdef USE_OPENBLAS
@@ -150,7 +150,7 @@ static void cpu_code_v2( const int n1,
   const size_t nsites = nSp*X[3] ;
   double _Complex *q1 = (double _Complex*)calloc( n1*nsites*3 , sizeof(double _Complex) ) ;
   double _Complex *q2 = (double _Complex*)calloc( n2*nsites*3 , sizeof(double _Complex) ) ;
-  std::vector<size_t> ndil  = { n1 , n2 } ;
+  const std::vector<size_t> ndil  = { (size_t)n1 , (size_t)n2 } ;
   std::vector<double _Complex*> coeffs = { host_coeffs1 , host_coeffs2 } ;
   std::vector<double _Complex*> q = { q1 , q2 } ;
   double _Complex *rt = (double _Complex*)return_array ;

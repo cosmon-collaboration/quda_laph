@@ -20,15 +20,15 @@ using namespace LaphEnv ;
 
 //#define VERBOSE_COMPARISON
 //#define GPU_STRESS
-#define CPU_CROSSCHECK
+//#define CPU_CROSSCHECK
 
 static void
 cpuInner( void **host_quark , void *result , const int X[4] , const int A , const int B )
 {
   const int Nsites = X[0]*X[1]*X[2]*X[3] ;
-  std::complex<double> *ptA = (std::complex<double>*)host_quark[A] ;
-  std::complex<double> *ptB = (std::complex<double>*)host_quark[B] ;
-  std::complex<double> *ptC = (std::complex<double>*)result ;  
+  double _Complex *ptA = (double _Complex*)host_quark[A] ;
+  double _Complex *ptB = (double _Complex*)host_quark[B] ;
+  double _Complex *ptC = (double _Complex*)result ;  
   //#pragma omp parallel for
   for( size_t i = 0 ; i < (size_t)Nsites ; i++ ) {
     #ifdef USE_OPENBLAS
@@ -319,7 +319,7 @@ int main(int argc, char *argv[]) {
 #ifdef GPU_STRESS
   const int nEv = 512 ;
 #else
-  const int nEv = 64 ; 
+  const int nEv = 768 ; 
 #endif
   std::vector<LattField> laphEigvecs( nEv, FieldSiteType::ColorVector);
   set_constant( laphEigvecs ) ;
@@ -329,7 +329,7 @@ int main(int argc, char *argv[]) {
     evList[i] = (void*)laphEigvecs[i].getDataPtr() ;
   }
 
-  const int nmom = 64 ;
+  const int nmom = 42 ;
   const int X[4] = { LayoutInfo::getRankLattExtents()[0],
     LayoutInfo::getRankLattExtents()[1],
     LayoutInfo::getRankLattExtents()[2],
@@ -361,7 +361,8 @@ int main(int argc, char *argv[]) {
   inv_param.solution_type = QUDA_MAT_SOLUTION;
   inv_param.solve_type = QUDA_DIRECT_SOLVE;
   inv_param.cpu_prec = QUDA_DOUBLE_PRECISION;
-  inv_param.cuda_prec = QUDA_SINGLE_PRECISION;
+  inv_param.cuda_prec = QUDA_DOUBLE_PRECISION;
+  //inv_param.cuda_prec = QUDA_SINGLE_PRECISION;
   inv_param.dirac_order = QUDA_DIRAC_ORDER;
   inv_param.gamma_basis = QUDA_DEGRAND_ROSSI_GAMMA_BASIS;
   inv_param.input_location = QUDA_CPU_FIELD_LOCATION;
@@ -372,7 +373,7 @@ int main(int argc, char *argv[]) {
     std::cout<< "block " << blockSizeMomProj << std::endl ;
     memset( GPU_ret , 0.0 , nEv*nEv*nmom*X[3]*sizeof(double _Complex));
 #else
-    const int blockSizeMomProj = 4 ;
+    const int blockSizeMomProj = 2048 ;
 #endif
 
     //alamode(
