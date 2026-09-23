@@ -57,3 +57,5 @@ Remarks:
       - computing the LapH eigenvectors 
       - computing quark perambulators
       - computing stochastic LapH quark sinks
+
+Acknowledgement:  This software has been developed using support from the U.S. National Science Foundation under awards OAC 2311430 and 2608348.
