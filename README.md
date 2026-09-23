@@ -59,3 +59,5 @@ Remarks:
       - computing stochastic LapH quark sinks
 
 Acknowledgement:  This software has been developed using support from the U.S. National Science Foundation under awards OAC 2311430 and 2608348.
+https://www.nsf.gov/awardsearch/show-award?AWD_ID=2311430
+https://www.nsf.gov/awardsearch/show-award?AWD_ID=2608348
