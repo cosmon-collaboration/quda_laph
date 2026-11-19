@@ -157,10 +157,10 @@ LattField& LattField::to_quda_precision()
 void LattField::to_single_precision(vector<char>& buffer)
 {
  buffer.resize(m_data.size()/2);
- int n=2*LayoutInfo::getRankLatticeNumSites()*m_site_elems; // number of reals
+ size_t n=2*size_t(LayoutInfo::getRankLatticeNumSites())*m_site_elems; // number of reals
  float *dest=reinterpret_cast<float*>(buffer.data());
  double *src=reinterpret_cast<double*>(m_data.data());
- for (int k=0;k<n;++k,++dest,++src){
+ for (size_t k=0;k<n;++k,++dest,++src){
     *dest=*src;}
 }  
 
@@ -168,10 +168,10 @@ void LattField::to_double_precision(vector<char>& buffer)
 {
  printLaph("WARNING: converting lattice field from single to double precision");
  buffer.resize(2*m_data.size());
- int n=2*LayoutInfo::getRankLatticeNumSites()*m_site_elems; // number of reals
+ size_t n=2*size_t(LayoutInfo::getRankLatticeNumSites())*m_site_elems; // number of reals
  double *dest=reinterpret_cast<double*>(buffer.data());
  float *src=reinterpret_cast<float*>(m_data.data());
- for (int k=0;k<n;++k,++dest,++src){
+ for (size_t k=0;k<n;++k,++dest,++src){
     *dest=*src;}
 }
 
@@ -182,7 +182,7 @@ void LattField::applyFermionTemporalAntiPeriodic()
  if (LayoutInfo::getMyCommCoords()[Tdir]!=(LayoutInfo::getCommNumPartitions()[Tdir]-1)){
     return;}
  int start_parity=LayoutInfo::getMyStartParity();
- int npsites=LayoutInfo::getRankLatticeNumSites()/2;
+ size_t npsites=LayoutInfo::getRankLatticeNumSites()/2;
  const vector<int>& N=LayoutInfo::getRankLattExtents();
  bool dp=(bytesPerWord()==sizeof(complex<double>));
  int nreal=2*elemsPerSite();
@@ -190,7 +190,7 @@ void LattField::applyFermionTemporalAntiPeriodic()
  for (int z=0;z<N[2];++z)
  for (int y=0;y<N[1];++y)
  for (int x=0;x<N[0];++x){
-    int sindex=nreal*( (x+N[0]*(y+N[1]*(z+N[2]*t)))/2 + npsites*((start_parity+x+y+z+t)%2));
+    size_t sindex=nreal*( (x+size_t(N[0])*(y+N[1]*(z+size_t(N[2])*t)))/2 + npsites*((start_parity+x+y+z+t)%2));
     if (dp){
        double* ptr=reinterpret_cast<double*>(m_data.data())+sindex;
        for (int s=0;s<nreal;++s,++ptr) *ptr=-(*ptr);}

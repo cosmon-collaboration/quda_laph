@@ -158,7 +158,7 @@ void GluonSmearingHandler::computeSmearedGaugeField()
  for (int i=0;i<calcobs;++i){
     gauge_obs_param[i] = newQudaGaugeObservableParam();
     gauge_obs_param[i].compute_plaquette = QUDA_BOOLEAN_TRUE;
-    gauge_obs_param[i].compute_qcharge = QUDA_BOOLEAN_TRUE;
+    gauge_obs_param[i].compute_qcharge = QUDA_BOOLEAN_FALSE;  // needs a 6-component field-strength tensor on the device: too much memory on large lattices
     gauge_obs_param[i].su_project = QUDA_BOOLEAN_TRUE;
     gauge_obs_param[i].struct_size = sizeof(gauge_obs_param[i]);}
 
@@ -168,6 +168,15 @@ void GluonSmearingHandler::computeSmearedGaugeField()
  bulova.stop();
  printLaph(make_strf("Smearing computation done: time was %g seconds",bulova.getTimeInSeconds()));
  QudaInfo::smeared_gauge_on_device=true;
+
+    // free the unsmeared links (precise, sloppy and extended copies) on the
+    // device before copying the smeared field back: saveGaugeQuda needs room
+    // for an unextended copy plus a reordering buffer, which does not fit on
+    // large lattices otherwise.  The host copy remains, so the configuration
+    // is put back on the device when next needed.
+ if (QudaInfo::gauge_config_on_device){
+    freeUniqueGaugeQuda(QUDA_WILSON_LINKS);
+    QudaInfo::gauge_config_on_device=false;}
 
     // Now save smeared gauge to host
  bulova.reset(); bulova.start();

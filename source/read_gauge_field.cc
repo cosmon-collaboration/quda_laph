@@ -1,4 +1,5 @@
 #include "read_gauge_field.h"
+#include <cstddef>
 #include "laph_stdio.h"
 #include "stop_watch.h"
 
@@ -77,10 +78,10 @@ void GaugeCERNConfigReader::cern_to_qdp_lexico(const double* cern, double* xl, d
  int tstride=NX*NY*NZ;
 #pragma omp parallel for
  for (int t=0;t<NT;++t){
-    int cindex=t*tstride;   // calculate these so each loop independent for threading
-    const double* cptr=cern+4*t*tstride*su3dble; 
+    std::ptrdiff_t cindex=std::ptrdiff_t(t)*tstride;   // calculate these so each loop independent for threading
+    const double* cptr=cern+4*std::ptrdiff_t(t)*tstride*su3dble; 
     int td=(t>0)?(t-1):(NT-1);
-    int tshift=(td-t)*NX*NY*NZ;
+    std::ptrdiff_t tshift=std::ptrdiff_t(td-t)*NX*NY*NZ;
     for (int x=0;x<NX;++x){
        int xd=(x>0)?(x-1):(NX-1);
        int xshift=xd-x;
@@ -92,8 +93,8 @@ void GaugeCERNConfigReader::cern_to_qdp_lexico(const double* cern, double* xl, d
              if (oddparity){
                 int zd=(z>0)?(z-1):(NZ-1);
                 int zshift=(zd-z)*NX*NY;
-                int qindex=cindex+x*dx+y*dy+z*dz;
-                int qq=qindex*su3dble;
+                std::ptrdiff_t qindex=cindex+x*dx+y*dy+z*dz;
+                std::ptrdiff_t qq=qindex*su3dble;
                 su3_copy(tl+qq,cptr,su3dble); cptr+=su3dble;
                 su3_copy(tl+(qindex+tshift)*su3dble,cptr,su3dble); cptr+=su3dble;
                 su3_copy(xl+qq,cptr,su3dble); cptr+=su3dble;
@@ -158,7 +159,7 @@ bool GaugeCERNConfigReader::read(vector<LattField>& u, const std::string& in_cfg
  size_t linkdbles=2*FieldNcolor*FieldNcolor;
  size_t ndir=LayoutInfo::Ndim;
  size_t nelemsite=ndir*linkdbles;
- size_t nelem=NX*NY*NZ*NT*nelemsite;
+ size_t nelem=size_t(NX)*NY*NZ*NT*nelemsite;
  vector<double> buffer(nelem);
  iotimer.start();
  fin.read(reinterpret_cast<char *>(buffer.data()),dbsize*nelem);
@@ -221,10 +222,10 @@ void GaugeCERNConfigReader::local_cern_to_qdp_lexico(const double* cernlinks,
  for (int t=0;t<locNT;++t){
 
      // for threading, each t must be independent
-    int cindex=t*tstride;   // calculate these so each loop independent for threading
-    const double* cptr=cernlinks+8*((t*tstride+start_parity)/2)*su3dble; 
+    std::ptrdiff_t cindex=std::ptrdiff_t(t)*tstride;   // calculate these so each loop independent for threading
+    const double* cptr=cernlinks+8*((std::ptrdiff_t(t)*tstride+start_parity)/2)*su3dble; 
     int td=((t>0)||(tsend!=0))?(t-1):(locNT-1);  // tsend==0 means locNT==globalNT
-    int tshift=(td-t)*locNX*locNY*locNZ;
+    std::ptrdiff_t tshift=std::ptrdiff_t(td-t)*locNX*locNY*locNZ;
     double* xs=xsend+t*((locNY*locNZ+1)/2)*su3dble;
     double* ys=ysend+t*((locNX*locNZ+1)/2)*su3dble;
     double* zs=zsend+t*((locNY*locNX+1)/2)*su3dble;
@@ -243,8 +244,8 @@ void GaugeCERNConfigReader::local_cern_to_qdp_lexico(const double* cernlinks,
              if (oddparity){
                 int zd=((z>0)||(zsend!=0))?(z-1):(locNZ-1);  // zsend==0 means locNZ==globalNZ
                 int zshift=(zd-z)*locNX*locNY;
-                int qindex=cindex+x*dx+y*dy+z*dz;
-                int qq=qindex*su3dble;
+                std::ptrdiff_t qindex=cindex+x*dx+y*dy+z*dz;
+                std::ptrdiff_t qq=qindex*su3dble;
 
                 su3_copy(tl+qq,cptr,su3dble); cptr+=su3dble;
 
@@ -306,9 +307,9 @@ void GaugeCERNConfigReader::local_cern_to_qdp_lexico_edge(
  for (int t=0;t<locNT;++t){
 
      // for threading, each t must be independent
-    int cindex=t*tstride;   // calculate these so each loop independent for threading
+    std::ptrdiff_t cindex=std::ptrdiff_t(t)*tstride;   // calculate these so each loop independent for threading
     int td=((t==0)&&(tedge!=0))?(locNT-1):-1; 
-    int tshift=(td-t)*locNX*locNY*locNZ;
+    std::ptrdiff_t tshift=std::ptrdiff_t(td-t)*locNX*locNY*locNZ;
     const double* xr=xedge+t*((locNY*locNZ+1)/2)*su3dble;
     const double* yr=yedge+t*((locNX*locNZ+1)/2)*su3dble;
     const double* zr=zedge+t*((locNY*locNX+1)/2)*su3dble;
@@ -326,7 +327,7 @@ void GaugeCERNConfigReader::local_cern_to_qdp_lexico_edge(
           for (int z=0;z<locNZ;++z,++cindex,oddparity=!oddparity){
              int zd=((z==0)&&(zedge!=0))?(locNZ-1):-1;  
              int zshift=(zd-z)*locNX*locNY;
-             int qindex=cindex+x*dx+y*dy+z*dz;
+             std::ptrdiff_t qindex=cindex+x*dx+y*dy+z*dz;
 
              if ((td>=0)&&((oddparity+tpar)%2)){ 
                 tdn=tl+(qindex+tshift)*su3dble;
@@ -476,7 +477,7 @@ bool GaugeCERNConfigReader::read(vector<LattField>& u, const std::string& in_cfg
  int ndir=LayoutInfo::Ndim;
  int su3dble=2*FieldNcolor*FieldNcolor;
  int ndblesite=ndir*su3dble;
- int ndble=LayoutInfo::getRankLatticeNumSites()*ndblesite;
+ size_t ndble=size_t(LayoutInfo::getRankLatticeNumSites())*ndblesite;
  vector<double> buffer(ndble);
  int nbytes_per_site=2*ndblesite*dbsize;  // only odd sites, but 8 directions
  int locNT = LayoutInfo::getRankLattExtents()[3];

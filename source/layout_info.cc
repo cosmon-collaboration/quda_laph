@@ -374,7 +374,7 @@ void LayoutInfo::lexico_to_evenodd(char* dest, const char* src, int sitebytes)
  int locNT = LayoutInfo::getRankLattExtents()[3];
  const char* lex=src;
  char* even=dest;
- char* odd=dest+((locNX*locNY*locNZ*locNT)/2)*sitebytes;
+ char* odd=dest+((size_t(locNX)*locNY*locNZ*locNT)/2)*size_t(sitebytes);
  for (int t=0;t<locNT;++t)
  for (int z=0;z<locNZ;++z)
  for (int y=0;y<locNY;++y){
@@ -398,7 +398,7 @@ void LayoutInfo::evenodd_to_lexico(char* dest, const char* src, int sitebytes)
  int locNT = LayoutInfo::getRankLattExtents()[3];
  char* lex=dest;
  const char* even=src;
- const char* odd=src+((locNX*locNY*locNZ*locNT)/2)*sitebytes;
+ const char* odd=src+((size_t(locNX)*locNY*locNZ*locNT)/2)*size_t(sitebytes);
  for (int t=0;t<locNT;++t)
  for (int z=0;z<locNZ;++z)
  for (int y=0;y<locNY;++y){
