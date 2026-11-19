@@ -69,6 +69,16 @@ set_target_properties(cblas PROPERTIES
 
 set(QUDA_DIR ${QUDA_DIR}/lib/cmake/QUDA)
 find_package(QUDA REQUIRED)
+
+#  HDF5 library (C API), for HDF5 output of gauge fields; a parallel build
+#  needs HDF5 built with MPI support (set HDF5_ROOT to choose an installation)
+if(ARCH STREQUAL "PARALLEL")
+   set(HDF5_PREFER_PARALLEL TRUE)
+endif()
+find_package(HDF5 REQUIRED COMPONENTS C)
+if(ARCH STREQUAL "PARALLEL" AND NOT HDF5_IS_PARALLEL)
+   message(FATAL_ERROR "ARCH=PARALLEL needs a parallel HDF5 library (found ${HDF5_C_LIBRARIES})")
+endif()
 #find_package(MPI REQUIRED)
 
 #if(BUILD_MULTISRCINVERTER)
@@ -87,6 +97,7 @@ target_sources(quda_laph PRIVATE
     filelist_info.cc
     gauge_configuration_handler.cc
     gauge_configuration_info.cc
+    gauge_field_hdf5.cc
     gluon_smearing_handler.cc
     inverter_info.cc
     io_fm_handler.cc
@@ -116,3 +127,6 @@ target_sources(quda_laph PRIVATE
 target_link_libraries(quda_laph PUBLIC cblas)
 target_link_libraries(quda_laph PUBLIC gputoolkitlib)
 target_link_libraries(quda_laph PUBLIC quda)
+target_include_directories(quda_laph PRIVATE ${HDF5_INCLUDE_DIRS})
+target_compile_definitions(quda_laph PRIVATE ${HDF5_DEFINITIONS})
+target_link_libraries(quda_laph PUBLIC ${HDF5_C_LIBRARIES})

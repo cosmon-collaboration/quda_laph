@@ -1,6 +1,7 @@
 #include "gluon_smearing_handler.h"
 #include "host_global.h"
 #include "stop_watch.h"
+#include "gauge_field_hdf5.h"
 
 using namespace std;
 using namespace quda;
@@ -182,11 +183,26 @@ void GluonSmearingHandler::computeSmearedGaugeField()
 
      //  Now output to file if requested
  if (!h_filename.empty()){
-    DataPutHandlerSF<GluonSmearingHandler,UIntKey,vector<LattField>> 
-               dhput(*this,h_filename,"Laph--SmearedGaugeField4D");
-    UIntKey dummykey(0);
-    dhput.putData(dummykey,the_smeared_config);
-    printLaph("Write to file complete");}
+    if (isHDF5FileName(h_filename)){
+          // HDF5, one group per timeslice (see gauge_field_hdf5.h)
+       XMLHandler header("GaugeFieldMetaData");
+       XMLHandler xmlh;
+       uPtr->output(xmlh);
+       header.put_child(xmlh);
+       const vector<int>& extents=LayoutInfo::getLattExtents();
+       string dims;
+       for (int k=0;k<LayoutInfo::Ndim;++k) dims+=((k>0)?" ":"")+make_string(extents[k]);
+       header.put_child("LatticeDimensions",dims);
+       smearPtr->output(xmlh);
+       header.put_child(xmlh);
+       writeGaugeFieldHDF5(h_filename,the_smeared_config,header.output());
+       printLaph("Write to HDF5 file complete");}
+    else{
+       DataPutHandlerSF<GluonSmearingHandler,UIntKey,vector<LattField>>
+                  dhput(*this,h_filename,"Laph--SmearedGaugeField4D");
+       UIntKey dummykey(0);
+       dhput.putData(dummykey,the_smeared_config);
+       printLaph("Write to file complete");}}
 
  bulova.stop();
  printLaph(make_strf("Time to write to host and then to file was %g seconds",bulova.getTimeInSeconds()));
