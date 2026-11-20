@@ -76,9 +76,11 @@ class GluonSmearingHandler
 
            // Computes the smeared gauge field into HostGlobal and 
            // optionally puts it into the file whose name is stored in 
-           // "h_filename".
+           // "h_filename".  If "remove_unsmeared", the unsmeared gauge
+           // configuration is afterwards removed from the device and
+           // from HostGlobal (later tasks that need it read it again).
 
-   void computeSmearedGaugeField();
+   void computeSmearedGaugeField(bool remove_unsmeared=false);
 
            // Returns a reference to the smeared gauge field.
            // Checks first if in HostGlobal; if not, reads from

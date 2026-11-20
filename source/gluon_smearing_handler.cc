@@ -118,9 +118,10 @@ void GluonSmearingHandler::filefail(const string& message)
 
            // Compute the smeared gauge field into HostGlobal and put into
            // the file whose name is stored in "h_filename" unless the
-           // file name is empty
+           // file name is empty; if "remove_unsmeared", remove the unsmeared
+           // gauge configuration from the device and HostGlobal afterwards
 
-void GluonSmearingHandler::computeSmearedGaugeField()
+void GluonSmearingHandler::computeSmearedGaugeField(bool remove_unsmeared)
 {
  check_info_set("computeSmearedGaugeField");
  if (m_read_mode)
@@ -172,11 +173,13 @@ void GluonSmearingHandler::computeSmearedGaugeField()
     // free the unsmeared links (precise, sloppy and extended copies) on the
     // device while copying the smeared field back: saveGaugeQuda needs room
     // for an unextended copy plus a reordering buffer, which does not fit on
-    // large lattices otherwise.  They are put back on the device (from the
-    // host copy) afterwards, since QUDA needs them for later tasks even when
-    // these use the smeared links (eigensolveQuda checks for them).
- bool reload_gauge=QudaInfo::gauge_config_on_device;
- if (reload_gauge){
+    // large lattices otherwise.  Unless "remove_unsmeared", they are put back
+    // on the device (from the host copy) afterwards, since QUDA needs them for
+    // later tasks even when these use the smeared links (eigensolveQuda checks
+    // for them); otherwise the host copy is removed too, and tasks needing
+    // the configuration read it again.
+ bool reload_gauge=(QudaInfo::gauge_config_on_device)&&(!remove_unsmeared);
+ if (QudaInfo::gauge_config_on_device){
     freeUniqueGaugeQuda(QUDA_WILSON_LINKS);
     QudaInfo::gauge_config_on_device=false;}
 
@@ -192,6 +195,11 @@ void GluonSmearingHandler::computeSmearedGaugeField()
  for (int k=0;k<LayoutInfo::Ndim;++k) gaugeptrs[k]=the_smeared_config[k].getDataPtr();
  saveGaugeQuda(gaugeptrs.data(), &smeared_gauge_info);
  if (reload_gauge) GH.copyDataToDevice();
+ if (remove_unsmeared){
+       // the data only: the GaugeConfigurationInfo in HostGlobal also
+       // identifies the smeared field (and Laph eigvecs), so it must stay
+    GB::clearGaugeConfigData();
+    printLaph("Unsmeared gauge configuration removed from the device and host");}
 
      //  Now output to file if requested
  if (!h_filename.empty()){
