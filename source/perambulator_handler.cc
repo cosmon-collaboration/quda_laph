@@ -1,4 +1,5 @@
 #include "perambulator_handler.h"
+#include "gauge_field_hdf5.h"   // isHDF5FileName
 #include "multi_compare.h"
 #include "stop_watch.h"
 #include "field_ops.h"
@@ -212,7 +213,12 @@ void PerambulatorHandler::set_info(const GaugeConfigurationInfo& gaugeinfo,
     fPtr = new FileListInfo(flist);
 		Nspin = (upper_spin_components_only) ? 2 : 4;
     mode = in_mode;
-    if ((mode==Compute)||(mode==Merge)){
+    if (isHDF5FileName(fPtr->getFileStub())){
+       if (mode!=Compute){
+          errorLaph(make_strf("HDF5 perambulator file %s can only be written (Compute mode)",
+                              fPtr->getFileStub()));}
+       h5Ptr.reset(new PerambulatorHDF5Writer);}
+    else if ((mode==Compute)||(mode==Merge)){
        DHputPtr=new DataPutHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType>(
                        *this,*fPtr,"Laph--QuarkPeramb","PerambulatorHandlerDataFile");
 		}
@@ -275,6 +281,7 @@ void PerambulatorHandler::clear()
 		disconnectQuarkSmearingHandler();
 		delete DHgetPtr; DHgetPtr=0;
 		delete DHputPtr; DHputPtr=0;
+		h5Ptr.reset();
 	}
 }
 
@@ -471,12 +478,14 @@ void PerambulatorHandler::setComputationSet(const XMLHandler& xmlin)
 
 void PerambulatorHandler::getFileMap(XMLHandler& xmlout) const
 {
- if (isInfoSet()) DHputPtr->getFileMap(xmlout);
+ if (isInfoSet()&&(DHputPtr)) DHputPtr->getFileMap(xmlout);
 }
 
 map<int,PerambulatorHandler::FileKey> PerambulatorHandler::getSuffixMap() const
 {
  check_info_set("getSuffixMap");
+ if (h5Ptr){
+    return map<int,PerambulatorHandler::FileKey>();}   // one HDF5 file, no suffixes
  if (mode!=ReadOnly){
     return DHputPtr->getSuffixMap();}
  else{
@@ -487,6 +496,9 @@ map<int,PerambulatorHandler::FileKey> PerambulatorHandler::getSuffixMap() const
 void PerambulatorHandler::outputSuffixMap()
 {
  check_info_set("getSuffixMap");
+ if (h5Ptr){
+    printLaph(make_strf("\nPerambulators written to HDF5 file %s\n",fPtr->getFileStub()));
+    return;}
  map<int,PerambulatorHandler::FileKey> suffixmap=getSuffixMap();
  printLaph("\nSuffix map:");
  for (map<int,PerambulatorHandler::FileKey>::const_iterator it=suffixmap.begin();
@@ -736,6 +748,21 @@ void PerambulatorHandler::computePerambulators(bool extra_soln_check, bool print
  int count=0;
  int ncomp=perambComps.computations.size();
 
+    // open the HDF5 output file, if any (an existing file must have the same header)
+ if (h5Ptr){
+    XMLHandler hdr;
+    getHeader(hdr);
+    string existing=h5Ptr->open(fPtr->getFileStub(),hdr.str(),nEigs,fPtr->isModeOverwrite());
+    if (existing.empty()){
+       printLaph(make_strf("Created HDF5 perambulator file %s",fPtr->getFileStub()));}
+    else{
+       XMLHandler xmlex;
+       xmlex.set_from_string(existing);
+       if (!checkHeader(xmlex,0)){
+          errorLaph(make_strf("Header of existing HDF5 perambulator file %s does not match",
+                              fPtr->getFileStub()));}
+       printLaph(make_strf("Adding to existing HDF5 perambulator file %s",fPtr->getFileStub()));}}
+
  for (list<PerambComputation>::const_iterator it=perambComps.computations.begin();
       it!=perambComps.computations.end();count++,it++){
     printLaph("\n\n *************************************************************");
@@ -747,6 +774,7 @@ void PerambulatorHandler::computePerambulators(bool extra_soln_check, bool print
     computePerambulators(it->src_time,it->tmin,it->tmax,it->src_lapheigvec_indices,evList,print_coeffs,extra_soln_check,
                          report_gflops,srctime,invtime,evprojtime,writetime,perambComps.useMultiSrcInverter);
     }
+ if (h5Ptr) h5Ptr->close();
 
  totaltime.stop();
  printLaph("\n\n");
@@ -831,6 +859,8 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, int tmin, int tma
  double writetime=0.0;
  double evprojtime=0.0;
  int ninv=src_evindices.size();
+ vector<int> snk_times;
+ for (int tind=minTime;tind<=maxTime;tind++) snk_times.push_back((tind+Textent)%Textent);
 
      // loop over source laph eigvec indices and source spin
 
@@ -838,22 +868,18 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, int tmin, int tma
 
      // get the file key and open file for writing
   FileKey fkey(src_time,srcspin);
-  DHputPtr->open(fkey);
+  if (!h5Ptr) DHputPtr->open(fkey);
 	if (sGridOutput)
     DHputPtrSparseGrid->open(fkey);
   int invcount=0;
   int iSinkBatch = 0;
- 
+
 
   for (set<int>::const_iterator vt=src_evindices.begin();vt!=src_evindices.end();++vt,++invcount){
 
     int srcev_ind=*vt;
     printLaph(make_strf("\nStarting source number %d (with %d as last) with source spin %d",invcount,ninv-1,srcspin));
-    bool doneflag=true;
-    for (int sink_time=0;sink_time<Textent;++sink_time){
-    for (int sinkspin=1;sinkspin<=int(Nspin);++sinkspin){
-       if (!DHputPtr->queryData(RecordKey(sinkspin,sink_time,srcev_ind))){
-          doneflag=false; sinkspin=Nspin+1; sink_time=Textent;}}}
+    bool doneflag=querySourceDone(src_time,srcspin,srcev_ind,snk_times);
 
     if ((!fPtr->isModeOverwrite())&&(doneflag)){
        printLaph("warning: these quark sinks already computed...");
@@ -992,19 +1018,9 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, int tmin, int tma
 
 	       // rearrange data then output to file
 	       bulova.reset(); bulova.start();
-	       for (int iSink=0; iSink<nSinks; ++iSink) {
-		       for (int tind=minTime;tind<=maxTime;tind++){
-						 int t = (tind+Textent)%Textent; 
-			       for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
-				       vector<dcmplx> quark_sink(nEigs);
-				       for (int iEv=0; iEv<nEigs; ++iEv) {
-					       quark_sink[iEv] = soln_rescale*qudaRes(iSpin, t, iEv, iSink);}
-				       DHputPtr->putData(RecordKey(iSpin+1,t,sinkBatchDoneInds[iSink]),quark_sink);
-				       if (print_coeffs){
-					       printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchDoneInds[iSink],iSpin+1,t));
-					       for (int n=0;n<nEigs;n++){
-						       printLaph(make_strf("coef for eigenlevel %d = (%14.8f, %14.8f)",
-									       n,real(quark_sink[n]),imag(quark_sink[n])));}}}}}
+	       putProjectedSinks(src_time,srcspin,snk_times,
+	                         vector<int>(sinkBatchDoneInds.begin(),sinkBatchDoneInds.begin()+nSinks),
+	                         qudaRes,soln_rescale,print_coeffs);
 					       bulova.stop();
 					       double otime=bulova.getTimeInSeconds();
 					       printLaph(make_str(" Output of this batch to file took ",otime," seconds"));
@@ -1012,7 +1028,7 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, int tmin, int tma
 
        }}  // 	batch end
 
-    DHputPtr->flush();
+    if (h5Ptr) h5Ptr->flush(); else DHputPtr->flush();
 	  if (sGridOutput)	
 			DHputPtrSparseGrid->flush();
 	}}   // src_ind, src_spin loop end
@@ -1067,17 +1083,19 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, int tmin, int tma
 
  if (sGridOutput)
 	 printLaph("\nIn computeSS: sparse grid enabled.");
- else 
+ else
 	 printLaph("\nIn computeSS: sparse grid disabled.");
-   
+ vector<int> snk_times;
+ for (int tind=minTime;tind<=maxTime;tind++) snk_times.push_back((tind+Textent)%Textent);
+
  // loop over source laph eigvec indices and source spin
- 
+
  for (int srcspin=1;srcspin<=int(Nspin);++srcspin){
 
      // get the file key and open file for writing
   FileKey fkey(src_time,srcspin);
-  DHputPtr->open(fkey);
-  if (sGridOutput) 
+  if (!h5Ptr) DHputPtr->open(fkey);
+  if (sGridOutput)
 		DHputPtrSparseGrid->open(fkey);
   int invcount=0;
 
@@ -1085,11 +1103,7 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, int tmin, int tma
 
     int srcev_ind=*vt;
     printLaph(make_strf("\nStarting inversion number %d (with %d as last) with source spin %d",invcount,ninv-1,srcspin));
-    bool doneflag=true;
-    for (int sink_time=0;sink_time<Textent;++sink_time){
-    for (int sinkspin=1;sinkspin<=int(Nspin);++sinkspin){
-       if (!DHputPtr->queryData(RecordKey(sinkspin,sink_time,srcev_ind))){
-          doneflag=false; sinkspin=Nspin+1; sink_time=Textent;}}}
+    bool doneflag=querySourceDone(src_time,srcspin,srcev_ind,snk_times);
 
     if ((!fPtr->isModeOverwrite())&&(doneflag)){
        printLaph("warning: these quark sinks already computed...");
@@ -1220,29 +1234,16 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, int tmin, int tma
 
 			 // rearrange data then output to file
 			 bulova.reset(); bulova.start();
-			 for (int iSink=0; iSink<nSinks; ++iSink) {
-				 for (int tind=minTime;tind<=maxTime;tind++){
-					 int t = (tind+Textent)%Textent; 
-					 for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {  
-						 vector<dcmplx> quark_sink(nEigs);
-						 for (int iEv=0; iEv<nEigs; ++iEv) {
-							 quark_sink[iEv] = soln_rescale*qudaRes(iSpin, t, iEv, iSink);}
-						 DHputPtr->putData(RecordKey(iSpin+1,t,sinkBatchInds[iSink]),quark_sink);
-						 if (print_coeffs){
-							 printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchInds[iSink],iSpin+1,t));
-							 for (int n=0;n<nEigs;n++){
-								 printLaph(make_strf("coef for eigenlevel %d = (%14.8f, %14.8f)",
-											 n,real(quark_sink[n]),imag(quark_sink[n])));}}
-
-
-					 }}}
+			 putProjectedSinks(src_time,srcspin,snk_times,
+			                   vector<int>(sinkBatchInds.begin(),sinkBatchInds.begin()+nSinks),
+			                   qudaRes,soln_rescale,print_coeffs);
 			 bulova.stop();
 			 double otime=bulova.getTimeInSeconds();
 			 printLaph(make_str(" Output of this batch to file took ",otime," seconds"));
 			 writetime+=otime;
 
 			 iSinkBatch = 0;}    // batch end
-		DHputPtr->flush();
+		if (h5Ptr) h5Ptr->flush(); else DHputPtr->flush();
 	  if (sGridOutput)	
 			DHputPtrSparseGrid->flush();
 	}}   // src_ind, src_spin loop end
@@ -1251,6 +1252,54 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, int tmin, int tma
  makesrc_time+=srctime; 
  evproj_time+=evprojtime; 
  write_time+=writetime;
+}
+
+
+// ***************************************************************************
+
+bool PerambulatorHandler::querySourceDone(int src_time, int src_spin, int srcev,
+                                          const vector<int>& snk_times)
+{
+ if (h5Ptr){
+    return h5Ptr->queryColumn(src_time,src_spin,snk_times,Nspin,srcev);}
+ int Textent=uPtr->getTimeExtent();
+ for (int sink_time=0;sink_time<Textent;++sink_time)
+ for (int sinkspin=1;sinkspin<=int(Nspin);++sinkspin){
+    if (!DHputPtr->queryData(RecordKey(sinkspin,sink_time,srcev))) return false;}
+ return true;
+}
+
+
+void PerambulatorHandler::putProjectedSinks(int src_time, int src_spin, const vector<int>& snk_times,
+                                            const vector<int>& srcevs,
+                                            const Array<dcmplx>& qudaRes,
+                                            double soln_rescale, bool print_coeffs)
+{
+ int nEigs=qSmearPtr->getNumberOfLaplacianEigenvectors();
+ int nSinks=srcevs.size();
+ if (h5Ptr){
+       // one write per (sink time, sink spin) of all the columns of this batch
+    vector<dcmplx> buf(size_t(nEigs)*nSinks);
+    for (int t : snk_times)
+    for (int iSpin=0;iSpin<int(Nspin);++iSpin){
+       for (int iEv=0;iEv<nEigs;++iEv)
+       for (int iSink=0;iSink<nSinks;++iSink){
+          buf[size_t(iEv)*nSinks+iSink]=soln_rescale*qudaRes(iSpin,t,iEv,iSink);}
+       h5Ptr->putColumns(src_time,src_spin,t,iSpin+1,srcevs,buf);}}
+ for (int iSink=0;iSink<nSinks;++iSink)
+ for (int t : snk_times)
+ for (int iSpin=0;iSpin<int(Nspin);++iSpin){
+    if ((h5Ptr)&&(!print_coeffs)) continue;
+    vector<dcmplx> quark_sink(nEigs);
+    for (int iEv=0;iEv<nEigs;++iEv){
+       quark_sink[iEv]=soln_rescale*qudaRes(iSpin,t,iEv,iSink);}
+    if (!h5Ptr){
+       DHputPtr->putData(RecordKey(iSpin+1,t,srcevs[iSink]),quark_sink);}
+    if (print_coeffs){
+       printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",srcevs[iSink],iSpin+1,t));
+       for (int n=0;n<nEigs;n++){
+          printLaph(make_strf("coef for eigenlevel %d = (%14.8f, %14.8f)",
+                              n,real(quark_sink[n]),imag(quark_sink[n])));}}}
 }
 
 

@@ -5,7 +5,9 @@
 #include "quark_smearing_handler.h"
 #include "inverter_info.h"
 #include "sparse_grid.h"
+#include "perambulator_hdf5.h"
 #include "array.h"
+#include <memory>
 
 
 namespace LaphEnv {
@@ -94,6 +96,15 @@ namespace LaphEnv {
 // *     contains NColor*NGrid complex numbers, where NColor = 3   *
 // *     and NGrid is number of spatial sparse grid points.        *
 // *     The Dirac-Pauli spin convention is used.                  *
+// *                                                               *
+// *   - HDF5 output: in Compute mode, if the file stub of the     *
+// *     (ordinary) FileListInfo ends in ".hdf5" or ".h5", the     *
+// *     perambulators are instead written to the one HDF5 file    *
+// *     of that name (no suffix), in the layout of last_laph's    *
+// *     doPerambulatorConvert; see perambulator_hdf5.h.  An       *
+// *     existing file (same header) is extended unless the        *
+// *     overwrite mode is set, in which case it is replaced.      *
+// *     Such stubs are not accepted in the other modes.           *
 // *                                                               *
 // *  All Laph Handlers follow the member naming convention:       *
 // *                                                               *
@@ -277,6 +288,9 @@ class PerambulatorHandler {
 
 	 DataGetHandlerMF<PerambulatorHandler,FileKey,RecordKey,DataType> *DHgetPtr;
 	 DataGetHandlerMF<SparseGridHandler,FileKey,RecordKey,DataType> *DHgetPtrSparseGrid;
+
+	 // HDF5 output (instead of DHputPtr), if the file stub ends in .hdf5 or .h5
+	 std::unique_ptr<PerambulatorHDF5Writer> h5Ptr;
 
 
  public:
@@ -479,8 +493,22 @@ class PerambulatorHandler {
 	  // gamma_4 times the usual source since we use the chi = psi-bar gamma_4
 	  // field operator.   "src_spin" is 1,2,3,4
 
-   void make_source(LattField& ferm_src, const void* ev_src_ptr, 
+   void make_source(LattField& ferm_src, const void* ev_src_ptr,
                     int src_time, int src_spin);
+
+          // True if the sinks for source (src_time, src_spin, srcev) are already
+          // in the output: for HDF5 output, at the sink times "snk_times"; for
+          // the record files (DHputPtr open on that source's file), at all times.
+   bool querySourceDone(int src_time, int src_spin, int srcev,
+                        const std::vector<int>& snk_times);
+
+          // Writes the projected sinks qudaRes(snkspin-1, t, sink eigvec, k) times
+          // "soln_rescale" for source eigvecs srcevs[k] and sink times "snk_times"
+          // (to the HDF5 file, or the record file open in DHputPtr).
+   void putProjectedSinks(int src_time, int src_spin, const std::vector<int>& snk_times,
+                          const std::vector<int>& srcevs,
+                          const Array<std::complex<double>>& qudaRes,
+                          double soln_rescale, bool print_coeffs);
 
    void doACheck(const PerambComputation& pcomp, int src_spin,
                  const std::string& logfile, bool verbose_output);

@@ -170,11 +170,13 @@ void GluonSmearingHandler::computeSmearedGaugeField()
  QudaInfo::smeared_gauge_on_device=true;
 
     // free the unsmeared links (precise, sloppy and extended copies) on the
-    // device before copying the smeared field back: saveGaugeQuda needs room
+    // device while copying the smeared field back: saveGaugeQuda needs room
     // for an unextended copy plus a reordering buffer, which does not fit on
-    // large lattices otherwise.  The host copy remains, so the configuration
-    // is put back on the device when next needed.
- if (QudaInfo::gauge_config_on_device){
+    // large lattices otherwise.  They are put back on the device (from the
+    // host copy) afterwards, since QUDA needs them for later tasks even when
+    // these use the smeared links (eigensolveQuda checks for them).
+ bool reload_gauge=QudaInfo::gauge_config_on_device;
+ if (reload_gauge){
     freeUniqueGaugeQuda(QUDA_WILSON_LINKS);
     QudaInfo::gauge_config_on_device=false;}
 
@@ -189,6 +191,7 @@ void GluonSmearingHandler::computeSmearedGaugeField()
  std::vector<char*> gaugeptrs(LayoutInfo::Ndim);
  for (int k=0;k<LayoutInfo::Ndim;++k) gaugeptrs[k]=the_smeared_config[k].getDataPtr();
  saveGaugeQuda(gaugeptrs.data(), &smeared_gauge_info);
+ if (reload_gauge) GH.copyDataToDevice();
 
      //  Now output to file if requested
  if (!h_filename.empty()){

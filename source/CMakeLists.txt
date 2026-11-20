@@ -98,6 +98,7 @@ target_sources(quda_laph PRIVATE
     gauge_configuration_handler.cc
     gauge_configuration_info.cc
     gauge_field_hdf5.cc
+    perambulator_hdf5.cc
     gluon_smearing_handler.cc
     inverter_info.cc
     io_fm_handler.cc
