@@ -11,6 +11,10 @@ namespace LaphEnv {
 // *                                                                             *
 // *   Output of quark perambulators to one HDF5 file, in the layout written by  *
 // *   doPerambulatorConvert (last_laph, inline_convert_perambulators.cc):       *
+// *   (sparse-grid perambulators: doPerambulatorConvertSG, with the group       *
+// *   /PerambulatorSparseGridData, header <PerambulatorHandlerSparseGrid-       *
+// *   DataFile>, and nrows = 3*NGrid rows n = color + 3*grid point instead of   *
+// *   the nEv sink Laph eigvecs: length 3*NGrid*nEv, element n*nEv+m)           *
 // *                                                                             *
 // *      /PerambulatorData            group                                     *
 // *         attribute "Header"        variable-length string: the XML header    *
@@ -38,20 +42,23 @@ class PerambulatorHDF5Writer
 {
    long long m_file;        // hid_t (primary rank only)
    std::string m_filename;
-   int m_nev;
+   std::string m_group;     // "/PerambulatorData" or "/PerambulatorSparseGridData"
+   int m_nrows;             // sink index range (nEv, or 3*NGrid)
+   int m_nev;               // source Laph eigvecs (columns)
 
  public:
 
-   PerambulatorHDF5Writer() : m_file(-1), m_nev(0) {}
+   PerambulatorHDF5Writer() : m_file(-1), m_nrows(0), m_nev(0) {}
    ~PerambulatorHDF5Writer() {close();}
 
-      // Opens "filename" for writing perambulators with "nev" Laph eigvecs.
-      // If "overwrite" or the file does not exist, a new file is created with
-      // "header_xml" as its header, and an empty string returned.  Otherwise
-      // the existing file is opened, and its header returned (on all ranks)
-      // for the caller to check.
-   std::string open(const std::string& filename, const std::string& header_xml,
-                    int nev, bool overwrite);
+      // Opens "filename" for writing perambulators under group "group" as
+      // nrows x nev matrices ("nev" source Laph eigvecs).  If "overwrite" or
+      // the file does not exist, a new file is created with "header_xml" as
+      // the header of "group", and an empty string returned.  Otherwise the
+      // existing file is opened, and its header returned (on all ranks) for
+      // the caller to check.
+   std::string open(const std::string& filename, const std::string& group,
+                    const std::string& header_xml, int nrows, int nev, bool overwrite);
 
    bool isOpen() const {return !m_filename.empty();}
 

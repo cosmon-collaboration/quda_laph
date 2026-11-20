@@ -30,10 +30,10 @@ void broadcastBool(bool& flag)
 #endif
 }
 
-string matrixPath(int src_time, int src_spin, int snk_time, int snk_spin)
+string matrixPath(const string& group, int src_time, int src_spin, int snk_time, int snk_spin)
 {
- return make_strf("/PerambulatorData/srcTime%d_snkTime%d/srcSpin%d/snkSpin%d",
-                  src_time,snk_time,src_spin,snk_spin);
+ return group+make_strf("/srcTime%d_snkTime%d/srcSpin%d/snkSpin%d",
+                        src_time,snk_time,src_spin,snk_spin);
 }
 
    // true if every link along the absolute "path" exists
@@ -50,11 +50,13 @@ bool pathExists(hid_t file, const string& path)
 }
 
 
-string PerambulatorHDF5Writer::open(const string& filename, const string& header_xml,
-                                    int nev, bool overwrite)
+string PerambulatorHDF5Writer::open(const string& filename, const string& group,
+                                    const string& header_xml, int nrows, int nev, bool overwrite)
 {
  close();
  m_filename=filename;
+ m_group=group;
+ m_nrows=nrows;
  m_nev=nev;
  string existing_header;
  if (isPrimaryRank()){
@@ -62,29 +64,29 @@ string PerambulatorHDF5Writer::open(const string& filename, const string& header
        // one (strided) column is one read-modify-write of the file
     hid_t fapl=H5Pcreate(H5P_FILE_ACCESS);
     h5check(fapl,filename,"create file access property list");
-    h5check(H5Pset_sieve_buf_size(fapl,max(size_t(1)<<20,size_t(nev)*size_t(nev)*sizeof(double))),
+    h5check(H5Pset_sieve_buf_size(fapl,max(size_t(1)<<20,size_t(nrows)*size_t(nev)*sizeof(double))),
             filename,"set sieve buffer size");
     bool create=overwrite||(!fileExists(filename,false));
     if (create){
        m_file=H5Fcreate(filename.c_str(),H5F_ACC_TRUNC,H5P_DEFAULT,fapl);
        h5check(m_file,filename,"create file");
-       hid_t group=H5Gcreate2(m_file,"/PerambulatorData",H5P_DEFAULT,H5P_DEFAULT,H5P_DEFAULT);
-       h5check(group,filename,"create group /PerambulatorData");
+       hid_t gid=H5Gcreate2(m_file,group.c_str(),H5P_DEFAULT,H5P_DEFAULT,H5P_DEFAULT);
+       h5check(gid,filename,"create top group");
        hid_t strtype=H5Tcopy(H5T_C_S1);
        h5check(strtype,filename,"copy string type");
        h5check(H5Tset_size(strtype,H5T_VARIABLE),filename,"set string type size");
        hid_t attspace=H5Screate(H5S_SCALAR);
        h5check(attspace,filename,"create attribute dataspace");
-       hid_t attr=H5Acreate2(group,"Header",strtype,attspace,H5P_DEFAULT,H5P_DEFAULT);
+       hid_t attr=H5Acreate2(gid,"Header",strtype,attspace,H5P_DEFAULT,H5P_DEFAULT);
        h5check(attr,filename,"create Header attribute");
        const char* hdr=header_xml.c_str();
        h5check(H5Awrite(attr,strtype,&hdr),filename,"write Header attribute");
        H5Aclose(attr); H5Sclose(attspace); H5Tclose(strtype);
-       h5check(H5Gclose(group),filename,"close group");}
+       h5check(H5Gclose(gid),filename,"close group");}
     else{
        m_file=H5Fopen(filename.c_str(),H5F_ACC_RDWR,fapl);
        h5check(m_file,filename,"open existing file");
-       hid_t attr=H5Aopen_by_name(m_file,"/PerambulatorData","Header",H5P_DEFAULT,H5P_DEFAULT);
+       hid_t attr=H5Aopen_by_name(m_file,group.c_str(),"Header",H5P_DEFAULT,H5P_DEFAULT);
        h5check(attr,filename,"open Header attribute of existing file");
        hid_t strtype=H5Tcopy(H5T_C_S1);
        h5check(strtype,filename,"copy string type");
@@ -109,18 +111,18 @@ bool PerambulatorHDF5Writer::queryColumn(int src_time, int src_spin, const vecto
  bool complete=true;
  if (isPrimaryRank()){
     const hsize_t nev=m_nev;
-    const hsize_t total=nev*nev;
+    const hsize_t total=hsize_t(m_nrows)*nev;
     hid_t fspace=H5Screate_simple(1,&total,nullptr);
     h5check(fspace,m_filename,"create file dataspace");
-    hsize_t start=srcev, stride=nev, count=nev;
+    hsize_t start=srcev, stride=nev, count=m_nrows;
     h5check(H5Sselect_hyperslab(fspace,H5S_SELECT_SET,&start,&stride,&count,nullptr),
             m_filename,"select column");
     hid_t mspace=H5Screate_simple(1,&count,nullptr);
     h5check(mspace,m_filename,"create memory dataspace");
-    vector<double> col(nev);
+    vector<double> col(m_nrows);
     for (size_t it=0;(it<snk_times.size())&&complete;++it)
     for (int snk_spin=1;(snk_spin<=nspin)&&complete;++snk_spin){
-       string path=matrixPath(src_time,src_spin,snk_times[it],snk_spin);
+       string path=matrixPath(m_group,src_time,src_spin,snk_times[it],snk_spin);
        for (const char* part : {"/re","/im"}){
           if (!complete) break;
           string dpath=path+part;
@@ -147,9 +149,10 @@ void PerambulatorHDF5Writer::putColumns(int src_time, int src_spin, int snk_time
  if (!isOpen()) errorLaph("PerambulatorHDF5Writer::putColumns: no file open");
  if (!isPrimaryRank()) return;
  const hsize_t nev=m_nev;
+ const hsize_t nrows=m_nrows;
  const hsize_t ncol=srcevs.size();
  if (ncol==0) return;
- if (data.size()!=nev*ncol){
+ if (data.size()!=nrows*ncol){
     errorLaph("PerambulatorHDF5Writer::putColumns: data size does not match");}
 
     // HDF5 maps the buffer onto the selection in increasing file offset
@@ -157,21 +160,21 @@ void PerambulatorHDF5Writer::putColumns(int src_time, int src_spin, int snk_time
  vector<size_t> perm(ncol);
  std::iota(perm.begin(),perm.end(),0);
  std::sort(perm.begin(),perm.end(),[&srcevs](size_t a,size_t b){return srcevs[a]<srcevs[b];});
- const hsize_t total=nev*nev;
+ const hsize_t total=nrows*nev;
  hid_t fspace=H5Screate_simple(1,&total,nullptr);
  h5check(fspace,m_filename,"create file dataspace");
  for (hsize_t k=0;k<ncol;++k){
     int m=srcevs[perm[k]];
     if ((m<0)||(hsize_t(m)>=nev)||((k>0)&&(m==srcevs[perm[k-1]]))){
        errorLaph("PerambulatorHDF5Writer::putColumns: invalid source eigvec indices");}
-    hsize_t start=m, stride=nev, count=nev;
+    hsize_t start=m, stride=nev, count=nrows;
     h5check(H5Sselect_hyperslab(fspace,(k==0)?H5S_SELECT_SET:H5S_SELECT_OR,
                                 &start,&stride,&count,nullptr),m_filename,"select columns");}
- const hsize_t nbuf=nev*ncol;
+ const hsize_t nbuf=nrows*ncol;
  hid_t mspace=H5Screate_simple(1,&nbuf,nullptr);
  h5check(mspace,m_filename,"create memory dataspace");
  vector<double> re(nbuf), im(nbuf);
- for (hsize_t n=0;n<nev;++n)
+ for (hsize_t n=0;n<nrows;++n)
  for (hsize_t k=0;k<ncol;++k){
     const complex<double>& z=data[n*ncol+perm[k]];
     re[n*ncol+k]=z.real(); im[n*ncol+k]=z.imag();}
@@ -187,7 +190,7 @@ void PerambulatorHDF5Writer::putColumns(int src_time, int src_spin, int snk_time
  h5check(lcpl,m_filename,"create link creation property list");
  h5check(H5Pset_create_intermediate_group(lcpl,1),m_filename,"set intermediate group creation");
 
- string path=matrixPath(src_time,src_spin,snk_time,snk_spin);
+ string path=matrixPath(m_group,src_time,src_spin,snk_time,snk_spin);
  const char* parts[2]={"/re","/im"};
  const double* bufs[2]={re.data(),im.data()};
  for (int p=0;p<2;++p){

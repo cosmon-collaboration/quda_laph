@@ -104,7 +104,9 @@ namespace LaphEnv {
 // *     doPerambulatorConvert; see perambulator_hdf5.h.  An       *
 // *     existing file (same header) is extended unless the        *
 // *     overwrite mode is set, in which case it is replaced.      *
-// *     Such stubs are not accepted in the other modes.           *
+// *     Such stubs are not accepted in the other modes.  The same *
+// *     holds for the sparse-grid FileListInfo, with the layout   *
+// *     of doPerambulatorConvertSG.                               *
 // *                                                               *
 // *  All Laph Handlers follow the member naming convention:       *
 // *                                                               *
@@ -291,6 +293,7 @@ class PerambulatorHandler {
 
 	 // HDF5 output (instead of DHputPtr), if the file stub ends in .hdf5 or .h5
 	 std::unique_ptr<PerambulatorHDF5Writer> h5Ptr;
+	 std::unique_ptr<PerambulatorHDF5Writer> sgH5Ptr;   // same for the sparse-grid output
 
 
  public:
@@ -499,6 +502,8 @@ class PerambulatorHandler {
           // True if the sinks for source (src_time, src_spin, srcev) are already
           // in the output: for HDF5 output, at the sink times "snk_times"; for
           // the record files (DHputPtr open on that source's file), at all times.
+          // HDF5 sparse-grid output must also be complete (sparse-grid record
+          // files are not checked).
    bool querySourceDone(int src_time, int src_spin, int srcev,
                         const std::vector<int>& snk_times);
 
@@ -509,6 +514,14 @@ class PerambulatorHandler {
                           const std::vector<int>& srcevs,
                           const Array<std::complex<double>>& qudaRes,
                           double soln_rescale, bool print_coeffs);
+
+          // Writes the sparse-grid projections of the sinks "sinks" (host fields,
+          // double precision) for source eigvecs srcevs[k] and sink times
+          // "snk_times" (to the HDF5 file, or the record file open in
+          // DHputPtrSparseGrid); collective over the MPI ranks.
+   void putSparseGridSinks(int src_time, int src_spin, const std::vector<int>& snk_times,
+                           const std::vector<int>& srcevs, const std::vector<const void*>& sinks,
+                           size_t site_bytes, size_t word_bytes, bool print_coeffs);
 
    void doACheck(const PerambComputation& pcomp, int src_spin,
                  const std::string& logfile, bool verbose_output);
@@ -541,6 +554,7 @@ class SparseGridHandler {
 	qInfo(_qInfo), grid(_grid), Nspin(_Nspin) {} 
 
 	bool checkHeader(XMLHandler& xmlr, int suffix);
+	void getHeader(XMLHandler& xmlout) const;   // without the FileKey (HDF5 output)
 	void writeHeader(XMLHandler& xmlout, 
 			const PerambulatorHandler::FileKey& fkey,
 			int suffix);

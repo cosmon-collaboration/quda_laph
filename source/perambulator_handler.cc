@@ -182,7 +182,12 @@ void PerambulatorHandler::set_info(const GaugeConfigurationInfo& gaugeinfo,
 
 	  sgHandler = new SparseGridHandler(gaugeinfo,gluonsmear,quarksmear,quark,rsgrid,Nspin);
     fPtrSparseGrid = new FileListInfo(flist_sparse_grid);
-    if ((mode==Compute)||(mode==Merge)){
+    if (isHDF5FileName(fPtrSparseGrid->getFileStub())){
+       if (mode!=Compute){
+          errorLaph(make_strf("HDF5 sparse-grid perambulator file %s can only be written (Compute mode)",
+                              fPtrSparseGrid->getFileStub()));}
+       sgH5Ptr.reset(new PerambulatorHDF5Writer);}
+    else if ((mode==Compute)||(mode==Merge)){
 			 DHputPtrSparseGrid=new DataPutHandlerMF<SparseGridHandler,FileKey,RecordKey,DataType>(
                        *sgHandler,*fPtrSparseGrid,"Laph--SparseGridQuarkPeramb","PerambulatorHandlerSparseGridDataFile");
 		}
@@ -282,6 +287,7 @@ void PerambulatorHandler::clear()
 		delete DHgetPtr; DHgetPtr=0;
 		delete DHputPtr; DHputPtr=0;
 		h5Ptr.reset();
+		sgH5Ptr.reset();
 	}
 }
 
@@ -752,7 +758,8 @@ void PerambulatorHandler::computePerambulators(bool extra_soln_check, bool print
  if (h5Ptr){
     XMLHandler hdr;
     getHeader(hdr);
-    string existing=h5Ptr->open(fPtr->getFileStub(),hdr.str(),nEigs,fPtr->isModeOverwrite());
+    string existing=h5Ptr->open(fPtr->getFileStub(),"/PerambulatorData",hdr.str(),nEigs,nEigs,
+                                fPtr->isModeOverwrite());
     if (existing.empty()){
        printLaph(make_strf("Created HDF5 perambulator file %s",fPtr->getFileStub()));}
     else{
@@ -762,6 +769,22 @@ void PerambulatorHandler::computePerambulators(bool extra_soln_check, bool print
           errorLaph(make_strf("Header of existing HDF5 perambulator file %s does not match",
                               fPtr->getFileStub()));}
        printLaph(make_strf("Adding to existing HDF5 perambulator file %s",fPtr->getFileStub()));}}
+ if (sgH5Ptr){
+    XMLHandler hdr;
+    sgHandler->getHeader(hdr);
+    int nrows=FieldNcolor*sgHandler->getGrid().getNGridPoints();
+    string existing=sgH5Ptr->open(fPtrSparseGrid->getFileStub(),"/PerambulatorSparseGridData",
+                                  hdr.str(),nrows,nEigs,fPtrSparseGrid->isModeOverwrite());
+    if (existing.empty()){
+       printLaph(make_strf("Created HDF5 sparse-grid perambulator file %s",fPtrSparseGrid->getFileStub()));}
+    else{
+       XMLHandler xmlex;
+       xmlex.set_from_string(existing);
+       if (!sgHandler->checkHeader(xmlex,0)){
+          errorLaph(make_strf("Header of existing HDF5 sparse-grid perambulator file %s does not match",
+                              fPtrSparseGrid->getFileStub()));}
+       printLaph(make_strf("Adding to existing HDF5 sparse-grid perambulator file %s",
+                           fPtrSparseGrid->getFileStub()));}}
 
  for (list<PerambComputation>::const_iterator it=perambComps.computations.begin();
       it!=perambComps.computations.end();count++,it++){
@@ -775,6 +798,7 @@ void PerambulatorHandler::computePerambulators(bool extra_soln_check, bool print
                          report_gflops,srctime,invtime,evprojtime,writetime,perambComps.useMultiSrcInverter);
     }
  if (h5Ptr) h5Ptr->close();
+ if (sgH5Ptr) sgH5Ptr->close();
 
  totaltime.stop();
  printLaph("\n\n");
@@ -869,7 +893,7 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, int tmin, int tma
      // get the file key and open file for writing
   FileKey fkey(src_time,srcspin);
   if (!h5Ptr) DHputPtr->open(fkey);
-	if (sGridOutput)
+	if ((sGridOutput)&&(!sgH5Ptr))
     DHputPtrSparseGrid->open(fkey);
   int invcount=0;
   int iSinkBatch = 0;
@@ -952,53 +976,11 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, int tmin, int tma
 
 	       // sparse grid output to file
 				 if (sGridOutput) { 
-					 int nColor = 3; 
-					 int nGridPoints = (*sgHandler).getGrid().getNGridPoints(); 
-					 vector<vector<int>> offsets; (*sgHandler).getGrid().generateOffsets(offsets); 
-					 printLaph(" Outputting to sparse grid file"); 
-					 for (int iSink=0; iSink<nSinks; ++iSink) {
-						 const char* field_start=sinkBatchData[iSink].getDataConstPtr();
-						 size_t site_bytes=sinkBatchData[iSink].bytesPerSite();
-						 size_t word_bytes=sinkBatchData[iSink].bytesPerWord();
-						 if (word_bytes!=sizeof(complex<double>))
-							 throw logic_error("only implemented for double precision"); 
-						 size_t colvec_bytes=word_bytes*FieldNcolor;  
-
-						 for (int tind=minTime;tind<=maxTime;tind++){
-							 int t = (tind+Textent)%Textent; 
-							 const auto& local_offsets =  
-								 (*sgHandler).getGrid().getLocalGridPoints(offsets[t],t);
-							 vector<dcmplx> all_spin_quark_sink(nColor*nGridPoints*Nspin,0.0);
-							 for (const auto& offset : local_offsets) { 
-								 size_t local_offset=site_bytes*offset.local_offset;
-								 for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
-									 const char* get_ptr = field_start+local_offset+
-										iSpin*colvec_bytes;
-									 size_t global_offset=colvec_bytes*(
-											 offset.global_offset + iSpin*nGridPoints);
-									 char* dest_ptr = reinterpret_cast<char*>(
-											 all_spin_quark_sink.data())+global_offset; 
-									 memcpy(dest_ptr,get_ptr,colvec_bytes); 
-								 }
-							 }
-								 MPI_Allreduce(MPI_IN_PLACE, all_spin_quark_sink.data(), 
-										 2*all_spin_quark_sink.size(), MPI_DOUBLE, MPI_SUM,
-										 MPI_COMM_WORLD);
-								 for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
-									 vector<dcmplx> quark_sink(all_spin_quark_sink.cbegin()+
-											 iSpin*nColor*nGridPoints,all_spin_quark_sink.cbegin()+
-											 (iSpin+1)*nColor*nGridPoints);
-									 DHputPtrSparseGrid->putData(RecordKey(iSpin+1,t,sinkBatchDoneInds[iSink]),quark_sink);
-									 if (print_coeffs){
-										 printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchDoneInds[iSink],iSpin+1,t));
-										 for (int n=0;n<(nColor*nGridPoints);n++){
-											 printLaph(make_strf("component for color/space component %d = (%14.8f, %14.8f)",
-														 n,real(quark_sink[n]),imag(quark_sink[n])));
-									 }
-								 }
-							 }
-						 }
-					 }
+				 	printLaph(" Outputting to sparse grid file");
+				 	putSparseGridSinks(src_time,srcspin,snk_times,
+				 	                   vector<int>(sinkBatchDoneInds.begin(),sinkBatchDoneInds.begin()+nSinks),
+				 	                   vector<const void*>(doneList.begin(),doneList.begin()+nSinks),
+				 	                   sinkBatchData[0].bytesPerSite(),sinkBatchData[0].bytesPerWord(),print_coeffs);
 					 bulova.stop();
 					 double otime=bulova.getTimeInSeconds();
 					 printLaph(make_str(" Output of this batch to sparse grid file took ",otime," seconds"));
@@ -1029,8 +1011,8 @@ void PerambulatorHandler::computePerambulatorsMS(int src_time, int tmin, int tma
        }}  // 	batch end
 
     if (h5Ptr) h5Ptr->flush(); else DHputPtr->flush();
-	  if (sGridOutput)	
-			DHputPtrSparseGrid->flush();
+	  if (sGridOutput){
+			if (sgH5Ptr) sgH5Ptr->flush(); else DHputPtrSparseGrid->flush();}
 	}}   // src_ind, src_spin loop end
 
  inv_time+=invtime;
@@ -1095,7 +1077,7 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, int tmin, int tma
      // get the file key and open file for writing
   FileKey fkey(src_time,srcspin);
   if (!h5Ptr) DHputPtr->open(fkey);
-  if (sGridOutput)
+  if ((sGridOutput)&&(!sgH5Ptr))
 		DHputPtrSparseGrid->open(fkey);
   int invcount=0;
 
@@ -1168,54 +1150,11 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, int tmin, int tma
        __complex__ double* qudaResPtr = (__complex__ double*)(&qudaRes(0,0,0,0));
 
 			 if (sGridOutput) {
-				 int nColor = 3; 
-				 int nGridPoints = (*sgHandler).getGrid().getNGridPoints(); 
-				 vector<vector<int>> offsets; (*sgHandler).getGrid().generateOffsets(offsets); 
-				 printLaph(" Outputting to sparse grid file");
-				 // sparse grid output to file
-				 for (int iSink=0; iSink<nSinks; ++iSink) {
-					 const char* field_start=sinkBatchData[iSink].getDataConstPtr();
-					 size_t site_bytes=sinkBatchData[iSink].bytesPerSite();
-					 size_t word_bytes=sinkBatchData[iSink].bytesPerWord();
-					 if (word_bytes!=sizeof(complex<double>))
-						 throw logic_error("only implemented for double precision");
-					 size_t colvec_bytes=word_bytes*FieldNcolor;
-
-					 for (int tind=minTime;tind<=maxTime;tind++){
-						 int t = (tind+Textent)%Textent;
-						 const auto& local_offsets =
-							 (*sgHandler).getGrid().getLocalGridPoints(offsets[t],t);
-						 vector<dcmplx> all_spin_quark_sink(nColor*nGridPoints*Nspin,0.0);
-						 for (const auto& offset : local_offsets) {
-							 size_t local_offset=site_bytes*offset.local_offset;
-							 for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
-								 const char* get_ptr = field_start+local_offset+
-									 iSpin*colvec_bytes;
-								 size_t global_offset=colvec_bytes*(
-										 offset.global_offset + iSpin*nGridPoints);
-								 char* dest_ptr = reinterpret_cast<char*>(
-										 all_spin_quark_sink.data())+global_offset;
-								 memcpy(dest_ptr,get_ptr,colvec_bytes);
-							 }
-						 }
-						 MPI_Allreduce(MPI_IN_PLACE, all_spin_quark_sink.data(),
-								 2*all_spin_quark_sink.size(), MPI_DOUBLE, MPI_SUM,
-								 MPI_COMM_WORLD);
-						 for (int iSpin=0; iSpin<int(Nspin); ++iSpin) {
-							 vector<dcmplx> quark_sink(all_spin_quark_sink.cbegin()+
-									 iSpin*nColor*nGridPoints,all_spin_quark_sink.cbegin()+
-									 (iSpin+1)*nColor*nGridPoints);
-							 DHputPtrSparseGrid->putData(RecordKey(iSpin+1,t,sinkBatchInds[iSink]),quark_sink);
-							 if (print_coeffs){
-								 printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",sinkBatchInds[iSink],iSpin+1,t));
-								 for (int n=0;n<(nColor*nGridPoints);n++){
-									 printLaph(make_strf("component for color/space component %d = (%14.8f, %14.8f)",
-												 n,real(quark_sink[n]),imag(quark_sink[n])));
-								 }
-							 }
-						 }
-					 }
-				 }
+			 	printLaph(" Outputting to sparse grid file");
+			 	putSparseGridSinks(src_time,srcspin,snk_times,
+			 	                   vector<int>(sinkBatchInds.begin(),sinkBatchInds.begin()+nSinks),
+			 	                   vector<const void*>(sinkList.begin(),sinkList.begin()+nSinks),
+			 	                   sinkBatchData[0].bytesPerSite(),sinkBatchData[0].bytesPerWord(),print_coeffs);
 				 bulova.stop();
 				 double otime=bulova.getTimeInSeconds();
 				 printLaph(make_str(" Output of this batch to sparse grid file took ",otime," seconds"));
@@ -1244,8 +1183,8 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, int tmin, int tma
 
 			 iSinkBatch = 0;}    // batch end
 		if (h5Ptr) h5Ptr->flush(); else DHputPtr->flush();
-	  if (sGridOutput)	
-			DHputPtrSparseGrid->flush();
+	  if (sGridOutput){
+			if (sgH5Ptr) sgH5Ptr->flush(); else DHputPtrSparseGrid->flush();}
 	}}   // src_ind, src_spin loop end
 
  inv_time+=invtime;
@@ -1260,6 +1199,8 @@ void PerambulatorHandler::computePerambulatorsSS(int src_time, int tmin, int tma
 bool PerambulatorHandler::querySourceDone(int src_time, int src_spin, int srcev,
                                           const vector<int>& snk_times)
 {
+ if ((sgH5Ptr)&&(!sgH5Ptr->queryColumn(src_time,src_spin,snk_times,Nspin,srcev))){
+    return false;}
  if (h5Ptr){
     return h5Ptr->queryColumn(src_time,src_spin,snk_times,Nspin,srcev);}
  int Textent=uPtr->getTimeExtent();
@@ -1300,6 +1241,55 @@ void PerambulatorHandler::putProjectedSinks(int src_time, int src_spin, const ve
        for (int n=0;n<nEigs;n++){
           printLaph(make_strf("coef for eigenlevel %d = (%14.8f, %14.8f)",
                               n,real(quark_sink[n]),imag(quark_sink[n])));}}}
+}
+
+
+void PerambulatorHandler::putSparseGridSinks(int src_time, int src_spin, const vector<int>& snk_times,
+                                             const vector<int>& srcevs, const vector<const void*>& sinks,
+                                             size_t site_bytes, size_t word_bytes, bool print_coeffs)
+{
+ const int nColor=FieldNcolor;
+ const int nGridPoints=sgHandler->getGrid().getNGridPoints();
+ const int nTot=nColor*nGridPoints;
+ const int nSinks=srcevs.size();
+ if (word_bytes!=sizeof(complex<double>))
+    throw logic_error("only implemented for double precision");
+ const size_t colvec_bytes=word_bytes*nColor;
+ vector<vector<int>> offsets; sgHandler->getGrid().generateOffsets(offsets);
+
+ for (int t : snk_times){
+    const auto& local_offsets=sgHandler->getGrid().getLocalGridPoints(offsets[t],t);
+       // all sinks, all spins at this time: element (iSink*Nspin+iSpin)*nTot + 3*grid point + color
+    vector<dcmplx> all_sinks(size_t(nSinks)*Nspin*nTot,0.0);
+    for (int iSink=0;iSink<nSinks;++iSink){
+       const char* field_start=reinterpret_cast<const char*>(sinks[iSink]);
+       for (const auto& offset : local_offsets){
+          size_t local_offset=site_bytes*offset.local_offset;
+          for (int iSpin=0;iSpin<int(Nspin);++iSpin){
+             const char* get_ptr=field_start+local_offset+iSpin*colvec_bytes;
+             char* dest_ptr=reinterpret_cast<char*>(all_sinks.data()
+                 +(size_t(iSink)*Nspin+iSpin)*nTot)+colvec_bytes*offset.global_offset;
+             memcpy(dest_ptr,get_ptr,colvec_bytes);}}}
+#ifdef ARCH_PARALLEL
+    MPI_Allreduce(MPI_IN_PLACE,all_sinks.data(),2*all_sinks.size(),MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+#endif
+    for (int iSpin=0;iSpin<int(Nspin);++iSpin){
+       if (sgH5Ptr){
+             // all the columns of this batch: data[n*nSinks+iSink]
+          vector<dcmplx> buf(size_t(nTot)*nSinks);
+          for (int iSink=0;iSink<nSinks;++iSink)
+          for (int n=0;n<nTot;++n){
+             buf[size_t(n)*nSinks+iSink]=all_sinks[(size_t(iSink)*Nspin+iSpin)*nTot+n];}
+          sgH5Ptr->putColumns(src_time,src_spin,t,iSpin+1,srcevs,buf);}
+       for (int iSink=0;iSink<nSinks;++iSink){
+          auto first=all_sinks.cbegin()+(size_t(iSink)*Nspin+iSpin)*nTot;
+          if (!sgH5Ptr){
+             DHputPtrSparseGrid->putData(RecordKey(iSpin+1,t,srcevs[iSink]),vector<dcmplx>(first,first+nTot));}
+          if (print_coeffs){
+             printLaph(make_strf("srcev_index = %d, spin = %d, time = %d",srcevs[iSink],iSpin+1,t));
+             for (int n=0;n<nTot;n++){
+                printLaph(make_strf("component for color/space component %d = (%14.8f, %14.8f)",
+                                    n,real(first[n]),imag(first[n])));}}}}}
 }
 
 
@@ -1834,6 +1824,18 @@ bool SparseGridHandler::checkHeader(XMLHandler& xmlin, int suffix)
  }
  catch(const exception& xp){ return false;}
  return true;
+}
+
+void SparseGridHandler::getHeader(XMLHandler& xmlout) const
+{
+ xmlout.set_root("PerambulatorHandlerSparseGridDataFile");
+ XMLHandler xmltmp;
+ gInfo.output(xmltmp); xmlout.put_child(xmltmp);
+ gsInfo.output(xmltmp); xmlout.put_child(xmltmp);
+ qsInfo.output(xmltmp); xmlout.put_child(xmltmp);
+ qInfo.output(xmltmp); xmlout.put_child(xmltmp);
+ grid.output(xmltmp); xmlout.put_child(xmltmp);
+ xmlout.put_child("NumSpinComponents",make_string(Nspin));
 }
 
 void SparseGridHandler::writeHeader(XMLHandler& xmlout, 
